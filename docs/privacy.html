@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy — Momento</title>
+<meta name="description" content="Privacy policy for Momento, a local Windows game recorder with an opt-in YouTube upload feature.">
+<style>
+  :root {
+    --accent: #8b5cf6;
+    --bg: #0f1117;
+    --bg-card: #1a1d26;
+    --bg-card-2: #20242e;
+    --text: #e8eaf2;
+    --text-dim: #9aa0b0;
+    --text-dim-2: #6b7080;
+    --border: #2a2f3b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.6; }
+  body { padding: 32px 16px 80px; }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  header { padding: 24px 0 32px; }
+  header .home { display: inline-block; color: var(--text-dim); text-decoration: none; font-size: 14px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 1px; }
+  header .home:hover { color: var(--accent); border-color: var(--accent); }
+  header h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+  header .effective { color: var(--text-dim-2); font-size: 14px; }
+
+  section { padding: 28px 0 14px; }
+  section h2 { font-size: 22px; font-weight: 600; margin-bottom: 14px; color: var(--text); letter-spacing: -0.005em; }
+  section h3 { font-size: 17px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
+  section p, section li { color: var(--text-dim); font-size: 16px; margin-bottom: 12px; }
+  section p strong, section li strong { color: var(--text); font-weight: 600; }
+  section ul { padding-left: 22px; }
+  section li { margin-bottom: 8px; }
+  section a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(139,92,246,0.4); }
+  section a:hover { border-color: var(--accent); }
+
+  .callout { background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02)); border: 1px solid rgba(139,92,246,0.25); border-radius: 12px; padding: 22px; margin: 18px 0; }
+  .callout p { margin: 0; color: var(--text); }
+  .callout p + p { margin-top: 10px; }
+
+  code { background: var(--bg-card-2); border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-family: "Cascadia Code", "Consolas", monospace; font-size: 14px; color: var(--text); }
+
+  footer { padding: 40px 0 0; border-top: 1px solid var(--border); color: var(--text-dim-2); font-size: 14px; margin-top: 48px; }
+  footer a { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; }
+  footer a:hover { color: var(--accent); border-color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <a class="home" href="index.html">← Momento</a>
+    <h1>Privacy Policy</h1>
+    <p class="effective">Effective: 27 May 2026</p>
+  </header>
+
+  <section>
+    <h2>Overview</h2>
+    <p>Momento is a desktop application that runs locally on your Windows machine. It records gameplay, stores recordings on your local drive, and includes an optional feature to upload selected clips to YouTube on your behalf.</p>
+    <p>This policy explains what data Momento accesses, where it's stored, and what we do (and don't) do with it.</p>
+
+    <div class="callout">
+      <p><strong>Short version:</strong> Momento collects no personal data and sends nothing over the network unless you explicitly click "Upload to YouTube" on a clip. There is no telemetry, no analytics, no account system, no advertising, and no third-party data sharing. Your recordings stay on your machine.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>What Momento stores locally</h2>
+    <p>Momento writes the following to your machine under <code>%APPDATA%\Momento\</code> and the recordings folder you select in Settings:</p>
+    <ul>
+      <li><strong>Recordings</strong> (<code>.mkv</code> files) and exported clips (<code>.mp4</code>) — saved to the folder you choose. Momento never moves or transmits these files unless you explicitly export or upload them.</li>
+      <li><strong>Bookmarks</strong> (<code>.bookmarks.json</code> sidecar files) — timecodes you marked during gameplay.</li>
+      <li><strong>Thumbnails</strong> (<code>.thumb.jpg</code>) — extracted frames used by the in-app editor.</li>
+      <li><strong>Settings</strong> (<code>config.json</code>) — your preferences (capture quality, hotkey, output folder, etc.).</li>
+      <li><strong>Logs</strong> (<code>logs/momento.log</code>) — diagnostic messages, written only to disk, never transmitted.</li>
+    </ul>
+    <p>Momento does <strong>not</strong> collect or transmit your machine specs, IP address, usage patterns, installed games, or any other system or behavioural data.</p>
+  </section>
+
+  <section>
+    <h2>YouTube upload feature</h2>
+    <p>If you choose to connect your YouTube account and upload a clip, Momento interacts with Google's APIs as described below. <strong>This feature is entirely optional and never runs without explicit user action.</strong></p>
+
+    <h3>Sign-in</h3>
+    <p>Connection happens through Google's standard OAuth 2.0 desktop flow. When you click "Connect YouTube account," Momento opens your system's default browser and directs it to <code>accounts.google.com</code>. You sign in to Google on Google's site, review the requested permissions, and consent.</p>
+    <p><strong>Momento never sees, requests, transmits, or stores your Google password.</strong> Authentication happens entirely between your browser and Google's servers.</p>
+
+    <h3>What Google data Momento accesses</h3>
+    <p>Momento requests two YouTube API scopes:</p>
+    <ul>
+      <li><code>youtube.upload</code> — permission to upload videos to your YouTube channel. Used <strong>solely</strong> to upload clips that you have explicitly selected and confirmed for upload through Momento's UI. Never used for any other purpose. Never used to upload content automatically or in the background.</li>
+      <li><code>youtube.readonly</code> — permission to read your channel information. Used <strong>solely</strong> to display your channel name in Momento's Settings screen (so you can see which account you are connected as). The only API call made with this scope is a single <code>channels.list(mine=true)</code> request after sign-in, which retrieves your channel's name and ID. No other channel data, video data, comment data, or analytics data is retrieved or stored.</li>
+    </ul>
+
+    <h3>What Momento stores from Google</h3>
+    <p>After successful sign-in, Momento stores the following locally on your machine:</p>
+    <ul>
+      <li><strong>OAuth refresh token</strong> — at <code>%APPDATA%\Momento\youtube_token.dat</code>. This token allows Momento to upload on your behalf without re-prompting you to sign in every time. It is encrypted using Windows Data Protection API (DPAPI), which binds the encrypted blob to your Windows user account. The encrypted file cannot be decrypted by another Windows user account on the same machine or by anyone on a different machine.</li>
+      <li><strong>Connected channel name and ID</strong> — cached in <code>config.json</code> only so Momento's Settings can display "Signed in as: [your channel]" without making a network call on every Settings open.</li>
+    </ul>
+    <p>No other Google-sourced data is stored.</p>
+
+    <h3>Where uploaded videos go</h3>
+    <p>When you click "Upload to YouTube" on a clip, Momento sends the video file directly to YouTube's servers via the official YouTube Data API v3. The video, title, description, tags, category, and privacy setting you chose in the upload dialog are uploaded. <strong>Momento does not send these to any other party.</strong> Once on YouTube, the video is governed by your YouTube account's settings and Google's own terms.</p>
+
+    <h3>Compliance with Google API Services User Data Policy</h3>
+    <p>Momento's use of information received from Google APIs adheres to the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the <strong>Limited Use requirements</strong>. Specifically:</p>
+    <ul>
+      <li>Google user data is used only to provide the user-facing YouTube upload feature.</li>
+      <li>Google user data is not transferred to others except as needed to provide that feature (i.e., transferred to YouTube as the upload destination, on user instruction).</li>
+      <li>Google user data is not used for advertising, profiling, or any unrelated purpose.</li>
+      <li>Google user data is not read or stored by humans (the developer), except where the user explicitly opts to debug an issue and shares logs.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How to disconnect or revoke access</h2>
+    <p>You can disconnect at any time:</p>
+    <ul>
+      <li><strong>From within Momento:</strong> Settings → YouTube → Disconnect. This deletes the local <code>youtube_token.dat</code> file immediately.</li>
+      <li><strong>From your Google account:</strong> Visit <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>, find "Momento," and click Remove access. This revokes Momento's ability to use any previously-issued tokens, even if the local token file still exists.</li>
+    </ul>
+    <p>Either action stops Momento from making any further YouTube API calls on your behalf.</p>
+  </section>
+
+  <section>
+    <h2>Children</h2>
+    <p>Momento is not directed at children under 13. The app contains no advertising and collects no personal information regardless of user age. The YouTube upload feature inherits YouTube's own age policies.</p>
+  </section>
+
+  <section>
+    <h2>Changes to this policy</h2>
+    <p>If this policy changes meaningfully, the updated version will be posted here with a revised "Effective" date. Significant changes that affect how user data is handled will be accompanied by an in-app notice on the next launch after the change.</p>
+  </section>
+
+  <section>
+    <h2>Contact</h2>
+    <p>For questions about this policy or Momento's data handling, contact:</p>
+    <p><a href="mailto:leeprice095@gmail.com">leeprice095@gmail.com</a></p>
+  </section>
+
+  <footer>
+    <p><a href="index.html">← Back to Momento</a></p>
+  </footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,54 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+*.egg-info/
+.eggs/
+# build/ holds PyInstaller intermediate artifacts (work dir, exe stage,
+# pyz packs). Only the spec file is source-of-truth and tracked.
+build/
+!build/pyinstaller.spec
+dist/
+
+# PyInstaller
+*.spec.bak
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+desktop.ini
+
+# Project — bundled binaries (download separately, not shipped via git)
+resources/ffmpeg/ffmpeg.exe
+resources/ffmpeg/ffprobe.exe
+resources/ffmpeg/*.dll
+*.log
+*.mp4
+
+# Recordings + their sidecars MUST stay local. Default dev output folder
+# is recordings/ in the repo root for convenience during development.
+recordings/
+*.mkv
+*.thumb.jpg
+*.bookmarks.json
+*.wav
+
+# Throwaway exploration dirs (accent colour studies, design dumps, etc.)
+tmp_*/
+tmp/
+
+# Phase 11 — Google OAuth client credentials. App-specific identity that
+# distinguishes Momento builds; should not be in version control. The
+# Settings → YouTube flow expects this at resources/youtube/client_secrets.json
+# (or via PyInstaller resource bundling for the frozen build).
+resources/youtube/client_secrets.json
+momento/youtube/client_secrets.json
+# DPAPI-encrypted token blob lives in %APPDATA%/Momento/, never in the repo,
+# but listed here defensively in case anyone drops a copy into the source tree.
+*.dat

@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Momento — Local game recorder for Windows</title>
+<meta name="description" content="Momento is a local Windows desktop app that auto-records games to MKV and includes a built-in clip editor. No telemetry, no cloud, no account required. Optional one-click YouTube upload for sharing clips.">
+<style>
+  :root {
+    --accent: #8b5cf6;
+    --accent-hover: #a78bf9;
+    --bg: #0f1117;
+    --bg-card: #1a1d26;
+    --bg-card-2: #20242e;
+    --text: #e8eaf2;
+    --text-dim: #9aa0b0;
+    --text-dim-2: #6b7080;
+    --border: #2a2f3b;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; line-height: 1.55; }
+  body { padding: 32px 16px 80px; }
+  .wrap { max-width: 880px; margin: 0 auto; }
+
+  header { padding: 48px 0 56px; text-align: center; }
+  header h1 { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px; }
+  header h1 .dot { color: var(--accent); }
+  header .tagline { font-size: 20px; color: var(--text-dim); max-width: 580px; margin: 0 auto; }
+
+  .badges { display: flex; gap: 10px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
+  .badge { background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; color: var(--text-dim); }
+
+  section { padding: 48px 0; border-top: 1px solid var(--border); }
+  section h2 { font-size: 28px; font-weight: 600; margin-bottom: 24px; letter-spacing: -0.01em; }
+  section p { color: var(--text-dim); margin-bottom: 14px; font-size: 16px; }
+  section p strong { color: var(--text); font-weight: 600; }
+
+  .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .feature { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
+  .feature h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
+  .feature p { font-size: 14px; color: var(--text-dim); margin: 0; }
+
+  .privacy-strip { background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02)); border: 1px solid rgba(139,92,246,0.25); border-radius: 14px; padding: 28px; margin-top: 8px; }
+  .privacy-strip h3 { font-size: 18px; margin-bottom: 12px; color: var(--text); }
+  .privacy-strip ul { list-style: none; padding: 0; }
+  .privacy-strip li { padding: 6px 0 6px 24px; position: relative; color: var(--text-dim); }
+  .privacy-strip li::before { content: "✓"; position: absolute; left: 0; color: var(--accent); font-weight: 700; }
+
+  footer { padding: 56px 0 0; border-top: 1px solid var(--border); color: var(--text-dim-2); font-size: 14px; text-align: center; }
+  footer a { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; }
+  footer a:hover { color: var(--accent); border-color: var(--accent); }
+  footer .links { margin-bottom: 18px; }
+  footer .links a { margin: 0 12px; }
+
+  .yt-note { background: var(--bg-card-2); border-left: 3px solid var(--accent); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+  .yt-note p { color: var(--text); font-size: 15px; margin: 0; }
+  .yt-note p + p { margin-top: 8px; color: var(--text-dim); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>Momento<span class="dot">.</span></h1>
+    <p class="tagline">A local Windows game recorder with a built-in clip editor. Everything stays on your machine.</p>
+    <div class="badges">
+      <span class="badge">Windows 10/11</span>
+      <span class="badge">NVIDIA GPU (NVENC)</span>
+      <span class="badge">No account required</span>
+      <span class="badge">No telemetry</span>
+    </div>
+  </header>
+
+  <section>
+    <h2>What it does</h2>
+    <p>Momento sits quietly in your system tray. When it detects a game launching, it starts capturing the game's window via Windows Graphics Capture along with your microphone and the system's audio output. When the game closes, recording stops automatically and the resulting MKV file lands in your chosen folder.</p>
+    <p>The built-in editor lets you browse past recordings, trim clips, drop bookmarks during gameplay with a hotkey, and export final cuts as MP4. There's nothing to configure to get started — Momento picks sensible defaults for resolution, framerate, and quality.</p>
+  </section>
+
+  <section>
+    <h2>Features</h2>
+    <div class="features">
+      <div class="feature">
+        <h3>Auto-record on game launch</h3>
+        <p>Detects ~650 popular PC games out of the box. Add your own; toggle individual games on or off.</p>
+      </div>
+      <div class="feature">
+        <h3>In-app clip editor</h3>
+        <p>Timeline with trim handles, zoom, bookmark ticks, time inputs. Preview playback before export.</p>
+      </div>
+      <div class="feature">
+        <h3>Bookmark hotkey</h3>
+        <p>Press F8 mid-game to drop a marker. Find the highlight instantly when editing afterwards.</p>
+      </div>
+      <div class="feature">
+        <h3>Crash-safe MKV</h3>
+        <p>Cluster-based muxing means a hard crash loses at most one second. Manual repair tool for the rest.</p>
+      </div>
+      <div class="feature">
+        <h3>Quality presets</h3>
+        <p>Low/Medium/High or custom bitrate. NVENC hardware encoding so recording doesn't tax your CPU.</p>
+      </div>
+      <div class="feature">
+        <h3>YouTube upload (opt-in)</h3>
+        <p>Right-click any clip → Upload to YouTube. Title, description, privacy in-app. Optional, never automatic.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>How Momento handles your data</h2>
+    <div class="privacy-strip">
+      <h3>Local-first by design</h3>
+      <ul>
+        <li>No telemetry. No analytics. No usage tracking.</li>
+        <li>No account required to use Momento.</li>
+        <li>Recordings are stored only on your machine, in a folder you choose.</li>
+        <li>No background network activity. Momento makes no outbound calls until you explicitly upload.</li>
+      </ul>
+    </div>
+
+    <div class="yt-note">
+      <p><strong>The one exception: YouTube upload.</strong></p>
+      <p>If you opt in by connecting a YouTube account and clicking "Upload to YouTube" on a clip, that single upload goes to YouTube via Google's standard API. Sign-in happens in your browser on Google's site — Momento never sees your password. The sign-in token is encrypted on disk via Windows DPAPI, bound to your Windows user account. See the <a href="privacy.html" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">privacy policy</a> for the full breakdown.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>System requirements</h2>
+    <p><strong>Windows 10</strong> (1903 or newer) or <strong>Windows 11</strong>.</p>
+    <p><strong>NVIDIA GPU</strong> with NVENC support (any GTX 10-series or newer, all RTX cards). NVENC handles the video encode so Momento is light on CPU during recording.</p>
+    <p>Approximately 5 GB free disk for the app and a comfortable buffer for recordings (recordings are large — plan for ~1-3 GB per hour at the default High quality preset).</p>
+  </section>
+
+  <footer>
+    <div class="links">
+      <a href="privacy.html">Privacy Policy</a>
+      <a href="mailto:leeprice095@gmail.com">Contact</a>
+    </div>
+    <p>© 2026 Momento. Built as a personal project.</p>
+  </footer>
+
+</div>
+</body>
+</html>

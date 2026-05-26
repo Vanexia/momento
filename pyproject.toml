@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "momento"
+version = "0.1.0"
+description = "Local Windows desktop game recorder with simple clip editor"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "MIT" }
+authors = [{ name = "Momento" }]
+
+dependencies = [
+    "PyQt6>=6.7",
+    "psutil>=5.9",
+    # Audio: WASAPI loopback capture from any playback endpoint.
+    "soundcard>=0.4",
+    # Video: Windows Graphics Capture API for per-window recording.
+    "windows-capture>=2.0",
+    # In-process video + audio encode/mux via libav. Bundles its own libav so
+    # the live recording path no longer depends on a subprocess + TCP pipes.
+    # We still bundle ffmpeg.exe for the offline MKV->MP4 remux step (and for
+    # device enumeration / thumbnails / trim export).
+    "av>=14.0",
+    # numpy: we hand frames to PyAV as ndarrays and resample audio chunks.
+    "numpy>=2.0",
+    # YouTube upload bridge (Phase 11). Google's official client + OAuth
+    # helper. The OAuth flow stays entirely local: we spin up a transient
+    # loopback HTTP server, hand the browser over to Google's consent screen,
+    # and receive an auth code back on localhost — we never see the user's
+    # password. Refresh tokens are encrypted via Windows DPAPI before being
+    # written to %APPDATA%/Momento/youtube_token.dat.
+    "google-api-python-client>=2.130",
+    "google-auth-oauthlib>=1.2",
+    "google-auth-httplib2>=0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "PyInstaller>=6.6",
+    "black>=24.0",
+]
+
+[project.scripts]
+momento = "momento.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["momento*"]
+exclude = ["tests*", "resources*", "build*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
