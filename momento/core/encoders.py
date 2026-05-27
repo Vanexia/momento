@@ -66,9 +66,28 @@ _DISPLAY_NAMES: dict[str, str] = {
 }
 
 
+# Pixel format the encoder actually accepts. QSV is the picky one — its
+# libav build advertises ``nv12 qsv`` only. The rest accept yuv420p (the
+# universal H.264 player-compatibility format). Routing the wrong pix_fmt
+# either fails at codec_context.open() or — worse — silently inserts a
+# software swscale before the hardware encoder, defeating the whole point.
+_PREFERRED_PIX_FMT: dict[str, str] = {
+    NVENC: "yuv420p",
+    AMF: "yuv420p",
+    QSV: "nv12",
+    MEDIA_FOUNDATION: "yuv420p",
+    LIBX264: "yuv420p",
+}
+
+
 def display_name_for(encoder: str) -> str:
     """Friendly label for ``encoder``. Returns the raw name if unknown."""
     return _DISPLAY_NAMES.get(encoder, encoder)
+
+
+def preferred_pix_fmt_for(encoder: str) -> str:
+    """Pixel format the encoder accepts cleanly. Defaults to yuv420p."""
+    return _PREFERRED_PIX_FMT.get(encoder, "yuv420p")
 
 
 # ---------- Detection ----------------------------------------------------
@@ -84,31 +103,45 @@ _probe_cache: Optional[list[_ProbeResult]] = None
 
 
 def _probe_one(name: str) -> _ProbeResult:
-    """Try to open a CodecContext for ``name``. Returns success + any error.
+    """Try to open a CodecContext for ``name`` with the SAME options the
+    real recorder will use. Returns success + any error.
 
-    The open call is what actually exercises the hardware/driver path; if
-    the GPU isn't present (e.g. AMF on a NVIDIA-only box), libav returns
-    a non-zero error here. A successful open proves we can encode through
-    this backend on this machine.
+    Probing with default options used to mask bugs where the encoder
+    opened bare but rejected our quality options at real-record time
+    (e.g. an older AMF driver missing `qp_b`). We now apply the "high"
+    preset's options dict — the most demanding hardware path — so a
+    probe pass guarantees that ``Recorder.start()`` for the same backend
+    will also open.
+
+    Pix_fmt comes from :func:`preferred_pix_fmt_for`. QSV in particular
+    needs ``nv12``, not ``yuv420p`` — passing the wrong format here
+    rejects the probe with ``Invalid argument`` and the backend never
+    becomes available even though it would work fine at real-record.
     """
+    ctx = None
     try:
         ctx = av.codec.CodecContext.create(name, "w")
         ctx.width = 320
         ctx.height = 240
-        ctx.pix_fmt = "yuv420p"
+        ctx.pix_fmt = preferred_pix_fmt_for(name)
         ctx.time_base = Fraction(1, 30)
         ctx.framerate = Fraction(30)
-        # libx264 needs no extra options; hardware encoders default to
-        # vendor-specific safe values on open. Quality settings are
-        # applied at the real per-recording context, not the probe one.
+        # Apply the same options the real recorder will set, so a backend
+        # whose options don't open is correctly reported as unavailable.
+        # custom_bitrate_kbps is irrelevant under "high" (CRF-style) — we
+        # pass a placeholder.
+        ctx.options = quality_options_for(name, "high", 12000)
         ctx.open()
-        # PyAV 14 dropped CodecContext.close(); GC + __del__ releases.
-        del ctx
         return _ProbeResult(encoder=name, ok=True, error=None)
     except Exception as exc:  # noqa: BLE001 — third-party can throw anything
         return _ProbeResult(
             encoder=name, ok=False, error=f"{type(exc).__name__}: {exc}"
         )
+    finally:
+        # Drop the local ref immediately so libav can release the
+        # underlying AVCodecContext (and the NVENC/AMF/QSV session it
+        # holds) on the next GC cycle. PyAV 14 dropped explicit close().
+        ctx = None  # noqa: F841 — intentional release
 
 
 def detect_available() -> list[str]:
@@ -116,14 +149,17 @@ def detect_available() -> list[str]:
 
     Order follows :data:`_PRIORITY`. Result is cached at module level —
     safe to call repeatedly.
+
+    Every probe is logged at INFO (whether it succeeded or failed) so a
+    user reporting "why isn't my GPU picked?" can read momento.log and
+    see exactly which backend failed and what error libav returned —
+    no need to raise log levels and reproduce.
     """
     global _probe_cache
     if _probe_cache is None:
         _probe_cache = [_probe_one(name) for name in _PRIORITY]
         for r in _probe_cache:
-            level = logging.INFO if r.ok else logging.DEBUG
-            logger.log(
-                level,
+            logger.info(
                 "Encoder probe: %s = %s%s",
                 r.encoder, "available" if r.ok else "unavailable",
                 f" ({r.error})" if r.error else "",
@@ -276,25 +312,25 @@ def _mf_options(preset: str, kbps: int) -> dict[str, str]:
     """Windows Media Foundation generic hardware encoder.
 
     Notably limited compared to vendor-specific paths — only a handful
-    of options are exposed and the quality knob is a 0-100 integer
-    (``quality_vs_speed``: 0 = fastest/lowest-quality, 100 = best). We
-    map the named presets to that scale.
+    of options are exposed. The quality knob in libav's h264_mf binding
+    is ``quality`` (0-100, higher = better), NOT ``quality_vs_speed``
+    despite what some Microsoft docs call the underlying MF property.
+    ``ffmpeg -h encoder=h264_mf`` confirms: ``rate_control``, ``scenario``,
+    ``quality``, ``hw_encoding`` — no ``quality_vs_speed``.
     """
-    qvs_for: dict[str, int] = {
+    quality_for: dict[str, int] = {
         "low": 30,
         "medium": 60,
         "high": 85,
     }
-    base = {
-        "quality_vs_speed": str(qvs_for.get(preset, 60)),
-    }
+    base: dict[str, str] = {}
     if preset == "custom":
         base["rate_control"] = "cbr"
         base["b"] = f"{max(1000, int(kbps))}k"
         return base
-    # For non-custom, MF only really gives us VBR with quality_vs_speed;
-    # libav picks reasonable defaults for everything else.
-    base["rate_control"] = "u_vbr"
+    # Quality-VBR mode: 'quality' takes effect under rate_control=quality.
+    base["rate_control"] = "quality"
+    base["quality"] = str(quality_for.get(preset, 60))
     return base
 
 

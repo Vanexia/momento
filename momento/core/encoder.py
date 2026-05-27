@@ -105,8 +105,14 @@ class InProcessEncoder:
         mic_volume: float = 1.0,
         sys_volume: float = 1.0,
         audio_offset_seconds: float = 0.0,
-        video_codec: str = "h264_nvenc",
-        video_options: dict[str, str] | None = None,
+        video_codec: str,
+        video_options: dict[str, str],
+        # Pixel format the chosen video_codec accepts. Phase 12 made this
+        # explicit because QSV requires nv12 while everything else takes
+        # yuv420p; the old NVENC-only path hardcoded yuv420p and the QSV
+        # path silently broke. Recorder supplies this via
+        # ``encoders.preferred_pix_fmt_for(video_codec)``.
+        encoder_pix_fmt: str = "yuv420p",
         audio_codec: str = "aac",
         audio_bitrate: int = 192_000,
         game_slug: str | None = None,
@@ -165,15 +171,10 @@ class InProcessEncoder:
         self._audio_offset_s = float(audio_offset_seconds)
 
         self._video_codec_name = video_codec
-        self._video_options = dict(video_options) if video_options else {
-            "preset": "p4",
-            "tune": "hq",
-            "rc": "vbr",
-            "cq": "19",
-            "b": "0",
-            "spatial-aq": "1",
-            "temporal-aq": "1",
-        }
+        self._video_options = dict(video_options)
+        # Pix fmt the encoder accepts. yuv420p for almost everything;
+        # nv12 for QSV. Set as the stream's on-disk format below.
+        self._encoder_pix_fmt = str(encoder_pix_fmt)
         self._audio_codec_name = audio_codec
         self._audio_bitrate = int(audio_bitrate)
         # Identifier for the game this recording belongs to. Written as a
@@ -261,11 +262,18 @@ class InProcessEncoder:
             vs = container.add_stream(self._video_codec_name, rate=self._video_framerate)
             vs.width = self._target_width
             vs.height = self._target_height
-            # NVENC accepts NV12 natively; libav will swscale BGRA->NV12 at
-            # encode time. We pick yuv420p as the on-disk pix_fmt because it
-            # gives the broadest player compatibility once we remux to MP4.
-            vs.pix_fmt = "yuv420p"
+            # Pix fmt is per-encoder: QSV needs nv12, everything else
+            # takes yuv420p. yuv420p still gives the broadest player
+            # compatibility once we remux to MP4; QSV's nv12 output is
+            # also universally playable.
+            vs.pix_fmt = self._encoder_pix_fmt
             vs.codec_context.options = self._video_options
+            # Explicit keyframe interval: every 2 seconds. Without this
+            # the various backends default to 250-frame GOPs (~4-8s at
+            # typical capture rates), and the editor's seek/scrub for
+            # bookmarks and trim handles has to decode an entire GOP
+            # before landing — visibly sluggish on long recordings.
+            vs.codec_context.gop_size = max(1, self._video_framerate * 2)
             # Millisecond-resolution timebase. PTS values come from wallclock
             # seconds * 1000, so reordering / drift is easy to reason about.
             vs.time_base = Fraction(1, 1000)

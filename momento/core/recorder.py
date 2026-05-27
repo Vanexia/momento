@@ -179,19 +179,24 @@ class Recorder:
             # NVENC first, then AMF, QSV, MF, finally libx264 as software
             # floor. The probe + cache lives in momento.core.encoders so
             # the picked backend is consistent across recordings in the
-            # same process run.
-            video_codec = encoders.pick_encoder()
-            video_options = encoders.quality_options_for(
-                video_codec,
-                params.quality_preset,
-                params.custom_bitrate_kbps,
-            )
-            logger.info(
-                "Selected video encoder: %s (preset=%s)",
-                encoders.display_name_for(video_codec),
-                params.quality_preset,
-            )
+            # same process run. This is INSIDE the same try/except that
+            # owns video.stop() — if pick_encoder() raises (no encoder at
+            # all works on this machine, libav corrupt, etc.) the WGC
+            # capture session built above is correctly torn down.
             try:
+                video_codec = encoders.pick_encoder()
+                video_options = encoders.quality_options_for(
+                    video_codec,
+                    params.quality_preset,
+                    params.custom_bitrate_kbps,
+                )
+                encoder_pix_fmt = encoders.preferred_pix_fmt_for(video_codec)
+                logger.info(
+                    "Selected video encoder: %s (preset=%s, pix_fmt=%s)",
+                    encoders.display_name_for(video_codec),
+                    params.quality_preset,
+                    encoder_pix_fmt,
+                )
                 encoder = InProcessEncoder(
                     output_path=mkv_path,
                     video_width=w,
@@ -206,11 +211,12 @@ class Recorder:
                     target_height=target_h,
                     video_codec=video_codec,
                     video_options=video_options,
+                    encoder_pix_fmt=encoder_pix_fmt,
                 )
                 encoder.start()
             except Exception:
                 video.stop()
-                logger.exception("Failed to start encoder")
+                logger.exception("Failed to pick encoder or start it")
                 raise
 
             video.start_sending(encoder.submit_video)

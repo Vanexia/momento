@@ -20,6 +20,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from momento.core.encoder import InProcessEncoder
+from momento.core import encoders
 
 WIDTH = 1280
 HEIGHT = 720
@@ -54,6 +55,16 @@ def main() -> int:
     if OUT_PATH.exists():
         OUT_PATH.unlink()
 
+    # Phase 12+: pick whichever encoder the host actually supports so
+    # the smoke test isn't locked to NVIDIA. On a CI box with no GPU
+    # this lands on libx264; on a dev machine with NVENC it lands on
+    # NVENC. quality_options_for + preferred_pix_fmt_for return the
+    # correct per-backend wiring for the chosen encoder.
+    video_codec = encoders.pick_encoder()
+    video_options = encoders.quality_options_for(video_codec, "high", 12000)
+    encoder_pix_fmt = encoders.preferred_pix_fmt_for(video_codec)
+    print(f"smoke encoder: {encoders.display_name_for(video_codec)} (pix_fmt={encoder_pix_fmt})")
+
     enc = InProcessEncoder(
         OUT_PATH,
         video_width=WIDTH,
@@ -66,6 +77,9 @@ def main() -> int:
         sys_channels=2,
         mic_volume=1.0,
         sys_volume=1.0,
+        video_codec=video_codec,
+        video_options=video_options,
+        encoder_pix_fmt=encoder_pix_fmt,
     )
     enc.start()
 
