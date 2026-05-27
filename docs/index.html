@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Momento — Local game recorder for Windows</title>
 <meta name="description" content="Momento is a local Windows desktop app that auto-records games to MKV and includes a built-in clip editor. No telemetry, no cloud, no account required. Optional one-click YouTube upload for sharing clips.">
+<link rel="icon" type="image/png" href="momento-256.png">
+<link rel="apple-touch-icon" href="momento-256.png">
+<meta property="og:image" content="momento-256.png">
+<meta property="og:title" content="Momento — Local game recorder for Windows">
+<meta property="og:description" content="Local Windows game recorder with built-in clip editor and opt-in YouTube upload.">
 <style>
   :root {
     --accent: #8b5cf6;
@@ -23,6 +28,7 @@
   .wrap { max-width: 880px; margin: 0 auto; }
 
   header { padding: 48px 0 56px; text-align: center; }
+  header .logo { display: block; margin: 0 auto 20px; width: 160px; height: 160px; }
   header h1 { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px; }
   header h1 .dot { color: var(--accent); }
   header .tagline { font-size: 20px; color: var(--text-dim); max-width: 580px; margin: 0 auto; }
@@ -61,6 +67,7 @@
 <div class="wrap">
 
   <header>
+    <img src="momento-256.png" alt="Momento logo" class="logo" width="160" height="160">
     <h1>Momento<span class="dot">.</span></h1>
     <p class="tagline">A local Windows game recorder with a built-in clip editor. Everything stays on your machine.</p>
     <div class="badges">
