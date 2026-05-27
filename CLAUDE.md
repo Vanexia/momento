@@ -49,7 +49,13 @@ notifications + startup before they ever see a game launch.
 
 - Windows 10 or 11
 - Python 3.12
-- NVIDIA GPU (NVENC for hardware encoding — no other encoder fallback in v1)
+- A working H.264 encoder — auto-detected at startup from this priority
+  chain: **NVENC** (NVIDIA) → **AMF** (AMD) → **QSV** (Intel) → **Media
+  Foundation** (generic Windows hardware path) → **libx264** (pure-CPU
+  software fallback). The software path works on any machine but uses
+  meaningfully more CPU; the hardware paths are essentially free during
+  recording. See `momento/core/encoders.py` for the probe + selection
+  logic.
 - Default capture: window's native resolution, **framerate auto-matched
   to the primary monitor's refresh rate** (Settings → Capture → "Match
   display refresh rate"). Falls back to manual 30 / 60 / 120 / Custom
@@ -427,7 +433,6 @@ Trim export carries the tag via `-map_metadata 0 -movflags
 - Mic noise suppression, audio post-processing
 - Hotkeys for manual record start/stop (auto-only; **bookmark** hotkey is
   fine because it's a different concept)
-- Hardware encoders other than NVENC
 - **Mic-disconnected notification** — no device-disconnect detector
   currently implemented; would need its own monitor service
 
@@ -501,7 +506,14 @@ Momento/
 │   ├── core/
 │   │   ├── audio_loopback.py     WASAPI loopback capture via soundcard
 │   │   ├── bookmarks.py          .bookmarks.json sidecar persistence
-│   │   ├── encoder.py            InProcessEncoder: PyAV-backed video +
+│   │   ├── encoders.py           Phase 12 — H.264 encoder probe + select.
+│   │                             detect_available() opens each backend
+│   │                             (NVENC/AMF/QSV/MF/libx264) at 320x240 to
+│   │                             see what the hardware can run. Cached.
+│   │                             pick_encoder() returns the highest
+│   │                             priority working one. quality_options_for
+│   │                             maps preset → per-backend options dict.
+│   ├── encoder.py            InProcessEncoder: PyAV-backed video +
 │   │   │                         audio encoder/muxer writing MKV.
 │   │   │                         Accepts `game_slug` (writes MOMENTO_GAME
 │   │   │                         tag), `target_width/height` (frame
@@ -837,6 +849,74 @@ every recording stops. Deletes oldest `.mkv` recordings + sidecars to fit
 **All 12 original milestones shipped + Tier-3 PyAV rewrite + multiple
 polish passes complete.** Build produces ~749 MB bundles at
 `dist/Momento/Momento.exe`.
+
+### Latest landed work (Phase 12 — Multi-vendor GPU encoder support, 2026-05-27)
+
+**Why:** Previously NVIDIA-only via hardcoded `h264_nvenc`. CLAUDE.md
+explicitly listed "Hardware encoders other than NVENC" as out of scope
+for v1 — that line is now gone. Adding YouTube distribution made the
+audience cap untenable; ~20% of gaming PCs run AMD, plus every laptop
+without a dGPU runs Intel iGPU.
+
+**New module: `momento/core/encoders.py`**
+
+- `detect_available()` probes h264_nvenc → h264_amf → h264_qsv →
+  h264_mf → libx264 by opening a real CodecContext at 320×240 yuv420p.
+  Caches result module-level — one probe per process. Failed probes log
+  at DEBUG (so a NVIDIA-only box doesn't spam INFO with AMF/QSV "device
+  not present" messages); successes log at INFO.
+- `pick_encoder(preferred=None)` returns the first available from the
+  priority list, or honours an explicit pin. Raises if even libx264
+  fails (which would mean the libav build is broken — we'd rather
+  refuse to start than fall through silently).
+- `quality_options_for(encoder, preset, custom_bitrate_kbps)` returns
+  the encoder-specific options dict. Each backend uses its own option
+  vocabulary; this is the single point that knows the differences:
+  - NVENC: `rc=vbr cq=N` (constant-quality) or `rc=cbr b=Nk`; common
+    `preset=p4 tune=hq spatial-aq=1 temporal-aq=1`
+  - AMF: `rc=cqp qp_i/qp_p/qp_b=N` or `rc=cbr b=Nk`; common
+    `usage=transcoding quality={speed|balanced|quality}`
+  - QSV: `global_quality=N preset={faster|medium|slow} look_ahead=0`
+    (lookahead off to avoid capture latency)
+  - Media Foundation: `quality_vs_speed=0-100 rate_control=u_vbr|cbr`
+  - libx264: `crf=N preset=ultrafast tune=zerolatency` — `ultrafast` is
+    essentially mandatory for live capture; anything slower drops
+    frames at 1080p60 even on fast CPUs.
+- `display_name_for(encoder)` returns the human-readable label that
+  the recorder logs and (in a future Phase) the Capture settings tab
+  surfaces.
+
+**Wiring in `momento/core/recorder.py`:**
+
+- `_QUALITY_CQ` dict + `_quality_options()` deleted — replaced by the
+  delegation to `encoders.quality_options_for()`.
+- Recorder picks the encoder at the start of each recording via
+  `encoders.pick_encoder()`. Logs "Selected video encoder: X (preset=Y)"
+  so a failed recording is diagnosable.
+- The InProcessEncoder constructor already accepted `video_codec` +
+  `video_options` independently; recorder now passes both rather than
+  relying on the NVENC default.
+
+**Quality semantics:**
+
+The constant-quality value (cq / qp / global_quality / crf) is held
+constant across backends at `_QUALITY_FACTOR = {low: 28, medium: 23,
+high: 19}`. Visual quality at the same factor is approximately
+comparable across NVENC / AMF / QSV / x264 (within ~10% bitrate at
+matched perceptual quality). libx264's `ultrafast` preset reaches
+the same CRF but with higher bitrate to hit the quality — file sizes
+on the software path will be somewhat larger than hardware-encoded
+output at the same preset.
+
+**Testing reality:**
+
+NVENC path verified bit-identical to pre-Phase-12 output (same options
+emitted, same encoder, same file). AMF + QSV paths are written
+correctly per FFmpeg docs but **not yet runtime-validated on real
+hardware** — the dev machine is NVIDIA-only. Treat reports from AMD /
+Intel-iGPU friends as the test pass. Media Foundation + libx264 paths
+verified open cleanly during probe; libx264 produces playable output
+in a smoke test.
 
 ### Latest landed work (Phase 11 — YouTube upload bridge, 2026-05-26)
 

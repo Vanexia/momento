@@ -38,6 +38,7 @@ from pathlib import Path
 
 from momento.core.audio_loopback import LoopbackStreamer
 from momento.core.encoder import InProcessEncoder
+from momento.core import encoders
 from momento.core.mic_capture import MicStreamer
 from momento.core.video_capture import WindowVideoStreamer
 from momento.util.paths import logs_dir
@@ -174,8 +175,21 @@ class Recorder:
             target_w, target_h = _resolve_target_dims(
                 w, h, params.target_resolution,
             )
-            video_options = _quality_options(
-                params.quality_preset, params.custom_bitrate_kbps,
+            # Auto-detect the best H.264 encoder available on this machine.
+            # NVENC first, then AMF, QSV, MF, finally libx264 as software
+            # floor. The probe + cache lives in momento.core.encoders so
+            # the picked backend is consistent across recordings in the
+            # same process run.
+            video_codec = encoders.pick_encoder()
+            video_options = encoders.quality_options_for(
+                video_codec,
+                params.quality_preset,
+                params.custom_bitrate_kbps,
+            )
+            logger.info(
+                "Selected video encoder: %s (preset=%s)",
+                encoders.display_name_for(video_codec),
+                params.quality_preset,
             )
             try:
                 encoder = InProcessEncoder(
@@ -190,6 +204,7 @@ class Recorder:
                     game_slug=params.game_slug,
                     target_width=target_w,
                     target_height=target_h,
+                    video_codec=video_codec,
                     video_options=video_options,
                 )
                 encoder.start()
@@ -298,13 +313,6 @@ _RESOLUTION_HEIGHTS: dict[str, int] = {
     "4k": 2160,
 }
 
-_QUALITY_CQ: dict[str, int] = {
-    "low": 28,
-    "medium": 23,
-    "high": 19,
-}
-
-
 def _resolve_target_dims(
     source_w: int, source_h: int, preset: str
 ) -> tuple[int, int]:
@@ -324,29 +332,6 @@ def _resolve_target_dims(
     target_h -= target_h & 1
     target_w -= target_w & 1
     return target_w, target_h
-
-
-def _quality_options(preset: str, custom_bitrate_kbps: int) -> dict[str, str]:
-    """Build the NVENC options dict for the configured quality preset.
-
-    Low / Medium / High pick a constant-quality CQ value. Custom switches
-    to constant-bitrate mode using ``custom_bitrate_kbps``.
-    """
-    base = {
-        "preset": "p4",
-        "tune": "hq",
-        "spatial-aq": "1",
-        "temporal-aq": "1",
-    }
-    if preset == "custom":
-        base["rc"] = "cbr"
-        base["b"] = f"{max(1000, int(custom_bitrate_kbps))}k"
-        return base
-    cq = _QUALITY_CQ.get(preset, _QUALITY_CQ["high"])
-    base["rc"] = "vbr"
-    base["cq"] = str(cq)
-    base["b"] = "0"
-    return base
 
 
 def _is_writable(folder: Path) -> bool:

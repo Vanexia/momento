@@ -26,8 +26,11 @@ and trim clips.
 ## Requirements
 
 - Windows 10 / 11 (Desktop Duplication API + WASAPI loopback are required).
-- An **NVIDIA GPU** with NVENC support (RTX 20-series or newer recommended).
-  AMD / Intel encoders are not used in v1.
+- A GPU with a hardware H.264 encoder is recommended — Momento
+  auto-detects **NVIDIA NVENC**, **AMD AMF**, or **Intel QuickSync**
+  in that priority order. If none are usable it falls back to
+  **libx264** (pure CPU encode) which works on any machine but uses
+  meaningfully more CPU during recording.
 - Python 3.12 (only for running from source; the packaged exe ships its own).
 - ~700 MB of disk space for the packaged build (mostly the bundled `ffmpeg`).
 
@@ -139,7 +142,6 @@ Output lands in `dist/Momento/`. Distribute the whole folder.
 
 The spec is intentionally narrow:
 
-- **NVENC only** — no QSV / AMF / x264 fallback in v1.
 - **No live preview** during recording.
 - **No ring-buffer / "last N minutes"** continuous recording.
 - **No per-app audio separation** — system audio is the full mix of whatever's
@@ -162,8 +164,11 @@ The spec is intentionally narrow:
   `%APPDATA%\Momento\config.json` (negative = audio earlier).
 - **Recording drops a lot of frames during gameplay** — check the per-recording
   log for `drops=N` on the video stream. Common causes: GPU pegged by the
-  game itself (NVENC time-slice starvation) or another active NVENC session
-  (OBS, ShadowPlay, Discord screen-share).
+  game itself (encoder time-slice starvation), another active hardware-encode
+  session (OBS, ShadowPlay, Discord screen-share), or — if Momento fell back
+  to the libx264 software encoder — the CPU just can't keep up at the
+  configured resolution/framerate. Search the log for "Selected video
+  encoder:" to see which backend is in use.
 - **Hotkey doesn't fire in a specific game** — some games using exclusive
   raw input block global hotkeys. Pick a different combo in Settings.
 - **Tray icon doesn't appear** — your tray may have icon overflow on; check

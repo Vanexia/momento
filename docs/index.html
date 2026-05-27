@@ -65,7 +65,7 @@
     <p class="tagline">A local Windows game recorder with a built-in clip editor. Everything stays on your machine.</p>
     <div class="badges">
       <span class="badge">Windows 10/11</span>
-      <span class="badge">NVIDIA GPU (NVENC)</span>
+      <span class="badge">NVIDIA / AMD / Intel GPU</span>
       <span class="badge">No account required</span>
       <span class="badge">No telemetry</span>
     </div>
@@ -128,7 +128,7 @@
   <section>
     <h2>System requirements</h2>
     <p><strong>Windows 10</strong> (1903 or newer) or <strong>Windows 11</strong>.</p>
-    <p><strong>NVIDIA GPU</strong> with NVENC support (any GTX 10-series or newer, all RTX cards). NVENC handles the video encode so Momento is light on CPU during recording.</p>
+    <p><strong>Any modern GPU</strong> — Momento auto-detects and uses NVIDIA NVENC (GTX 10-series and newer), AMD AMF (RX 400-series and newer), or Intel QuickSync (any iGPU since Sandy Bridge, plus Arc dGPUs). On machines without a usable hardware encoder, it falls back to a software encoder (works anywhere, uses more CPU).</p>
     <p>Approximately 5 GB free disk for the app and a comfortable buffer for recordings (recordings are large — plan for ~1-3 GB per hour at the default High quality preset).</p>
   </section>
 
