@@ -5,11 +5,20 @@ on Momento. Read it first — it contains the full spec, the deviations the
 shipping code has taken from that spec, the current architecture, and a
 focused punch list of known-rough edges.
 
-Last comprehensive update: **2026-05-26** (YouTube upload bridge — Phase
-11). The Phase 9 polish pass (fullscreen overlay + migration progress
-dialog + violet brand swap + optimisation) remains the most recent UI
-sweep; Phase 10 (Rust WMI watcher + perf hybrid) was scoped, paused, and
-ultimately dropped in favour of shipping the YouTube feature first.
+Last comprehensive update: **2026-05-27** (Phase 13 brand refresh + Phase
+12.1 encoder bugfix pass + Phase 11.12 verification submission). Most
+recent shipped work in chronological order: **Phase 11** (YouTube upload
+bridge, 2026-05-26), **Phase 12** (multi-vendor GPU encoder support —
+NVENC/AMF/QSV/MF/libx264 auto-detect, 2026-05-27), **Phase 12.1** (8-fix
+bugfix pass from a code review of Phase 12, 2026-05-27), **Phase 13**
+(new violet "M + play-button" logo replacing the placeholder icon
+everywhere — exe, tray, taskbar, window title bars, landing page,
+favicons, Cloud Console branding, 2026-05-27), and **Phase 11.12**
+(OAuth verification submitted to Google for human review on 2026-05-27 —
+2-6 week calendar wait now in flight). Phase 9 polish pass (fullscreen
+overlay + migration progress dialog + violet brand swap) remains the
+most recent UI structural sweep. Phase 10 (Rust WMI watcher + perf
+hybrid) was scoped, paused, and dropped in favour of shipping YouTube.
 
 ---
 
@@ -645,7 +654,16 @@ Momento/
 │
 ├── resources/
 │   ├── ffmpeg/  (ffmpeg.exe + ffprobe.exe)
-│   ├── icons/momento.ico
+│   ├── icons/
+│   │   ├── momento.ico           Phase 13 — multi-res Windows icon
+│   │   │                         (16/32/48/64/128/256). Embedded into
+│   │   │                         the exe at PyInstaller build; loaded
+│   │   │                         via app_icon_path() at every Qt
+│   │   │                         setWindowIcon site.
+│   │   ├── momento.png           512×512 canonical PNG.
+│   │   ├── momento-256.png       Landing page hero + favicon source.
+│   │   └── momento-120.png       Cloud Console branding upload (square,
+│   │                             <1 MB per Google's spec).
 │   ├── sounds/bookmark.wav
 │   ├── known_games.json
 │   └── youtube/
@@ -653,6 +671,16 @@ Momento/
 │       └── client_secrets.json   GITIGNORED — Google Cloud OAuth client
 │                                 ID/secret for the Desktop OAuth flow.
 │                                 Drop yours here before building the exe.
+│
+├── docs/                         Phase 11 — GitHub Pages source. Served
+│   │                             at https://vanexia.github.io/momento/
+│   ├── index.html                Landing page (logo hero, features,
+│   │                             system reqs, privacy posture)
+│   ├── privacy.html              Privacy policy (Limited Use compliant)
+│   ├── momento.png / momento-256.png  Logo assets served by Pages
+│   ├── googlef67fbea1180e2743.html   Search Console verification token
+│   │                                 for the /momento/ URL prefix
+│   └── README.md                 GitHub Pages hosting instructions
 │
 ├── tests/                        smoke + diagnostic scripts (not pytest)
 │   ├── check_ffmpeg.py
@@ -847,8 +875,117 @@ every recording stops. Deletes oldest `.mkv` recordings + sidecars to fit
 ## Current status — what's shipped
 
 **All 12 original milestones shipped + Tier-3 PyAV rewrite + multiple
-polish passes complete.** Build produces ~749 MB bundles at
-`dist/Momento/Momento.exe`.
+polish passes complete + YouTube upload bridge + multi-vendor GPU
+encoder support + new brand logo.** OAuth verification submitted to
+Google on 2026-05-27, currently in human-review queue (Verification
+centre shows "Your branding and data access are currently under
+review"; typical timeline 2-6 weeks). During the review the app keeps
+working for the two test users on the Cloud project's allow-list
+(`leepricetv@gmail.com` with the PriceyL33 YouTube channel, and
+`leeprice095@gmail.com` with no channel attached). Build produces
+~750 MB bundles at `dist/Momento/Momento.exe` (6.9 MB exe + bundled
+libav/Qt6/Google API client/ffmpeg).
+
+### Latest landed work (Phase 13 — New logo, transparent across all surfaces, 2026-05-27)
+
+**Why:** Previous icon was a placeholder. New design: stylised violet
+"M" with a play-button cutout in the centre — combines the recording
++ playback motif. Brand-consistent with the existing violet `#8b5cf6`
+accent.
+
+**Source-of-truth files (all in `resources/icons/`):**
+
+- `momento.ico` — multi-resolution Windows icon (16/32/48/64/128/256
+  px). Embedded into `Momento.exe` by PyInstaller; used by Qt's
+  `setWindowIcon` at every window construction site via
+  `momento.util.resources.app_icon_path()`.
+- `momento.png` — 512×512 canonical PNG. Available for any future
+  high-DPI in-app rendering.
+- `momento-256.png` — landing-page hero (`<img src="momento-256.png">`
+  in `docs/index.html`) and favicon source (`<link rel="icon">`).
+- `momento-120.png` — Cloud Console branding requirement (square,
+  ≤1 MB; we ship 12 KB).
+
+**Surfaces that pick this up automatically** (all read from
+`app_icon_path()` → `momento.ico`): editor window title bar + Alt+Tab,
+Welcome wizard window, tray toast notification icon, Windows taskbar
+(via the exe's embedded icon resource).
+
+**Surfaces NOT affected (intentionally):** the tray's idle (green) /
+recording (red) status dots are programmatically painted via QPainter
+in `momento/ui/tray.py::make_tray_icon`. They're status indicators,
+not brand marks.
+
+**Landing page + privacy policy at https://vanexia.github.io/momento/**
+also got: hero logo image in the header, favicon link, Apple touch-icon
+hint, Open Graph image meta for social previews.
+
+**Footgun avoided on second try:** the FIRST source PNG was
+ChatGPT-saved in RGB mode (no alpha channel). It LOOKED transparent in
+the chat preview because of the checkerboard render, but the actual
+bytes had baked-white in the negative spaces — produced an .ico with
+visible white background in the tray. Identified by `Pillow.Image.open
+().mode == "RGB"` rather than `RGBA`. The corrected source was
+re-saved RGBA from the same prompt; the converter now sanity-checks
+`min(alpha) == 0` before writing the .ico and confirms `corner alpha
+== 0` at every output size after.
+
+### Latest landed work (Phase 12.1 — Encoder bugfix pass from code review, 2026-05-27)
+
+**Why:** Phase 12 shipped multi-vendor encoder support but a recall-mode
+code review (15 candidate findings, 5 angles × 8 candidates each)
+surfaced eight real bugs that would silently break the AMD/Intel/MF
+paths in production. Phase 12.1 is the surgical fix pass. NVENC was
+verified bit-identical to pre-12.1 via the smoke encoder test; libx264
+fallback was verified end-to-end forcing the backend via
+`encoders.pick_encoder(preferred=encoders.LIBX264)`.
+
+**The 8 fixes:**
+
+1. **Per-backend pix_fmt selection.** New `encoders.preferred_pix_fmt_for
+   (encoder)` returns `nv12` for QSV (which doesn't accept yuv420p per
+   `ffmpeg -h encoder=h264_qsv`) and `yuv420p` for the rest.
+   `InProcessEncoder.__init__` takes `encoder_pix_fmt` as a kwarg
+   instead of hardcoding yuv420p on the stream. Without this, every
+   Intel-only host would fail at `container.add_stream()` or get a
+   silent swscale before the hardware encoder, defeating the point.
+2. **Media Foundation option name.** Fixed `quality_vs_speed` →
+   `quality` (the latter is what `ffmpeg -h encoder=h264_mf` shows
+   alongside `rate_control`, `scenario`, `hw_encoding`). Wrong key was
+   silently dropped by libav so all three named presets produced
+   identical files at MF's default quality.
+3. **Explicit GOP / keyframe interval.** Every backend now gets
+   `vs.codec_context.gop_size = max(1, framerate * 2)` set in
+   `InProcessEncoder.start()` — keyframe every 2 seconds. Without this
+   the various backends defaulted to 250-frame GOPs (4-8s at typical
+   capture rates), and the editor's seek + trim-handle scrubbing had
+   to decode an entire GOP before landing. Visibly sluggish on long
+   recordings; now snappy.
+4. **pick_encoder() failure cleanup.** Moved `encoders.pick_encoder()`
+   + `encoders.quality_options_for()` + `InProcessEncoder()`
+   construction all inside the same `try / except: video.stop()` block
+   in `Recorder.start()`. Previously, if pick_encoder() raised (no
+   encoder at all works on this machine — corrupt PyInstaller bundle
+   etc.), the WGC capture session was leaked.
+5. **smoke_encoder.py uses pick_encoder.** Was hardcoded to NVENC via
+   InProcessEncoder's default. Now calls `encoders.pick_encoder()` +
+   `encoders.quality_options_for()` + `encoders.preferred_pix_fmt_for
+   ()` and threads the results through. Works on any host now.
+6. **InProcessEncoder constructor: video_codec + video_options are
+   required.** Removed the `"h264_nvenc"` default and the NVENC-only
+   options dict. Any future caller forgetting to thread them gets a
+   clean `TypeError` instead of a silent NVIDIA-only regression.
+7. **Failed probes log at INFO.** Was DEBUG, which meant users
+   debugging "why isn't my GPU picked?" got no clue without raising
+   log levels and reproducing. Now `momento.log` always shows
+   `Encoder probe: h264_X = unavailable (libav error...)` for every
+   backend that didn't open.
+8. **Probe applies the same quality options the recorder will use.**
+   `_probe_one()` now sets `ctx.options = quality_options_for(name,
+   "high", 12000)` before `ctx.open()`. A backend that opened bare
+   but rejected our quality options at real-record time used to pass
+   the probe and then crash on first recording; now correctly reported
+   as unavailable.
 
 ### Latest landed work (Phase 12 — Multi-vendor GPU encoder support, 2026-05-27)
 
@@ -917,6 +1054,65 @@ hardware** — the dev machine is NVIDIA-only. Treat reports from AMD /
 Intel-iGPU friends as the test pass. Media Foundation + libx264 paths
 verified open cleanly during probe; libx264 produces playable output
 in a smoke test.
+
+### Latest landed work (Phase 11.12 — Verification submitted, 2026-05-27)
+
+The Phase 11 YouTube code shipped on 2026-05-26 (see below). Phase 11.12
+is the production-ready verification submission to Google's OAuth review
+team — what gets us past the "Google hasn't verified this app" warning
+and the 100-test-user cap so friends can install Momento without being
+on a manually-curated allow-list.
+
+**Submission contents (filled via Cloud Console verification centre):**
+
+- Scope justification (~950 chars): names both scopes
+  (youtube.upload + youtube.readonly), what each is used for,
+  why narrower alternatives don't satisfy the upload requirement,
+  and the Limited Use compliance statement.
+- Demo video: <https://www.youtube.com/watch?v=AY_Eh3jpKhU> — 2:55
+  walkthrough showing the OAuth client_id in the consent screen URL,
+  the unverified-app warning + Advanced bypass, both scopes listed on
+  the consent dialog, an explicit user-initiated upload, and the
+  resulting watch URL on YouTube. Recorded via Win+G Game Bar.
+- Additional info: context about the branding-cache propagation issue
+  (see below), pointer to test users + which one has the YouTube
+  channel, link to the public source at
+  <https://github.com/Vanexia/momento>.
+- Verification questionnaire (4 Yes/No): all No — not personal-only,
+  not internal-only, not dev/staging, not a WordPress Gmail SMTP
+  plugin.
+- Two compliance acknowledgments ticked: read the verification
+  requirements + acknowledge CASA-if-restricted-scopes (we don't
+  request any restricted scopes, so it's a "rule that doesn't apply"
+  acknowledgment).
+
+**The branding-cache rabbit hole (kept here so a future Claude doesn't
+re-walk it):**
+
+Google's automated branding check (run when you click the "Verify
+branding" button on the Branding page) reads ownership state from a
+cache that doesn't sync to Search Console URL-prefix verifications in
+real time. After verifying ownership of *both*
+`https://vanexia.github.io/` and `https://vanexia.github.io/momento/`
+in Search Console (the latter via `docs/googlef67fbea1180e2743.html`,
+the former via a new `Vanexia/vanexia.github.io` user-page repo
+created specifically to host a verification file at the root path),
+the automated branding check kept returning the same word-for-word
+error ("homepage URL is not registered to you"). Multiple retries +
+logo upload didn't shake the cache. **The workaround was the "I
+believe that the issues found are incorrect" path** on the
+verification-issues dialog — that routes both branding + data-access
+through the same human review queue. Google reviewers can see Search
+Console ownership through their internal tooling, so the branding
+cache becomes irrelevant once a human is looking at the case.
+
+**Status after submission:** Cloud Console > Verification centre shows
+*"Your branding and data access are currently under review."* Watch
+`leeprice095@gmail.com` for emails from
+`cloud-platform-trust-and-safety@google.com` or similar. Typical
+calendar timeline: 2-6 weeks. Possible replies: approval (warning
+disappears, cap removed); clarification request (we iterate); rejection
+with specific reason (we fix and resubmit).
 
 ### Latest landed work (Phase 11 — YouTube upload bridge, 2026-05-26)
 
@@ -1316,6 +1512,26 @@ C:\dev\Momento\.venv\Scripts\python.exe -m PyInstaller `
   could be tightened by re-tinting toward violet, but the chromatic
   shift is small enough to be invisible against the dominant violet
   accent — flag, don't rush.
+- **AMD AMF + Intel QSV paths are theoretically-correct but unverified
+  on real hardware** — the dev machine is NVIDIA-only. Phase 12.1 fixed
+  every bug a code review surfaced (per-backend pix_fmt, MF option
+  name, GOP size, probe-applies-options, etc.), but the *first AMD/
+  Intel-iGPU friend's first recording* is the actual test pass. If it
+  fails, the log line `Selected video encoder: X (preset=Y, pix_fmt=Z)`
+  + the preceding probe results identify the backend that broke.
+- **YouTube OAuth flow's loopback redirect doesn't auto-cancel on
+  browser-close** — if the user closes the OAuth tab without explicitly
+  cancelling on Google's page, `run_local_server` keeps waiting for the
+  redirect for the full 5-minute `_FLOW_TIMEOUT_SECONDS`. Settings
+  buttons stay disabled in busy state during that window. Workaround
+  today: restart Momento. Real fix: add a Cancel button to Settings
+  during connect, or drop the timeout to ~90s. Tracked but not
+  promised.
+- **Branding-verification cache lag (Cloud Console-side, not ours)** —
+  Google's branding-check service doesn't sync to Search Console
+  URL-prefix ownership in real time; the workaround is the
+  additional-review path (which we used). Affects future re-submissions
+  if Google requests resubmission and we re-trigger branding check.
 
 ---
 
@@ -1384,9 +1600,28 @@ high-leverage places to look:
 
 ---
 
-## Future direction (snapshot as of 2026-05-23)
+## Future direction (snapshot as of 2026-05-27)
 
-### Where the user's head is
+### Where things actually are right now
+
+**Functionally complete + distribution-ready.** Phase 11 shipped the
+YouTube upload feature; Phase 12 + 12.1 expanded recording to
+NVENC/AMF/QSV/MF/libx264 (so the audience cap is "Windows users with
+any modern GPU or a capable CPU" rather than "NVIDIA users"); Phase 13
+replaced the placeholder icon with a real brand mark. The repo and
+landing page are public at <https://github.com/Vanexia/momento> and
+<https://vanexia.github.io/momento/>. **OAuth verification is in
+Google's review queue** as of 2026-05-27 — when approved (2-6 week
+calendar), friends can install Momento and use the YouTube upload
+without being on a manually-curated test-user list and without seeing
+the "Google hasn't verified this app" warning.
+
+**The next move depends on what comes back from Google's review.** If
+they approve cleanly, the project is genuinely shippable. If they
+request clarifications, we iterate the submission. The non-verification
+backlog (below) is everything we'd build *after* the review settles.
+
+### Where the user's head is (legacy gaps still on the table)
 
 Momento is functionally complete for a personal game-recorder. The
 remaining gap vs. commercial tools is:
