@@ -15,7 +15,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from PyQt6.QtCore import (
-    QObject, QSettings, QStandardPaths, Qt, QThread, QTimer, QUrl, pyqtSignal,
+    QObject, QRunnable, QSettings, QStandardPaths, Qt, QThread, QThreadPool,
+    QTimer, QUrl, pyqtSignal,
 )
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -47,7 +48,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from PyQt6.QtGui import QBrush, QColor, QFont, QIcon
+from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap
 
 from momento.config import Config, DEFAULT_KNOWN_GAMES, save_config
 from momento.core.audio_loopback import LoopbackDevice, list_loopback_devices
@@ -752,11 +753,19 @@ class SettingsPanel(QWidget):
         box = QGroupBox("Account")
         layout = QVBoxLayout(box)
 
-        # Status line: "Signed in as: X" or "Not connected".
+        # Identity row: round channel avatar (when connected) + status text
+        # ("Signed in as: X" or "Not connected").
+        identity_row = QHBoxLayout()
+        identity_row.setSpacing(10)
+        self._yt_avatar_label = QLabel()
+        self._yt_avatar_label.setFixedSize(_YT_AVATAR_SIZE, _YT_AVATAR_SIZE)
+        self._yt_avatar_label.setVisible(False)
+        identity_row.addWidget(self._yt_avatar_label, 0, Qt.AlignmentFlag.AlignVCenter)
         self._yt_status_label = QLabel("")
         self._yt_status_label.setWordWrap(True)
         self._yt_status_label.setTextFormat(Qt.TextFormat.RichText)
-        layout.addWidget(self._yt_status_label)
+        identity_row.addWidget(self._yt_status_label, 1)
+        layout.addLayout(identity_row)
 
         # Three buttons in one row: Connect / Switch / Disconnect.
         # Visibility flips based on connection state so the user only sees
@@ -892,6 +901,7 @@ class SettingsPanel(QWidget):
         from momento.youtube import auth as yt_auth
 
         yt_auth.disconnect_account()
+        yt_auth.delete_cached_avatar()
         self._config = replace(
             self._config, youtube_channel_name="", youtube_channel_id=""
         )
@@ -928,6 +938,10 @@ class SettingsPanel(QWidget):
             self._yt_connect_btn.setVisible(False)
             self._yt_switch_btn.setVisible(True)
             self._yt_disconnect_btn.setVisible(True)
+            self._set_yt_avatar()
+            # Connected before this feature existed (or cache was cleared) →
+            # pull the avatar once in the background so it shows up too.
+            self._maybe_fetch_avatar_async()
         else:
             self._yt_status_label.setText(
                 "<span style='color:#aaa'>Not connected. "
@@ -936,6 +950,58 @@ class SettingsPanel(QWidget):
             self._yt_connect_btn.setVisible(True)
             self._yt_switch_btn.setVisible(False)
             self._yt_disconnect_btn.setVisible(False)
+            self._yt_avatar_label.setVisible(False)
+
+    def _set_yt_avatar(self) -> None:
+        """Load the cached avatar PNG into a round chip, or hide it if absent."""
+        from momento.util.paths import youtube_avatar_path
+
+        path = youtube_avatar_path()
+        src = QPixmap(str(path)) if path.is_file() else QPixmap()
+        if src.isNull():
+            self._yt_avatar_label.setVisible(False)
+            return
+
+        size = _YT_AVATAR_SIZE
+        scaled = src.scaled(
+            size,
+            size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        # Centre-crop the (possibly non-square) scaled image to a square.
+        cropped = scaled.copy(
+            (scaled.width() - size) // 2, (scaled.height() - size) // 2, size, size
+        )
+        rounded = QPixmap(size, size)
+        rounded.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(rounded)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        clip = QPainterPath()
+        clip.addEllipse(0, 0, size, size)
+        painter.setClipPath(clip)
+        painter.drawPixmap(0, 0, cropped)
+        painter.end()
+        self._yt_avatar_label.setPixmap(rounded)
+        self._yt_avatar_label.setVisible(True)
+
+    def _maybe_fetch_avatar_async(self) -> None:
+        """If connected but no avatar is cached yet, fetch it once off-thread."""
+        from momento.util.paths import youtube_avatar_path
+
+        if youtube_avatar_path().is_file() or getattr(self, "_yt_avatar_fetching", False):
+            return
+        self._yt_avatar_fetching = True
+        runnable = _AvatarFetchRunnable()
+        runnable.setAutoDelete(False)
+        self._yt_avatar_runnable = runnable  # keep alive past run()
+        runnable.signals.done.connect(self._on_avatar_fetched)
+        QThreadPool.globalInstance().start(runnable)
+
+    def _on_avatar_fetched(self, ok: bool) -> None:
+        self._yt_avatar_fetching = False
+        if ok:
+            self._set_yt_avatar()
 
     def _build_startup_group(self) -> QGroupBox:
         box = QGroupBox("Startup")
@@ -1876,10 +1942,47 @@ class _YouTubeConnectWorker(QObject):
         try:
             from momento.youtube import auth as yt_auth
             info = yt_auth.connect_account()
+            # Cache the avatar here (still off the GUI thread) so it's ready
+            # by the time `succeeded` repaints the Settings chip.
+            yt_auth.cache_channel_avatar(getattr(info, "thumbnail_url", ""))
             self.succeeded.emit(info)
         except Exception as exc:  # noqa: BLE001 — surface anything to the UI
             logger.exception("YouTube connect worker failed")
             self.failed.emit(str(exc))
+
+
+class _AvatarFetchSignals(QObject):
+    done = pyqtSignal(bool)  # True if a fresh avatar was cached to disk
+
+
+class _AvatarFetchRunnable(QRunnable):
+    """One-shot background fetch of the connected channel's avatar.
+
+    Used when the user is connected but no avatar is cached yet (e.g. they
+    signed in with a build that predated this feature). Cheap — one
+    channels.list call (1 quota unit) plus a small image download.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.signals = _AvatarFetchSignals()
+
+    def run(self) -> None:  # noqa: D401 — Qt slot
+        ok = False
+        try:
+            from momento.youtube import auth as yt_auth
+
+            creds = yt_auth.get_authorized_credentials()
+            if creds is not None:
+                info = yt_auth.fetch_channel_info(creds)
+                ok = yt_auth.cache_channel_avatar(info.thumbnail_url) is not None
+        except Exception:  # noqa: BLE001 — purely cosmetic, never surface
+            logger.warning("Background YouTube avatar fetch failed", exc_info=True)
+        self.signals.done.emit(ok)
+
+
+# Diameter (px) of the round channel-avatar chip in the YouTube settings tab.
+_YT_AVATAR_SIZE = 44
 
 
 def _hint_label(text: str) -> QLabel:

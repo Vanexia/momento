@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from google.auth.exceptions import RefreshError
@@ -227,6 +228,56 @@ def fetch_channel_info(creds: Credentials) -> ChannelInfo:
         custom_url=snippet.get("customUrl", ""),
         thumbnail_url=thumb,
     )
+
+
+def cache_channel_avatar(thumbnail_url: str) -> Optional[Path]:
+    """Download the channel avatar to a local PNG for the Settings chip.
+
+    Best-effort and non-fatal: returns the file path on success, ``None`` on
+    any failure (no network, bad URL, write error). A missing avatar is never
+    worth failing a sign-in over. Safe to call from a worker thread.
+    """
+    if not thumbnail_url:
+        return None
+
+    import urllib.request
+    from momento.util.paths import youtube_avatar_path
+
+    try:
+        req = urllib.request.Request(
+            thumbnail_url, headers={"User-Agent": "Momento"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = resp.read()
+    except Exception:  # noqa: BLE001 — network/URL errors are non-fatal
+        logger.warning("Could not download YouTube avatar", exc_info=True)
+        return None
+
+    path = youtube_avatar_path()
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    try:
+        tmp.write_bytes(data)
+        tmp.replace(path)  # atomic swap
+    except OSError:
+        logger.warning("Could not write YouTube avatar to %s", path, exc_info=True)
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return None
+    return path
+
+
+def delete_cached_avatar() -> None:
+    """Remove the cached avatar PNG. Best-effort, never raises."""
+    from momento.util.paths import youtube_avatar_path
+
+    path = youtube_avatar_path()
+    try:
+        if path.is_file():
+            path.unlink()
+    except OSError:
+        logger.warning("Could not delete cached YouTube avatar", exc_info=True)
 
 
 # ---------- Internals ------------------------------------------------------

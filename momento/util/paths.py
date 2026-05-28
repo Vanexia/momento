@@ -44,6 +44,15 @@ def youtube_token_path() -> Path:
     return appdata_dir() / "youtube_token.dat"
 
 
+def youtube_avatar_path() -> Path:
+    """Cached PNG of the connected channel's avatar, for the Settings chip.
+
+    Non-sensitive — a public channel thumbnail. Written on connect, deleted
+    on disconnect. Missing file just means "no avatar to show".
+    """
+    return appdata_dir() / "youtube_avatar.png"
+
+
 def default_output_folder() -> Path:
     """Return the default folder path for recorded MP4 files.
 
