@@ -139,6 +139,8 @@ class EditorWindow(QMainWindow):
         self._settings_panel: SettingsPanel | None = None
 
         self.setCentralWidget(self._stack)
+        # Start transparent; showEvent reveals once painted (see showEvent).
+        self.setWindowOpacity(0.0)
         self._install_shortcuts()
         self._restore_window_state()
         # Tray Quit calls QApplication.quit() which skips closeEvent — hook
@@ -1537,6 +1539,23 @@ class EditorWindow(QMainWindow):
         finally:
             s.endGroup()
 
+    def showEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        super().showEvent(event)
+        # Anti-flash: Windows paints a top-level window's default (white)
+        # background for a frame before Qt's first dark paint — a blinding
+        # flash on a dark, maximised window, worse on a re-map from hidden.
+        # The window is kept at opacity 0 until shown (see __init__ and the
+        # close-to-tray path); reveal it only after the event loop has had a
+        # turn to paint the real content, so the white frame happens while
+        # the window is invisible.
+        if self.windowOpacity() < 1.0:
+            QTimer.singleShot(0, self._reveal_window)
+
+    def _reveal_window(self) -> None:
+        # setWindowOpacity(1.0) also drops the transient layered-window style,
+        # so the native video surface composites normally afterwards.
+        self.setWindowOpacity(1.0)
+
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt API)
         # Save geometry on every close path — whether the user hides the
         # window or quits the app entirely, the next launch should land in
@@ -1553,6 +1572,9 @@ class EditorWindow(QMainWindow):
         if getattr(self._config, "close_to_tray", True):
             event.ignore()
             self.hide()
+            # Re-arm the anti-flash guard so the next show starts transparent
+            # and only reveals once it has repainted.
+            self.setWindowOpacity(0.0)
             return
         super().closeEvent(event)
 
