@@ -24,7 +24,7 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import (
     QColor, QCursor, QIcon, QKeyEvent, QKeySequence, QMouseEvent, QPainter,
-    QPen, QPixmap, QPolygonF, QShortcut,
+    QPalette, QPen, QPixmap, QPolygonF, QShortcut,
 )
 from PyQt6.QtMultimedia import QAudioOutput, QMediaDevices, QMediaPlayer
 from PyQt6.QtMultimediaWidgets import QVideoWidget
@@ -803,6 +803,18 @@ class VideoPreview(QWidget):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
         )
         self._video_widget.setMinimumHeight(200)
+        # The video renders into a native OS sub-window that the dark theme's
+        # QSS/palette doesn't reach, so on Windows it erases to white for a
+        # frame on every window show — a visible flash, since the preview
+        # fills a big slice of the editor. Force its background brush dark so
+        # any pre-frame erase blends into the theme (video letterboxes on
+        # black anyway) instead of flashing white.
+        self._video_widget.setAutoFillBackground(True)
+        _vpal = self._video_widget.palette()
+        _vpal.setColor(QPalette.ColorRole.Window, QColor("#000000"))
+        self._video_widget.setPalette(_vpal)
+        self._video_widget.setAttribute(Qt.WidgetAttribute.WA_OpaquePaintEvent, True)
+        self._video_widget.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground, True)
         self._video_widget.clicked.connect(self.toggle_play)
         self._video_widget.double_clicked.connect(self.toggle_fullscreen)
         self._video_widget.escape_pressed.connect(self._exit_fullscreen_if_active)
