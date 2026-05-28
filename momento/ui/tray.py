@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from PyQt6.QtCore import QObject, Qt, QUrl, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QTimer, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
@@ -129,6 +129,12 @@ class MomentoTray(QObject):
     # ------------------------------------------------------------------ API
     def show(self) -> None:
         self._tray.show()
+        # Warm the editor a moment after the app settles in the tray, so the
+        # first click shows an already-built window instead of stalling ~1s
+        # while it constructs. Skipped if a custom open_editor handler owns
+        # the editor lifecycle.
+        if self._open_editor is None:
+            QTimer.singleShot(1500, self._prebuild_editor)
 
     def hide(self) -> None:
         self._tray.hide()
@@ -282,25 +288,39 @@ class MomentoTray(QObject):
         # Refresh in case new recordings landed since it was opened.
         self._editor.refresh()
 
-    def _ensure_editor(self) -> EditorWindow:
-        """Lazy-construct the editor window, wire its signals once."""
+    def _build_editor(self) -> EditorWindow:
+        """Construct + wire the editor window without showing it.
+
+        Separated from ``_ensure_editor`` so it can run on a post-startup
+        idle timer — building the editor (~0.5-1s, dominated by the settings
+        panel) ahead of the first click makes that click feel instant.
+        """
         if self._editor is None:
             self._editor = EditorWindow(self._config, session=self._session)
             self._editor.settings_saved.connect(self._apply_new_config)
             # Seed the status strip with whatever we currently know — the
             # tray was the only listener until now, so the editor would
             # otherwise wait for the next session signal before showing
-            # the right state.
-            game = None
+            # the right state. ActiveGame isn't exposed on SessionManager;
+            # leave ``game`` None and let the next watcher tick refresh it.
             status = STATUS_RECORDING if self._session.is_recording else STATUS_IDLE
-            if status == STATUS_RECORDING:
-                # ActiveGame isn't directly exposed on SessionManager; the
-                # last-known display name on the tray is good enough for the
-                # status label, but we'd need to plumb the real ActiveGame
-                # through if we want exe-aware behaviour here. For now leave
-                # ``game`` as None — the next watcher tick will refresh it.
-                pass
-            self._editor.set_session_status(status, game)
+            self._editor.set_session_status(status, None)
+        return self._editor
+
+    def _prebuild_editor(self) -> None:
+        """Warm the editor in the background so the first tray click is instant.
+
+        Best-effort: a failure here leaves ``self._editor`` None, so the lazy
+        ``_ensure_editor`` path still builds it on click as before.
+        """
+        try:
+            self._build_editor()
+        except Exception:
+            logger.exception("Editor prebuild failed (will build lazily on click)")
+
+    def _ensure_editor(self) -> EditorWindow:
+        """Build the editor if needed, then show / raise it."""
+        self._build_editor()
         if not self._editor.isVisible():
             self._editor.show()
         else:

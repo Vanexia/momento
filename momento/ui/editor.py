@@ -132,10 +132,11 @@ class EditorWindow(QMainWindow):
         self._stack = QStackedWidget(self)
         self._stack.addWidget(self._build_editor_view())
 
-        self._settings_panel = SettingsPanel(config)
-        self._settings_panel.settings_saved.connect(self._on_settings_saved)
-        self._settings_panel.done.connect(self._show_editor_view)
-        self._stack.addWidget(self._settings_panel)
+        # The settings panel is heavy to build (~640-row games table, ~0.8s).
+        # Build it lazily on first open so showing the editor lands on the
+        # recordings page fast; an idle timer below pre-warms it so the first
+        # Settings open is also instant.
+        self._settings_panel: SettingsPanel | None = None
 
         self.setCentralWidget(self._stack)
         self._install_shortcuts()
@@ -146,6 +147,9 @@ class EditorWindow(QMainWindow):
         if app is not None:
             app.aboutToQuit.connect(self._save_window_state)
         self.refresh()
+        # Pre-warm settings shortly after the editor exists, off the critical
+        # open path, so navigating to it later doesn't stall.
+        QTimer.singleShot(800, self._ensure_settings_panel)
 
     # ----------------------------------------------------------- shortcuts
     def _install_shortcuts(self) -> None:
@@ -415,15 +419,25 @@ class EditorWindow(QMainWindow):
         col.addWidget(self._main_splitter, stretch=1)
         return wrapper
 
+    def _ensure_settings_panel(self) -> SettingsPanel:
+        """Lazy-construct the (heavy) settings panel and wire it once."""
+        if self._settings_panel is None:
+            self._settings_panel = SettingsPanel(self._config)
+            self._settings_panel.settings_saved.connect(self._on_settings_saved)
+            self._settings_panel.done.connect(self._show_editor_view)
+            self._stack.addWidget(self._settings_panel)
+        return self._settings_panel
+
     def _show_settings_view(self, open_tab: str | None = None) -> None:
         """Swap the stack to the settings page. ``open_tab`` can be e.g. "Audio"."""
         # Refresh from disk in case config changed via the warning-toast path,
         # then optionally jump to a specific tab (e.g. when summoned from the
         # tray's "Settings" menu or the welcome dialog).
-        self._settings_panel.reload_from_config(self._config)
+        panel = self._ensure_settings_panel()
+        panel.reload_from_config(self._config)
         if open_tab:
-            self._settings_panel.open_tab(open_tab)
-        self._stack.setCurrentIndex(1)
+            panel.open_tab(open_tab)
+        self._stack.setCurrentWidget(panel)
 
     def _show_editor_view(self) -> None:
         self._stack.setCurrentIndex(0)
@@ -1527,10 +1541,11 @@ class EditorWindow(QMainWindow):
         # window or quits the app entirely, the next launch should land in
         # the same place.
         self._save_window_state()
-        try:
-            self._settings_panel._stop_mic_test()
-        except Exception:
-            pass
+        if self._settings_panel is not None:
+            try:
+                self._settings_panel._stop_mic_test()
+            except Exception:
+                pass
         # ``close_to_tray`` (default on) hides the editor instead of closing
         # it; the tray icon stays the user's entry point. Quit from the tray
         # menu when they really want to exit.
