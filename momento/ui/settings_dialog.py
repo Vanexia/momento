@@ -141,20 +141,6 @@ class SettingsPanel(QWidget):
         self._tabs.addTab(self._build_youtube_tab(), "YouTube")
         root.addWidget(self._tabs, stretch=1)
 
-        # Bottom button row: Cancel + Save. Cancel just goes back without
-        # persisting; Save persists then goes back.
-        btn_row = QHBoxLayout()
-        btn_row.addStretch(1)
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self._on_back)
-        btn_row.addWidget(cancel_btn)
-        save_btn = QPushButton("Save")
-        save_btn.setObjectName("primary")
-        save_btn.setDefault(True)
-        save_btn.clicked.connect(self._on_save)
-        btn_row.addWidget(save_btn)
-        root.addLayout(btn_row)
-
         self._populate_devices()
         self._load_from_config()
 
@@ -188,7 +174,9 @@ class SettingsPanel(QWidget):
 
     # ---------------------------------------------------------------- tabs
     def _build_audio_tab(self) -> QWidget:
-        return _tab_with(self._build_audio_group())
+        return _tab_with(
+            self._build_audio_group(), on_save=self._on_save, on_cancel=self._on_back
+        )
 
     def _build_capture_tab(self) -> QWidget:
         return _tab_with_groups(
@@ -211,10 +199,14 @@ class SettingsPanel(QWidget):
                     "partial recording is still playable.",
                 ],
             ),
+            on_save=self._on_save,
+            on_cancel=self._on_back,
         )
 
     def _build_output_tab(self) -> QWidget:
-        return _tab_with(self._build_output_group())
+        return _tab_with(
+            self._build_output_group(), on_save=self._on_save, on_cancel=self._on_back
+        )
 
     def _build_bookmarks_tab(self) -> QWidget:
         return _tab_with_groups(
@@ -230,6 +222,8 @@ class SettingsPanel(QWidget):
                     "output — which means it lands in the recording too.",
                 ],
             ),
+            on_save=self._on_save,
+            on_cancel=self._on_back,
         )
 
     def _build_games_tab(self) -> QWidget:
@@ -237,18 +231,26 @@ class SettingsPanel(QWidget):
             self._build_games_group(),
             stretch_last=True,
             max_width=_GAMES_SETTINGS_WIDTH,
+            on_save=self._on_save,
+            on_cancel=self._on_back,
         )
 
     def _build_notifications_tab(self) -> QWidget:
-        return _tab_with(self._build_notifications_group())
+        return _tab_with(
+            self._build_notifications_group(), on_save=self._on_save, on_cancel=self._on_back
+        )
 
     def _build_startup_tab(self) -> QWidget:
-        return _tab_with(self._build_startup_group())
+        return _tab_with(
+            self._build_startup_group(), on_save=self._on_save, on_cancel=self._on_back
+        )
 
     def _build_youtube_tab(self) -> QWidget:
         return _tab_with_groups(
             self._build_youtube_account_group(),
             self._build_youtube_defaults_group(),
+            on_save=self._on_save,
+            on_cancel=self._on_back,
         )
 
     # ---------------------------------------------------------------- build
@@ -2044,8 +2046,34 @@ def _make_onoff_pill(checked: bool) -> QPushButton:
     return btn
 
 
+def _action_button_row(on_save, on_cancel) -> QHBoxLayout:
+    """Right-aligned Cancel + Save row, docked directly under a tab's content
+    box so the actions sit with the controls they commit — at the box's
+    bottom-right — instead of stranded at the window's bottom edge. Cancel
+    discards and returns; Save persists and returns."""
+    cancel_btn = QPushButton("Cancel")
+    cancel_btn.clicked.connect(on_cancel)
+    save_btn = QPushButton("Save")
+    save_btn.setObjectName("primary")
+    save_btn.setDefault(True)
+    save_btn.setMinimumWidth(96)
+    save_btn.clicked.connect(on_save)
+    row = QHBoxLayout()
+    row.setContentsMargins(0, 0, 0, 0)
+    row.setSpacing(8)
+    row.addStretch(1)
+    row.addWidget(cancel_btn)
+    row.addWidget(save_btn)
+    return row
+
+
 def _tab_with(
-    content: QWidget, stretch_last: bool = False, *, max_width: int = _DEFAULT_SETTINGS_WIDTH
+    content: QWidget,
+    stretch_last: bool = False,
+    *,
+    max_width: int = _DEFAULT_SETTINGS_WIDTH,
+    on_save=None,
+    on_cancel=None,
 ) -> QWidget:
     """Wrap a group/widget inside a padded, width-capped tab page."""
     page = QWidget()
@@ -2060,8 +2088,12 @@ def _tab_with(
     if stretch_last:
         # Games tab — let the table inside the group expand vertically.
         layout.addWidget(content, stretch=1)
+        if on_save is not None:
+            layout.addLayout(_action_button_row(on_save, on_cancel))
     else:
         layout.addWidget(content)
+        if on_save is not None:
+            layout.addLayout(_action_button_row(on_save, on_cancel))
         layout.addStretch(1)
     outer.addWidget(column, stretch=1)
     outer.addStretch(0)  # right-hand gutter once column is at its max
@@ -2069,7 +2101,7 @@ def _tab_with(
 
 
 def _tab_with_groups(
-    *groups: QWidget, max_width: int = _DEFAULT_SETTINGS_WIDTH
+    *groups: QWidget, max_width: int = _DEFAULT_SETTINGS_WIDTH, on_save=None, on_cancel=None
 ) -> QWidget:
     """Wrap multiple groups in a width-capped tab page so the thinner tabs
     feel finished instead of having a small group floating in a tall empty
@@ -2085,6 +2117,8 @@ def _tab_with_groups(
     layout.setSpacing(10)
     for g in groups:
         layout.addWidget(g)
+    if on_save is not None:
+        layout.addLayout(_action_button_row(on_save, on_cancel))
     layout.addStretch(1)
     outer.addWidget(column, stretch=1)
     outer.addStretch(0)
