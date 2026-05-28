@@ -147,9 +147,10 @@ class EditorWindow(QMainWindow):
         if app is not None:
             app.aboutToQuit.connect(self._save_window_state)
         self.refresh()
-        # Pre-warm settings shortly after the editor exists, off the critical
-        # open path, so navigating to it later doesn't stall.
-        QTimer.singleShot(800, self._ensure_settings_panel)
+        # NB: settings is built lazily on first open (see _ensure_settings_panel)
+        # rather than idle-prebuilt — a background build would land as a visible
+        # ~0.75s hitch shortly after the window opens. The one-time build when
+        # the user actually navigates to Settings is the expected place for it.
 
     # ----------------------------------------------------------- shortcuts
     def _install_shortcuts(self) -> None:

@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from PyQt6.QtCore import QObject, Qt, QTimer, QUrl, pyqtSignal
+from PyQt6.QtCore import QObject, Qt, QUrl, pyqtSignal
 from PyQt6.QtGui import QAction, QColor, QIcon, QPainter, QPen, QPixmap
 from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtWidgets import QApplication, QMenu, QMessageBox, QSystemTrayIcon
@@ -129,12 +129,6 @@ class MomentoTray(QObject):
     # ------------------------------------------------------------------ API
     def show(self) -> None:
         self._tray.show()
-        # Warm the editor a moment after the app settles in the tray, so the
-        # first click shows an already-built window instead of stalling ~1s
-        # while it constructs. Skipped if a custom open_editor handler owns
-        # the editor lifecycle.
-        if self._open_editor is None:
-            QTimer.singleShot(1500, self._prebuild_editor)
 
     def hide(self) -> None:
         self._tray.hide()
@@ -288,12 +282,13 @@ class MomentoTray(QObject):
         # Refresh in case new recordings landed since it was opened.
         self._editor.refresh()
 
-    def _build_editor(self) -> EditorWindow:
-        """Construct + wire the editor window without showing it.
+    def _ensure_editor(self) -> EditorWindow:
+        """Lazy-construct the editor window, wire its signals once, then show.
 
-        Separated from ``_ensure_editor`` so it can run on a post-startup
-        idle timer — building the editor (~0.5-1s, dominated by the settings
-        panel) ahead of the first click makes that click feel instant.
+        Built + shown together on click (not pre-built hidden): showing a
+        window that was constructed while hidden flashes when the preview's
+        native QVideoWidget surface realizes on first paint. The heavy part
+        (the settings panel) is deferred separately inside EditorWindow.
         """
         if self._editor is None:
             self._editor = EditorWindow(self._config, session=self._session)
@@ -305,22 +300,6 @@ class MomentoTray(QObject):
             # leave ``game`` None and let the next watcher tick refresh it.
             status = STATUS_RECORDING if self._session.is_recording else STATUS_IDLE
             self._editor.set_session_status(status, None)
-        return self._editor
-
-    def _prebuild_editor(self) -> None:
-        """Warm the editor in the background so the first tray click is instant.
-
-        Best-effort: a failure here leaves ``self._editor`` None, so the lazy
-        ``_ensure_editor`` path still builds it on click as before.
-        """
-        try:
-            self._build_editor()
-        except Exception:
-            logger.exception("Editor prebuild failed (will build lazily on click)")
-
-    def _ensure_editor(self) -> EditorWindow:
-        """Build the editor if needed, then show / raise it."""
-        self._build_editor()
         if not self._editor.isVisible():
             self._editor.show()
         else:
