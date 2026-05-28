@@ -286,46 +286,41 @@ class RecordingToast(QWidget):
         painter.setPen(QPen(_BORDER, 1))
         painter.drawPath(path)
 
-        # Left icon area (square with rounded inner box for the app icon).
+        # Left icon area (square — holds the brand logo plus a state dot).
         icon_rect = QRect(
             body_rect.left() + _PAD,
             body_rect.top() + (_BODY_H - _ICON_BOX) // 2,
             _ICON_BOX,
             _ICON_BOX,
         )
-        # Soft tinted background that switches colour based on state.
+        # State colour is carried by the dot only; the tinted background
+        # behind the logo has been dropped (it made the icon read as
+        # "avatar with presence dot" rather than "brand + event chip").
         tint = {
             "recording": _ACCENT_REC,
             "idle": _ACCENT_IDLE,
             "warn": _ACCENT_WARN,
             "bookmark": _ACCENT_BOOKMARK,
         }.get(self._state, _ACCENT_REC)
-        bg_tint = QColor(tint)
-        bg_tint.setAlpha(40)
-        icon_bg = QPainterPath()
-        icon_bg.addRoundedRect(icon_rect.toRectF(), 10, 10)
-        painter.fillPath(icon_bg, bg_tint)
 
-        # The app icon (resolved by the tray and handed in via set_app_icon).
+        # Brand logo at full size; state dot overlays its bottom-right corner
+        # with a BG halo so the dot pops cleanly off the violet and visibly
+        # overrides the brand mark with the current state.
         if self._app_icon is not None and not self._app_icon.isNull():
-            # Tight inset — the .ico already has its own rounded-square frame
-            # with margin, so we don't need much more here.
-            inset = 2
-            target = icon_rect.adjusted(inset, inset, -inset, -inset)
             scaled = self._app_icon.scaled(
-                target.size(),
+                _ICON_BOX - 4,
+                _ICON_BOX - 4,
                 Qt.AspectRatioMode.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            tx = target.left() + (target.width() - scaled.width()) // 2
-            ty = target.top() + (target.height() - scaled.height()) // 2
-            painter.drawPixmap(tx, ty, scaled)
+            lx = icon_rect.left() + (icon_rect.width() - scaled.width()) // 2
+            ly = icon_rect.top() + (icon_rect.height() - scaled.height()) // 2
+            painter.drawPixmap(lx, ly, scaled)
 
-        # Status indicator dot — bottom-right of the icon box.
-        dot_r = 9
+        dot_r = 10
         cx = icon_rect.right() - dot_r + 2
         cy = icon_rect.bottom() - dot_r + 2
-        painter.setPen(QPen(_BG, 2))  # halo to lift it off the icon
+        painter.setPen(QPen(_BG, 2))
         painter.setBrush(tint)
         painter.drawEllipse(cx - dot_r, cy - dot_r, dot_r * 2, dot_r * 2)
 
