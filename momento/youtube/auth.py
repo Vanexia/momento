@@ -57,8 +57,10 @@ SCOPES = [
 
 # Browser-flow timeout. If the user signs in correctly this resolves almost
 # immediately. If they close the tab without completing, the loopback server
-# would otherwise sit listening forever — bin it after 5 min.
-_FLOW_TIMEOUT_SECONDS = 300
+# blocks the worker thread (and disables the Settings buttons) until it fires,
+# so keep it short — 90s is ample to complete a real sign-in. (Was 300s, which
+# left the UI stuck for 5 min if the user abandoned the consent page.)
+_FLOW_TIMEOUT_SECONDS = 90
 
 
 class YouTubeAuthError(RuntimeError):

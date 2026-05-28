@@ -5,20 +5,25 @@ on Momento. Read it first — it contains the full spec, the deviations the
 shipping code has taken from that spec, the current architecture, and a
 focused punch list of known-rough edges.
 
-Last comprehensive update: **2026-05-27** (Phase 13 brand refresh + Phase
-12.1 encoder bugfix pass + Phase 11.12 verification submission). Most
-recent shipped work in chronological order: **Phase 11** (YouTube upload
-bridge, 2026-05-26), **Phase 12** (multi-vendor GPU encoder support —
-NVENC/AMF/QSV/MF/libx264 auto-detect, 2026-05-27), **Phase 12.1** (8-fix
-bugfix pass from a code review of Phase 12, 2026-05-27), **Phase 13**
-(new violet "M + play-button" logo replacing the placeholder icon
-everywhere — exe, tray, taskbar, window title bars, landing page,
-favicons, Cloud Console branding, 2026-05-27), and **Phase 11.12**
-(OAuth verification submitted to Google for human review on 2026-05-27 —
-2-6 week calendar wait now in flight). Phase 9 polish pass (fullscreen
+Last comprehensive update: **2026-05-28** (Phase 14 UX/perf polish pass).
+Most recent shipped work in chronological order: **Phase 11** (YouTube
+upload bridge, 2026-05-26), **Phase 12** (multi-vendor GPU encoder
+support — NVENC/AMF/QSV/MF/libx264 auto-detect, 2026-05-27), **Phase
+12.1** (8-fix bugfix pass from a code review of Phase 12, 2026-05-27),
+**Phase 13** (new violet "M + play-button" logo replacing the placeholder
+icon everywhere — exe, tray, taskbar, window title bars, landing page,
+favicons, Cloud Console branding, 2026-05-27), **Phase 11.12** (OAuth
+verification submitted to Google for human review on 2026-05-27 — 2-6
+week calendar wait now in flight), and **Phase 14** (2026-05-28: toast
+brand-mark icon, landing-page multi-vendor wording fix, Settings
+Cancel/Save relocated under each tab's content box, YouTube channel
+avatar in Settings, instant editor/Settings open via lazy-build +
+delegate-painted Games pills + tray idle prebuild, white-flash-on-open
+fix, OAuth connect timeout 300s→90s). Phase 9 polish pass (fullscreen
 overlay + migration progress dialog + violet brand swap) remains the
-most recent UI structural sweep. Phase 10 (Rust WMI watcher + perf
-hybrid) was scoped, paused, and dropped in favour of shipping YouTube.
+most recent UI structural sweep before Phase 14. Phase 10 (Rust WMI
+watcher + perf hybrid) was scoped, paused, and dropped in favour of
+shipping YouTube.
 
 ---
 
@@ -212,10 +217,13 @@ Each tab is width-capped (`_DEFAULT_SETTINGS_WIDTH = 920`, Games tab uses
   record non-game apps by mistake."
 - Search box + filter combo (All / Auto-record on / Auto-record off)
 - 3-column QTableWidget: **Game** (humanised name, italic + muted when
-  disabled) · **Executable** · **Auto-record** (pill toggle styled with
-  quiet "On" outline and prominent amber "Off" so disabled rows pop)
-- Pill is `setFixedSize(60, 24)`; rows are 38 px (`Fixed` resize mode +
-  per-row `setRowHeight`) so the rounded edges never clip
+  disabled) · **Executable** · **Auto-record** (On/Off pill — quiet "On"
+  outline, prominent amber "Off" so disabled rows pop)
+- The Auto-record pill is **delegate-painted** (`_OnOffPillDelegate`),
+  *not* a per-row widget (Phase 14 — was 641 live QPushButtons, the cause
+  of the ~0.25s Games-tab populate freeze). State lives on the column-2
+  item under `_AUTO_RECORD_ROLE`; click anywhere in the cell toggles it.
+  Rows are 38 px (`Fixed` resize mode + per-row `setRowHeight`).
 - Bottom row buttons (single line, left/right split):
   - Left: Add game… / Scan running apps… / Remove selected
   - Right: Restore defaults (merge) / Import… / Export… (JSON)
@@ -597,11 +605,14 @@ Momento/
 │   │   │                         select_by_path. Right-click signals
 │   │   │                         (play / rename / reveal / export /
 │   │   │                         repair / delete).
-│   │   ├── settings_dialog.py    SettingsPanel — 7 tabs. _make_onoff_pill
-│   │   │                         (Games column), _tab_with /
-│   │   │                         _tab_with_groups (width-capped pages
-│   │   │                         with optional max_width), _tips_group
-│   │   │                         (sub-cards).
+│   │   ├── settings_dialog.py    SettingsPanel — 8 tabs (incl. YouTube).
+│   │   │                         _OnOffPillDelegate (delegate-painted Games
+│   │   │                         Auto-record pill), _action_button_row
+│   │   │                         (Cancel/Save docked under each tab),
+│   │   │                         _tab_with / _tab_with_groups (width-capped
+│   │   │                         pages, with on_save/on_cancel), _tips_group
+│   │   │                         (sub-cards). Built lazily on first open;
+│   │   │                         tray idle-prewarms it.
 │   │   ├── status_panel.py       Live status strip with rounded pill
 │   │   │                         (Recording / Monitoring / Idle) + Mic /
 │   │   │                         System audio / Free space chips.
@@ -885,6 +896,77 @@ working for the two test users on the Cloud project's allow-list
 `leeprice095@gmail.com` with no channel attached). Build produces
 ~750 MB bundles at `dist/Momento/Momento.exe` (6.9 MB exe + bundled
 libav/Qt6/Google API client/ffmpeg).
+
+### Latest landed work (Phase 14 — UX/perf polish pass, 2026-05-28)
+
+A grab-bag polish session. All changes shipped to `main` and into a fresh
+exe; the landing-page wording fix is also live on GitHub Pages.
+
+**1. Toast left-icon rebrand (`momento/ui/toast.py`).** Dropped the tinted
+rounded-square background behind the brand logo (it read as "avatar with
+presence dot"); the logo now fills the icon box and the state dot (radius
+9→10) overlays its corner with a BG halo. Pure `paintEvent` change.
+
+**2. Landing-page encoder wording (`docs/index.html`).** One feature card
+still said "NVENC hardware encoding" post-Phase-12; now "Hardware encoding
+(NVIDIA, AMD or Intel)". (The GPU badge + system-reqs paragraph were
+already correct.)
+
+**3. Settings Cancel/Save relocated (`momento/ui/settings_dialog.py`).**
+Were pinned to the window's far bottom-right — easy to miss on tall sparse
+tabs (the user kept forgetting to Save). Now a right-aligned **Cancel +
+Save** row is docked directly under *each tab's* content box via a shared
+`_action_button_row(on_save, on_cancel)` helper threaded through
+`_tab_with` / `_tab_with_groups`. The old single bottom row is gone. Cancel
+and Save call `_on_back` / `_on_save`; `← Back` (top-left) still also
+discards-and-returns.
+
+**4. YouTube channel avatar (`momento/youtube/auth.py`,
+`settings_dialog.py`, `util/paths.py`).** `fetch_channel_info` already
+returned `thumbnail_url`; now `auth.cache_channel_avatar()` downloads it
+(stdlib `urllib`, best-effort) to `%APPDATA%/Momento/youtube_avatar.png`
+on connect, `delete_cached_avatar()` clears it on disconnect, and the
+Account section renders it as a round chip left of "Signed in as". For
+accounts connected before this existed, a one-shot `QThreadPool` fetch
+(`_AvatarFetchRunnable`) pulls it when Settings opens connected-but-
+uncached. No config-schema change (the cached PNG is the source of truth).
+New path helper: `paths.youtube_avatar_path()`.
+
+**5. Instant editor + Settings open (perf).** Three coordinated changes:
+  - **Lazy SettingsPanel** — `EditorWindow` no longer builds the (~0.7s)
+    settings panel in `__init__`; `_ensure_settings_panel()` builds it on
+    first open. `_show_settings_view` uses `setCurrentWidget`.
+  - **Delegate-painted Games pills** — the Games tab built **641 live
+    QPushButton cell widgets** (~240ms populate). Replaced with
+    `_OnOffPillDelegate` (a `QStyledItemDelegate`) that paints the On/Off
+    pill from the column-2 item's `_AUTO_RECORD_ROLE` (UserRole) data and
+    toggles on click. Populate dropped to ~11ms and scales to any list
+    size. `_make_onoff_pill` / `_pill_for_row` / the per-pill stylesheet
+    are **gone**; row state is read via `_row_enabled(row)`.
+  - **Tray idle prebuild** — `MomentoTray.show()` schedules
+    `QTimer.singleShot(1500, self._prebuild_editor)`, which builds the
+    editor **and** calls `editor.prewarm_settings()` while the window is
+    hidden, so the first click reveals an already-built editor and the
+    first Settings/Games open is instant. (`_build_editor` is split from
+    `_ensure_editor` for this.)
+
+**6. White-flash-on-open fix (`momento/ui/editor.py`).** Windows painted a
+top-level window's default white background for one frame before Qt's first
+dark paint — a blinding flash on the dark maximised editor, worse on a
+re-map from hidden. Fix: the window starts at `setWindowOpacity(0.0)` and
+`showEvent` reveals it via `QTimer.singleShot(0, self._reveal_window)` only
+after the event loop has painted; `closeEvent`'s close-to-tray path
+re-arms opacity 0 so reopen is covered too. **This is what made the tray
+prebuild safe to reintroduce** (a pre-built hidden window no longer
+flashes on show). The video preview's native `QVideoWidget` also got a
+black background brush (`preview.py`) so its area never reads white.
+*(Diagnosis note for the future: the flash is a paint artifact, NOT an
+auto-close — earlier confusion came from `closeEvent` logs that were just
+the user clicking X. There is no auto-close bug.)*
+
+**7. OAuth connect timeout 300s→90s (`momento/youtube/auth.py`).** An
+abandoned consent tab used to block the worker thread (and disable the
+Settings account buttons) for 5 min; now 90s.
 
 ### Latest landed work (Phase 13 — New logo, transparent across all surfaces, 2026-05-27)
 
@@ -1522,11 +1604,10 @@ C:\dev\Momento\.venv\Scripts\python.exe -m PyInstaller `
 - **YouTube OAuth flow's loopback redirect doesn't auto-cancel on
   browser-close** — if the user closes the OAuth tab without explicitly
   cancelling on Google's page, `run_local_server` keeps waiting for the
-  redirect for the full 5-minute `_FLOW_TIMEOUT_SECONDS`. Settings
-  buttons stay disabled in busy state during that window. Workaround
-  today: restart Momento. Real fix: add a Cancel button to Settings
-  during connect, or drop the timeout to ~90s. Tracked but not
-  promised.
+  redirect for the full `_FLOW_TIMEOUT_SECONDS` (Phase 14: lowered 300s →
+  **90s** so the Settings account buttons unstick within 90s instead of 5
+  min). Fuller fix (a Cancel button that stops the loopback server) is
+  still tracked, not promised.
 - **Branding-verification cache lag (Cloud Console-side, not ours)** —
   Google's branding-check service doesn't sync to Search Console
   URL-prefix ownership in real time; the workaround is the
