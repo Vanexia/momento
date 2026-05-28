@@ -15,8 +15,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from PyQt6.QtCore import (
-    QObject, QRunnable, QSettings, QStandardPaths, Qt, QThread, QThreadPool,
-    QTimer, QUrl, pyqtSignal,
+    QEvent, QObject, QRectF, QRunnable, QSettings, QSize, QStandardPaths, Qt,
+    QThread, QThreadPool, QTimer, QUrl, pyqtSignal,
 )
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -40,6 +40,9 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QSlider,
     QSpinBox,
+    QStyle,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
     QTabWidget,
     QTableWidget,
     QTableWidgetItem,
@@ -48,7 +51,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap
+from PyQt6.QtGui import QBrush, QColor, QFont, QIcon, QPainter, QPainterPath, QPen, QPainter, QPainterPath, QPixmap
 
 from momento.config import Config, DEFAULT_KNOWN_GAMES, save_config
 from momento.core.audio_loopback import LoopbackDevice, list_loopback_devices
@@ -1192,6 +1195,10 @@ class SettingsPanel(QWidget):
         vh.setSectionResizeMode(QHeaderView.ResizeMode.Fixed)
         vh.setDefaultSectionSize(38)
         self._games_table.setMinimumHeight(260)
+        # Auto-record column: delegate-painted pill (no per-row widget).
+        self._pill_delegate = _OnOffPillDelegate(self._games_table)
+        self._pill_delegate.toggled.connect(self._on_game_row_toggled)
+        self._games_table.setItemDelegateForColumn(2, self._pill_delegate)
         layout.addWidget(self._games_table, stretch=1)
         layout.addWidget(_hint_label(
             f"Tick the box to auto-record that game. Momento ships a curated "
@@ -1279,26 +1286,22 @@ class SettingsPanel(QWidget):
             exe_item.setFont(italic)
         table.setItem(row, 0, name_item)
         table.setItem(row, 1, exe_item)
-        pill = _make_onoff_pill(enabled)
-        pill.toggled.connect(lambda checked, r=row: self._on_game_row_toggled(r, checked))
-        wrap = QWidget()
-        row_lay = QHBoxLayout(wrap)
-        row_lay.setContentsMargins(0, 0, 0, 0)
-        row_lay.setSpacing(0)
-        # Centre the pill in both axes; without AlignVCenter the layout
-        # stretches the QPushButton to the cell height and the rounded
-        # corners get clipped against the cell edges.
-        row_lay.addStretch(1)
-        row_lay.addWidget(pill, 0, Qt.AlignmentFlag.AlignVCenter)
-        row_lay.addStretch(1)
-        table.setCellWidget(row, 2, wrap)
+        # Auto-record state on the column-2 item; the delegate paints the pill.
+        auto_item = QTableWidgetItem()
+        auto_item.setFlags(
+            (auto_item.flags() | Qt.ItemFlag.ItemIsEnabled) & ~Qt.ItemFlag.ItemIsEditable
+        )
+        auto_item.setData(_AUTO_RECORD_ROLE, enabled)
+        table.setItem(row, 2, auto_item)
         # Apply current search/filter to this fresh row so an Add-while-
         # filtering doesn't dump a hidden row into the user's selection.
         self._apply_games_filter_to_row(row)
 
-    def _on_game_row_toggled(self, row: int, checked: bool) -> None:
+    def _on_game_row_toggled(self, row: int) -> None:
         """Restyle the row + re-apply the filter when its auto-record state
-        flips so the muted look + Auto-record on/off filter stay in sync."""
+        flips so the muted look + Auto-record on/off filter stay in sync.
+        The delegate has already updated the column-2 item's data."""
+        checked = self._row_enabled(row)
         table = self._games_table
         muted = QBrush(QColor("#6e7588"))
         normal = QBrush(QColor("#e6e8ee"))
@@ -1312,6 +1315,11 @@ class SettingsPanel(QWidget):
             item.setFont(italic_font)
         self._apply_games_filter_to_row(row)
 
+    def _row_enabled(self, row: int) -> bool:
+        """Auto-record state for ``row``, read from the column-2 item."""
+        item = self._games_table.item(row, 2)
+        return bool(item.data(_AUTO_RECORD_ROLE)) if item is not None else False
+
     def _apply_games_filter(self) -> None:
         """Re-show/hide every row according to the current search + combo."""
         for row in range(self._games_table.rowCount()):
@@ -1321,9 +1329,9 @@ class SettingsPanel(QWidget):
         table = self._games_table
         name_item = table.item(row, 0)
         exe_item = table.item(row, 1)
-        pill = self._pill_for_row(row)
-        if name_item is None or exe_item is None or pill is None:
+        if name_item is None or exe_item is None:
             return
+        enabled = self._row_enabled(row)
         needle = self._games_search_edit.text().strip().lower()
         if needle:
             haystack = f"{name_item.text()} {exe_item.text()}".lower()
@@ -1331,24 +1339,13 @@ class SettingsPanel(QWidget):
                 table.setRowHidden(row, True)
                 return
         mode = self._games_filter_combo.currentData() or "all"
-        if mode == "enabled" and not pill.isChecked():
+        if mode == "enabled" and not enabled:
             table.setRowHidden(row, True)
             return
-        if mode == "disabled" and pill.isChecked():
+        if mode == "disabled" and enabled:
             table.setRowHidden(row, True)
             return
         table.setRowHidden(row, False)
-
-    def _pill_for_row(self, row: int) -> QPushButton | None:
-        """Return the auto-record pill for ``row``, or None if missing.
-
-        Looks up by ``objectName`` so the cell widget's layout can change
-        without breaking the table-collector logic.
-        """
-        wrap = self._games_table.cellWidget(row, 2)
-        if wrap is None:
-            return None
-        return wrap.findChild(QPushButton, _ONOFF_PILL_OBJECT_NAME)
 
     def _collect_games_from_table(self) -> tuple[list[str], list[str]]:
         """Read the table and return (known, disabled). Order preserved by
@@ -1366,8 +1363,7 @@ class SettingsPanel(QWidget):
                 continue
             seen.add(exe.lower())
             known.append(exe)
-            pill = self._pill_for_row(row)
-            if pill is not None and not pill.isChecked():
+            if not self._row_enabled(row):
                 disabled.append(exe)
         return known, disabled
 
@@ -2100,53 +2096,70 @@ def _wire_preset_custom_row(
 _DEFAULT_SETTINGS_WIDTH = 920
 _GAMES_SETTINGS_WIDTH = 1280
 
-# objectName on every auto-record pill so the games table can find them by
-# name when collecting / filtering, regardless of layout shape.
-_ONOFF_PILL_OBJECT_NAME = "GameAutoPill"
+# Auto-record state lives directly on the column-2 item (UserRole); the
+# delegate below paints the pill from it and toggles it on click. No per-row
+# widget, so the table builds in a few ms even with hundreds of games.
+_AUTO_RECORD_ROLE = Qt.ItemDataRole.UserRole
 
-# Visual emphasis is inverted on purpose: "On" is the default, so it stays
-# quiet (thin outline + muted text); "Off" pops with an amber fill so the
-# user can spot paused games at a glance scrolling a long list.
-_ONOFF_PILL_HEIGHT = 24  # px — fixed so the table cell doesn't stretch it
+# Pill geometry + colours. Emphasis is inverted on purpose: "On" is the
+# default so it stays quiet (thin outline + muted text); "Off" pops amber so
+# the user can spot paused games at a glance scrolling a long list.
+_ONOFF_PILL_HEIGHT = 24
 _ONOFF_PILL_WIDTH = 60
-
-_ONOFF_PILL_STYLE = (
-    "QPushButton#GameAutoPill { "
-    "  padding: 0px 12px; border-radius: 12px; "
-    "  background: transparent; color: #d4a64a; "
-    "  border: 1px solid #6e5a2a; font-size: 9pt; "
-    "  font-weight: 600; "
-    "}"
-    "QPushButton#GameAutoPill:hover { background: #2e2a1f; }"
-    "QPushButton#GameAutoPill:checked { "
-    "  background: transparent; color: #8a92a3; "
-    "  border-color: #3a4150; font-weight: 500; "
-    "}"
-    "QPushButton#GameAutoPill:checked:hover { background: #262a33; }"
-)
+_PILL_ON_BORDER = QColor("#3a4150")
+_PILL_ON_TEXT = QColor("#8a92a3")
+_PILL_OFF_BORDER = QColor("#6e5a2a")
+_PILL_OFF_TEXT = QColor("#d4a64a")
 
 
-def _make_onoff_pill(checked: bool) -> QPushButton:
-    """Build the auto-record pill — "On" when checked, "Off" otherwise.
+class _OnOffPillDelegate(QStyledItemDelegate):
+    """Paints the auto-record On/Off pill for the Games table's column 2 and
+    toggles it on click — replacing a per-row QPushButton cell widget, which
+    was the dominant cost building a 600+ row table. Only visible rows paint,
+    so the table is instant regardless of list length."""
 
-    Locked to a fixed size so a parent QTableWidget cell can't stretch the
-    button vertically past its border-radius (which produces the
-    pancake-strip look). Styled via object-name so other QPushButtons in
-    the same container aren't affected.
-    """
-    btn = QPushButton("On" if checked else "Off")
-    btn.setObjectName(_ONOFF_PILL_OBJECT_NAME)
-    btn.setCheckable(True)
-    btn.setChecked(checked)
-    btn.setCursor(Qt.CursorShape.PointingHandCursor)
-    btn.setStyleSheet(_ONOFF_PILL_STYLE)
-    btn.setFixedSize(_ONOFF_PILL_WIDTH, _ONOFF_PILL_HEIGHT)
+    toggled = pyqtSignal(int)  # row whose auto-record state just flipped
 
-    def _sync_label(on: bool) -> None:
-        btn.setText("On" if on else "Off")
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, index) -> None:  # noqa: N802
+        if option.state & QStyle.StateFlag.State_Selected:
+            painter.fillRect(option.rect, option.palette.highlight())
+        enabled = bool(index.data(_AUTO_RECORD_ROLE))
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        cell = option.rect
+        rect = QRectF(
+            cell.left() + (cell.width() - _ONOFF_PILL_WIDTH) / 2.0,
+            cell.top() + (cell.height() - _ONOFF_PILL_HEIGHT) / 2.0,
+            _ONOFF_PILL_WIDTH,
+            _ONOFF_PILL_HEIGHT,
+        )
+        path = QPainterPath()
+        path.addRoundedRect(rect, _ONOFF_PILL_HEIGHT / 2.0, _ONOFF_PILL_HEIGHT / 2.0)
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(_PILL_ON_BORDER if enabled else _PILL_OFF_BORDER, 1))
+        painter.drawPath(path)
+        font = QFont(option.font)
+        font.setPointSize(9)
+        font.setBold(not enabled)
+        painter.setFont(font)
+        painter.setPen(_PILL_ON_TEXT if enabled else _PILL_OFF_TEXT)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "On" if enabled else "Off")
+        painter.restore()
 
-    btn.toggled.connect(_sync_label)
-    return btn
+    def sizeHint(self, option, index) -> QSize:  # noqa: N802
+        return QSize(_ONOFF_PILL_WIDTH + 16, _ONOFF_PILL_HEIGHT + 8)
+
+    def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
+        # A click anywhere in the cell flips the state — bigger target than the
+        # pill itself, and no widget to manage.
+        if (
+            event.type() == QEvent.Type.MouseButtonRelease
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            model.setData(index, not bool(index.data(_AUTO_RECORD_ROLE)), _AUTO_RECORD_ROLE)
+            self.toggled.emit(index.row())
+            return True
+        return super().editorEvent(event, model, option, index)
 
 
 def _action_button_row(on_save, on_cancel) -> QHBoxLayout:

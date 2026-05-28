@@ -422,6 +422,12 @@ class EditorWindow(QMainWindow):
         col.addWidget(self._main_splitter, stretch=1)
         return wrapper
 
+    def prewarm_settings(self) -> None:
+        """Build the settings panel ahead of time (e.g. from the tray's idle
+        prebuild, while this window is still hidden) so the first Settings
+        open is instant rather than paying the ~0.7s build on click."""
+        self._ensure_settings_panel()
+
     def _ensure_settings_panel(self) -> SettingsPanel:
         """Lazy-construct the (heavy) settings panel and wire it once."""
         if self._settings_panel is None:
