@@ -4,13 +4,16 @@ This document identifies the source and build records corresponding to the Momen
 
 ## Momento
 
-- Build commit: `54b2a897407ab22184e4caa6763d24a9410e6d65`
+- Public source snapshot: `d92c0dd418199a9b3e06ebc546b7b21b6264081d`
 - Licence: GPL-3.0-only
 - Corresponding archive: `Momento-0.2.1-source.zip`
 - Pinned Python environment: `constraints-release.txt` in the archive
 - Packaging recipes: `build/pyinstaller.spec`, `build/installer.iss`, and `scripts/build_installer.ps1`
 
-The source archive contains all 228 files tracked at the build commit. It also contains the dependency lock, licence notices, build information, and the FFmpeg acquisition script.
+The source archive contains all 230 files tracked in the privacy-clean public
+snapshot. It preserves the release source while replacing test-only private
+identity fixtures with neutral placeholders. It also contains the dependency
+lock, licence notices, build information, and the FFmpeg acquisition script.
 
 ## FFmpeg
 
