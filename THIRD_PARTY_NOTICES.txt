@@ -1,0 +1,40 @@
+Momento third-party notices
+===========================
+
+Momento 0.2.1 is licensed under GNU GPL version 3. The complete license is
+installed as LICENSE, and the corresponding Momento source archive is installed
+under the source directory.
+
+This application is built with open-source components, including:
+
+- PyQt6 and SIP, distributed under GPLv3 for this build.
+  https://riverbankcomputing.com/software/pyqt/
+- Qt 6 libraries, distributed under their applicable GPL/LGPL terms.
+  https://www.qt.io/licensing/open-source-obligations
+- FFmpeg 8.1.2, a GPLv3-enabled build from gyan.dev. Its build configuration is
+  recorded in this release's BUILD_INFO.txt. The original build README, exact
+  external-library versions, and GPL text are installed under licenses/FFmpeg.
+  FFmpeg source and licensing details:
+  https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
+  https://ffmpeg.org/legal.html
+  https://www.gyan.dev/ffmpeg/builds/
+- CPython 3.12 and the PyInstaller bootloader. Their license texts are installed
+  under licenses/CPython and licenses/PyInstaller.
+- OpenCV, loaded by windows-capture. Its license text is installed under
+  licenses/opencv-python.
+- Plus Jakarta Sans, copyright its project authors and licensed under the SIL
+  Open Font License 1.1. The font license is bundled beside the font files.
+- PyAV, NumPy, psutil, PyAudioWPatch/PortAudio, windows-capture, and their
+  transitive dependencies.
+
+Distributor builds that enable YouTube additionally include requests, urllib3,
+google-api-python-client, google-auth, google-auth-oauthlib,
+google-auth-httplib2, httplib2, cryptography, and their transitive dependencies.
+
+Copyright remains with each component's authors. Their license files are
+included in the installed licenses directory where supplied by the Python
+distribution. This notice does not replace those license texts.
+
+The standard Momento public build does not include a Google OAuth client
+identity or any developer/user account data. YouTube upload is available only
+in distributor builds that deliberately provide an approved OAuth identity.

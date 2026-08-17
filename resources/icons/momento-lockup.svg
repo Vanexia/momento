@@ -1,0 +1,12 @@
+<svg width="520" height="160" viewBox="0 0 156 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="momento-grad" x1="4" y1="4" x2="44" y2="44" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#7C3AED"></stop>
+      <stop offset="1" stop-color="#D946EF"></stop>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="44" height="44" rx="12" fill="url(#momento-grad)"></rect>
+  <polygon points="11,35 11,14 18,14 24,23 30,14 37,14 37,35 30,35 30,25 24,33 18,25 18,35" fill="#fff"></polygon>
+  <circle cx="38" cy="12" r="4" fill="#FDE047"></circle>
+  <text x="56" y="32" font-family="&#39;Plus Jakarta Sans&#39;, &#39;Segoe UI&#39;, sans-serif" font-size="22" font-weight="800" letter-spacing="-0.3" fill="#15131D">Momento</text>
+</svg>

@@ -1,0 +1,42 @@
+# Momento 0.2.1 release environment: Windows x64, CPython 3.12.
+# Regenerate deliberately after dependency review; do not hand-edit around
+# resolver conflicts. Development-only lint/audit tools are not pinned here.
+altgraph==0.17.5
+av==17.0.1
+certifi==2026.5.20
+cffi==2.0.0
+charset-normalizer==3.4.7
+cryptography==50.0.0
+google-api-core==2.30.3
+google-api-python-client==2.196.0
+google-auth==2.53.0
+google-auth-httplib2==0.4.0
+google-auth-oauthlib==1.4.0
+googleapis-common-protos==1.75.0
+httplib2==0.32.0
+idna==3.16
+numpy==2.4.6
+oauthlib==3.3.1
+opencv-python==4.13.0.92
+packaging==26.2
+pefile==2024.8.26
+proto-plus==1.28.0
+protobuf==7.35.0
+psutil==7.2.2
+pyasn1==0.6.4
+pyasn1_modules==0.4.2
+PyAudioWPatch==0.2.12.8
+pycparser==3.0
+pyinstaller==6.20.0
+pyinstaller-hooks-contrib==2026.5
+pyparsing==3.3.2
+PyQt6==6.11.0
+PyQt6-Qt6==6.11.1
+PyQt6_sip==13.11.1
+pywin32-ctypes==0.2.3
+requests==2.34.2
+requests-oauthlib==2.0.0
+setuptools==83.0.0
+uritemplate==4.2.0
+urllib3==2.7.0
+windows-capture==2.0.0

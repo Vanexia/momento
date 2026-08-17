@@ -1,0 +1,79 @@
+[build-system]
+requires = ["setuptools>=83.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "momento"
+version = "0.2.1"
+description = "Local Windows desktop game recorder with simple clip editor"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = "GPL-3.0-only"
+authors = [{ name = "Momento" }]
+classifiers = [
+    "Operating System :: Microsoft :: Windows :: Windows 10",
+    "Operating System :: Microsoft :: Windows :: Windows 11",
+]
+
+dependencies = [
+    "PyQt6>=6.7",
+    "psutil>=5.9",
+    # Audio: PortAudio/WASAPI capture (mic + system-audio loopback) via the
+    # loopback-patched PyAudio fork. Replaces `soundcard`, whose Windows backend
+    # hard-asserted a float32 WAVEFORMATEXTENSIBLE mix format and crashed on the
+    # valid WAVE_FORMAT_IEEE_FLOAT representation many devices report.
+    "PyAudioWPatch>=0.2.12",
+    # Video: Windows Graphics Capture API for per-window recording.
+    "windows-capture>=2.0",
+    # In-process video + audio encode/mux via libav. Bundles its own libav so
+    # the live recording path no longer depends on a subprocess + TCP pipes.
+    # We still bundle ffmpeg.exe for the offline MKV->MP4 remux step (and for
+    # device enumeration / thumbnails / trim export).
+    "av>=14.0",
+    # numpy: we hand frames to PyAV as ndarrays and resample audio chunks.
+    "numpy>=2.0",
+    # YouTube upload bridge (Phase 11). Google's official client + OAuth
+    # helper. The OAuth flow stays entirely local: we spin up a transient
+    # loopback HTTP server, hand the browser over to Google's consent screen,
+    # and receive an auth code back on localhost — we never see the user's
+    # password. Refresh tokens are encrypted via Windows DPAPI before being
+    # written to %APPDATA%/Momento/youtube_token.dat.
+    "requests>=2.32",
+    "google-api-python-client>=2.130",
+    "google-auth-oauthlib>=1.2",
+    "google-auth-httplib2>=0.2",
+    # httplib2 <0.32.0 performs unbounded gzip/deflate response
+    # decompression (CVE-2026-59939). The Google client uses and bundles it.
+    "httplib2>=0.32.0",
+    # Security floor — cryptography is pulled in transitively by the Google
+    # auth stack and is BUNDLED in the frozen exe, so a vulnerable version
+    # ships to users. 50.0.0 fixes CVE-2026-69247. Keep this floor so a fresh
+    # install/build can't regress to an exploitable build.
+    "cryptography>=50.0.0",
+    # pyasn1 is also pulled in by Google authentication. 0.6.4 fixes three
+    # crafted-input denial-of-service vulnerabilities (CVE-2026-59884 through
+    # CVE-2026-59886), so pin the transitive dependency at its patched floor.
+    "pyasn1>=0.6.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "PyInstaller>=6.6",
+    "ruff>=0.12",
+    "pip-audit>=2.9",
+    # Used by tests/make_logo_icon.py. 12.3.0 contains the July 2026 security
+    # fixes; keeping it explicit prevents an old dev environment being reused
+    # for release assets.
+    "Pillow>=12.3.0",
+]
+
+[project.scripts]
+momento = "momento.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["momento*"]
+exclude = ["tests*", "resources*", "build*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]

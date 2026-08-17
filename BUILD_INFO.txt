@@ -1,0 +1,40 @@
+Momento 0.2.1 public release build
+=================================
+
+Target: Windows 10/11 x64
+Python: CPython 3.12
+Application packager: PyInstaller 6.20.0, one-folder mode
+Installer: Inno Setup 6.7.3, per-user mode
+
+Bundled FFmpeg:
+  Version: 8.1.2-essentials_build-www.gyan.dev
+  Configure: --enable-gpl --enable-version3 --enable-static --disable-w32threads
+    --disable-autodetect --enable-cairo --enable-fontconfig --enable-iconv
+    --enable-gnutls --enable-libxml2 --enable-gmp --enable-bzlib --enable-lzma
+    --enable-zlib --enable-libsrt --enable-libssh --enable-libzmq
+    --enable-avisynth --enable-sdl2 --enable-libwebp --enable-libx264
+    --enable-libx265 --enable-libxvid --enable-libaom --enable-libopenjpeg
+    --enable-libvpx --enable-mediafoundation --enable-libass --enable-libfreetype
+    --enable-libfribidi --enable-libharfbuzz --enable-libvidstab --enable-libvmaf
+    --enable-libzimg --enable-amf --enable-cuda-llvm --enable-cuvid
+    --enable-dxva2 --enable-d3d11va --enable-d3d12va --enable-ffnvcodec
+    --enable-libvpl --enable-nvdec --enable-nvenc --enable-vaapi --enable-openal
+    --enable-libgme --enable-libopenmpt --enable-libopencore-amrwb
+    --enable-libmp3lame --enable-libtheora --enable-libvo-amrwbenc
+    --enable-libgsm --enable-libopencore-amrnb --enable-libopus
+    --enable-libspeex --enable-libvorbis --enable-librubberband
+  Upstream source: https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
+  Source SHA-256: 464BEB5E7BF0C311E68B45AE2F04E9CC2AF88851ABB4082231742A74D97B524C
+  Build provider: https://www.gyan.dev/ffmpeg/builds/
+
+The installed licenses/FFmpeg directory contains the original licence and
+build README shipped with the exact FFmpeg binary archive. The README records
+the FFmpeg commit, full build configuration, and versions of the statically
+linked external libraries.
+
+The complete pinned Python environment is recorded in
+constraints-release.txt in the corresponding source archive.
+
+The installed licenses directory includes the CPython, PyInstaller, PyQt/Qt,
+OpenCV, PyAV, NumPy, capture, and audio package notices found in the exact build
+environment. THIRD_PARTY_NOTICES.txt identifies upstream projects and terms.

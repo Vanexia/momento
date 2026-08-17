@@ -1,0 +1,38 @@
+name: Deploy docs to Pages
+
+# The landing page + privacy policy (needed for the YouTube OAuth verification)
+# live in docs/ and only need redeploying when THEY change — not on every code
+# push. The old "Deploy from a branch" mode reran Pages on every push to main and
+# emailed a failure whenever GitHub's Pages backend hiccuped ("Deployment failed,
+# try again later") on a commit that never touched the site. Scoping to docs/**
+# stops that noise; the concurrency group serialises deploys so two never race
+# the github-pages environment (the other cause of that error).
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
+        with:
+          path: docs
+      - id: deployment
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4
