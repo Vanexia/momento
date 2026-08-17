@@ -54,21 +54,21 @@ def youtube_dir() -> Path:
 
 
 def youtube_client_secrets_path() -> Path | None:
-    """Path to the Google OAuth client_secrets.json shipped with Momento.
+    """Return the optional source-only OAuth fallback, never one in a build.
 
-    This is the app's *identity* to Google for the Desktop OAuth flow —
-    not a user secret. Google's docs explicitly call out that embedding
-    desktop-app client credentials in a distributed binary is the supported
-    pattern (the auth itself happens in the user's browser, not in the app).
-
-    Returns None if the file isn't present — the YouTube UI surfaces a clear
-    "this build wasn't shipped with YouTube credentials" message rather than
-    crashing at first auth attempt.
+    Kept for compatibility with older internal callers. Public frozen builds
+    must configure YouTube through the user's DPAPI-protected AppData import.
     """
-    p = youtube_dir() / "client_secrets.json"
-    return p if p.is_file() else None
+    if getattr(sys, "frozen", False):
+        return None
+    path = youtube_dir() / "client_secrets.json"
+    return path if path.is_file() else None
 
 
 def youtube_upload_available() -> bool:
-    """Whether this build carries a distributor-provided YouTube identity."""
-    return youtube_client_secrets_path() is not None
+    """Return whether this Momento version supports YouTube upload.
+
+    Setup state is deliberately separate: upload controls remain available so
+    an unconfigured user can open the setup guide.
+    """
+    return True

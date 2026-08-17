@@ -58,6 +58,11 @@ def youtube_token_path() -> Path:
     return appdata_dir() / "youtube_token.dat"
 
 
+def youtube_oauth_client_path() -> Path:
+    """DPAPI-protected user-imported Google Desktop OAuth client."""
+    return appdata_dir() / "youtube_oauth_client.dat"
+
+
 def youtube_avatar_path() -> Path:
     """Cached PNG of the connected channel's avatar, for the Settings chip.
 

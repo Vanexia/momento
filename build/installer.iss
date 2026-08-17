@@ -1,5 +1,5 @@
 #define MyAppName "Momento"
-#define MyAppVersion "0.2.4"
+#define MyAppVersion "0.2.5"
 #define MyAppPublisher "Momento"
 #define MyAppExeName "Momento.exe"
 
@@ -368,6 +368,8 @@ begin
     DeleteFile(ExpandConstant('{userappdata}\Momento\youtube_token.dat.tmp'));
     DeleteFile(ExpandConstant('{userappdata}\Momento\youtube_avatar.png'));
     DeleteFile(ExpandConstant('{userappdata}\Momento\youtube_avatar.png.tmp'));
+    DeleteFile(ExpandConstant('{userappdata}\Momento\youtube_oauth_client.dat'));
+    DeleteFile(ExpandConstant('{userappdata}\Momento\youtube_oauth_client.dat.tmp'));
     DeleteFile(ExpandConstant('{userappdata}\Momento\momento.lock'));
     DelTree(ExpandConstant('{userappdata}\Momento\logs'), True, True, True);
   end;

@@ -16,12 +16,12 @@ VSVersionInfo(
         [
           StringStruct('CompanyName', 'Momento'),
           StringStruct('FileDescription', 'Momento game recorder'),
-          StringStruct('FileVersion', '0.2.4'),
+          StringStruct('FileVersion', '0.2.5'),
           StringStruct('InternalName', 'Momento'),
           StringStruct('LegalCopyright', 'Copyright (c) 2026 Momento'),
           StringStruct('OriginalFilename', 'Momento.exe'),
           StringStruct('ProductName', 'Momento'),
-          StringStruct('ProductVersion', '0.2.4')
+          StringStruct('ProductVersion', '0.2.5')
         ]
       )
     ]),

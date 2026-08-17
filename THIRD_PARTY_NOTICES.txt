@@ -1,12 +1,12 @@
 Momento third-party notices
 ===========================
 
-Momento 0.2.4 is licensed under GNU GPL version 3. The complete licence is
+Momento 0.2.5 is licensed under GNU GPL version 3. The complete licence is
 installed as LICENSE. SOURCE_OFFER.txt identifies the matching source archives
-published beside the installer on the Momento 0.2.4 GitHub release:
+published beside the installer on the Momento 0.2.5 GitHub release:
 
-  Momento-0.2.4-source.zip
-  Momento-0.2.4-third-party-source.zip
+  Momento-0.2.5-source.zip
+  Momento-0.2.5-third-party-source.zip
 
 The third-party source bundle contains the exact hash-verified source inputs
 and native build records for Momento's FFmpeg helper, Momento's minimal
@@ -44,9 +44,9 @@ This application is built with open-source components, including:
 - PyAV, NumPy, psutil, PyAudioWPatch/PortAudio, windows-capture, and their
   transitive dependencies.
 
-Distributor builds that enable YouTube additionally include requests, urllib3,
-google-api-python-client, google-auth, google-auth-oauthlib,
-google-auth-httplib2, httplib2, cryptography, and their transitive dependencies.
+The public application includes requests, urllib3, google-api-python-client,
+google-auth, google-auth-oauthlib, google-auth-httplib2, httplib2,
+cryptography, and their transitive dependencies for optional YouTube upload.
 
 Copyright remains with each component's authors. Their licence files are
 included under licenses/Python/<distribution>-<version>, preserving paths from
@@ -54,6 +54,8 @@ the exact locked Python distributions. Packaging fails if a locked
 distribution supplies no licence or notice file. CPython's licence is installed
 separately under licenses/CPython. This notice does not replace those texts.
 
-The standard Momento public build does not include a Google OAuth client
-identity or any developer/user account data. YouTube upload is available only
-in distributor builds that deliberately provide an approved OAuth identity.
+Momento release assets do not include a Google OAuth client identity or any
+developer or user account data. Users who enable YouTube upload import a
+Desktop OAuth client from a Google Cloud project they control. Momento stores
+the validated client and connected-account token as separate DPAPI-encrypted
+files under that user's AppData directory.

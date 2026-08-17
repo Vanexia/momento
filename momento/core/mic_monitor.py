@@ -100,7 +100,7 @@ class MicMonitor(QObject):
                         p, device.id, 0, _CHANNELS, _BLOCK_FRAMES
                     )
                 except Exception as e:
-                    logger.exception("MicMonitor: cannot open mic %s", device.id)
+                    logger.exception("MicMonitor: cannot open selected microphone")
                     self.error.emit(f"Couldn't open microphone: {_format_error(e)}")
                     return
 

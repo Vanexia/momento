@@ -83,7 +83,7 @@ class DurationProbe(QRunnable):
         try:
             seconds = self._fast_probe()
         except Exception:
-            logger.exception("DurationProbe crashed for %s", self._path)
+            logger.exception("DurationProbe crashed")
             seconds = -1.0
         self.signals.done.emit(str(self._path), float(seconds))
 
@@ -185,7 +185,7 @@ class MetadataProbe(QRunnable):
         except (subprocess.TimeoutExpired, OSError):
             pass
         except Exception:
-            logger.exception("MetadataProbe crashed for %s", self._path)
+            logger.exception("MetadataProbe crashed")
         self.signals.done.emit(str(self._path), float(duration), slug)
 
 
@@ -260,7 +260,7 @@ def _replace_with_retry(tmp: Path, dst: Path) -> OSError | None:
             if not _is_transient_lock_error(e):
                 return e  # waiting can't help — give up now
             if i == 0:
-                logger.info("Repair swap blocked on %s; retrying: %s", dst.name, e)
+                logger.info("Repair swap blocked; retrying: %s", e)
     return last
 
 
@@ -291,7 +291,7 @@ class RepairJob(QRunnable):
             # QRunnable exceptions do not have a caller that can recover. A
             # missing terminal signal would also leave repair_async's registry
             # entry and the editor's progress state stuck forever.
-            logger.exception("Unexpected repair failure for %s", self._path)
+            logger.exception("Unexpected repair failure")
             tmp = self._path.with_name(self._path.stem + REPAIR_TMP_SUFFIX)
             self._cleanup(tmp)
             self.signals.done.emit(
@@ -365,7 +365,7 @@ class RepairJob(QRunnable):
             return
 
         if was_owned and not mark_recording_owned(src):
-            logger.warning("Could not refresh ownership marker after repairing %s", src.name)
+            logger.warning("Could not refresh ownership marker after repair")
 
         self.signals.done.emit(str(src), True, "")
 
@@ -413,12 +413,12 @@ def repair_async(path: Path, on_done) -> RepairJob | None:
     """
     resolved = Path(path).resolve()
     if resolved.suffix.lower() != ".mkv":
-        logger.warning("Refusing to queue non-MKV repair for %s", resolved.name)
+        logger.warning("Refusing to queue non-MKV repair")
         return None
     key = str(resolved)
     with _repair_lock:
         if key in _in_flight_repairs:
-            logger.info("Repair already in flight for %s; ignoring duplicate", Path(path).name)
+            logger.info("Repair already in flight; ignoring duplicate")
             return None
         _in_flight_repairs.add(key)
 
@@ -541,11 +541,11 @@ def cleanup_stale_repair_temps(folder: Path, min_age_seconds: float = 120.0) -> 
         try:
             p.unlink()
         except OSError as e:
-            logger.warning("Could not remove stale repair temp %s: %s", p.name, e)
+            logger.warning("Could not remove stale repair temp: %s", e)
             continue
         removed += 1
         logger.info(
-            "Removed stale repair temp %s (%.1f MiB)",
-            p.name, st.st_size / (1024 ** 2),
+            "Removed stale repair temp (%.1f MiB)",
+            st.st_size / (1024 ** 2),
         )
     return removed

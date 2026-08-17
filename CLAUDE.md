@@ -10,31 +10,34 @@ Trust source and executable checks over prose if they ever disagree.
 Momento is a local-first Windows tray application that automatically records a
 game window, microphone, and selected playback endpoint. It writes
 crash-tolerant MKV recordings and includes playback, bookmarks, clip export,
-repair, library management, storage controls, and an optional distributor-only
-YouTube upload integration.
+repair, library management, storage controls, and optional YouTube upload using
+a Google Cloud project supplied by the user.
 
 Product boundaries:
 
 - Windows 10 1903 or newer and Windows 11, x64 only.
 - No Momento account, telemetry, analytics, or cloud library.
-- Recordings stay local unless a build deliberately enables YouTube and the
-  user explicitly uploads a file.
+- Recordings stay local unless the user configures YouTube and confirms an
+  upload.
 - No replay buffer, streaming, webcam, HDR, or live recording preview.
 - System audio captures the selected playback endpoint's mix, not isolated
   per-application audio.
 
 ## Current Release
 
-- Version: `0.2.4`.
+- Version: `0.2.5` release candidate.
 - License: GPL-3.0-only. The installer includes the GPL text, build information,
   third-party notices/licenses, and an exact source offer. Matching Momento and
   third-party source archives are separate assets on the same GitHub release.
-- Public builds exclude `resources/youtube/client_secrets.json` unless
-  `MOMENTO_INCLUDE_YOUTUBE_OAUTH=1` is explicitly set for an approved OAuth
-  identity. The unavailable YouTube UI is hidden.
+- The 0.2.5 public build includes the Google upload runtime and setup UI but no
+  OAuth identity. Users import a Desktop OAuth JSON from their own Google Cloud
+  project. The build rejects the old `MOMENTO_INCLUDE_YOUTUBE_OAUTH` profile
+  and never bundles `resources/youtube/client_secrets.json`.
 - Public installer: per-user Inno Setup package under
-  `dist/installer/MomentoSetup-0.2.4.exe`.
-- Version 0.2.4 precisely centres update-result dialogs, including native
+  `dist/installer/MomentoSetup-0.2.5.exe`.
+- Version 0.2.5 adds user-owned Google OAuth setup, share-safe diagnostics,
+  upload input bounds, and public-release hardening. Version 0.2.4 centres
+  update-result dialogs, including native
   Windows frame offsets, and repairs the Windows
   CI dependency-install step. Version 0.2.2 hardened disk/output failures,
   capture recovery, stalled audio,
@@ -65,6 +68,9 @@ Product boundaries:
 - Installed Windows builds check the latest stable GitHub Release once in a
   background worker each time the process starts. Momento has no periodic
   update timer, background service, scheduled task, or prerelease channel.
+- GitHub receives the request's source IP address and fixed
+  `Momento-Updater/1` User-Agent. Momento sends no account, recording,
+  game-list, or device data with the check.
 - Users can also run the same check from the tray menu or from **Help > Check
   for updates** in the editor. Momento coalesces concurrent automatic and
   manual requests into one check. Interactive results are owned by the visible
@@ -106,8 +112,9 @@ Product boundaries:
   before it publishes the recording.
 - A reproducible minimal FFmpeg/ffprobe 8.1.2 helper handles trim, thumbnail,
   metadata, and repair. It has no network support or external DLL dependency.
-- Optional Google API clients support explicit YouTube uploads. User tokens are
-  encrypted with Windows DPAPI.
+- Google API clients support explicit YouTube uploads after the user imports a
+  Desktop OAuth client. DPAPI encrypts the imported client and account token as
+  separate AppData files.
 
 ## Recording Lifecycle
 
@@ -156,8 +163,9 @@ Product boundaries:
 
 - Normal logs avoid full output paths, audio endpoint identifiers, channel IDs,
   and account names. Detailed diagnostics should be explicitly gated if added.
-- Runtime config, logs, locks, window state, OAuth tokens, avatars, recordings,
-  and thumbnails are never copied into the public bundle or source archive.
+- Runtime config, logs, locks, window state, imported OAuth clients, OAuth
+  tokens, avatars, recordings, and thumbnails are never copied into the public
+  bundle or source archive.
 - Release dependencies are pinned in `constraints-release.txt`, and every
   approved CPython 3.12 Windows x64 wheel is SHA-256 locked in
   `requirements-release-hashed.txt`. CI runs static checks and executable
@@ -187,6 +195,9 @@ Product boundaries:
 - Uninstall removes the Windows startup entry, preserves user data by default,
   and never deletes recordings or clips. `/PURGEUSERDATA` removes only Momento's
   AppData state.
+- GitHub private vulnerability reporting is the security-reporting channel.
+  Public issues must not contain OAuth files, tokens, unredacted logs, or other
+  sensitive evidence.
 
 ## Runtime Data
 
@@ -195,6 +206,8 @@ Product boundaries:
 - Window state: `%APPDATA%\Momento\window_state.ini`
 - Lock: `%APPDATA%\Momento\momento.lock`
 - YouTube token: `%APPDATA%\Momento\youtube_token.dat` (DPAPI encrypted)
+- YouTube OAuth client: `%APPDATA%\Momento\youtube_oauth_client.dat` (DPAPI
+  encrypted; imported from a user-owned Google Cloud project)
 - YouTube avatar: `%APPDATA%\Momento\youtube_avatar.png`
 - Update cache: `%LOCALAPPDATA%\Momento\updates`
 - Update trust and retry state: `trusted-state.json` and `attempt-state.json`
@@ -215,7 +228,8 @@ Product boundaries:
 - `momento/core/`: watcher, recording, WGC, WASAPI, encoding, repair, metadata,
   thumbnails, and storage.
 - `momento/ui/`: tray, editor, settings, onboarding, playback, and timeline.
-- `momento/youtube/`: optional OAuth, avatar, and resumable upload support.
+- `momento/youtube/`: OAuth client validation and DPAPI storage, account auth,
+  avatar caching, and resumable upload support.
 - `momento/updater/`: signed metadata policy, GitHub client, trusted cache,
   durable attempts, application quiescence, and Windows installer handoff.
 - `momento/trim/ffmpeg_trim.py`: cancellable atomic clip export.
@@ -257,6 +271,9 @@ Core checks:
 .\.venv\Scripts\python.exe tests\smoke_update_service.py
 .\.venv\Scripts\python.exe tests\smoke_update_runtime.py
 .\.venv\Scripts\python.exe tests\smoke_encoder_portability.py
+.\.venv\Scripts\python.exe tests\smoke_youtube_client_config.py
+.\.venv\Scripts\python.exe tests\smoke_youtube_auth_config.py
+.\.venv\Scripts\python.exe tests\smoke_youtube_setup.py
 .\.venv\Scripts\python.exe tests\smoke_pyav_runtime_contract.py dist\pyav-runtime\av-17.0.1-cp311-abi3-win_amd64.whl
 ```
 
@@ -349,7 +366,11 @@ the real uninstall entry, shortcuts, autostart value, settings, and recordings.
   missed slots and worst lateness so this is visible.
 - Trim is keyframe-accurate because it stream-copies.
 - Severely truncated MKVs may be unrecoverable.
-- Optional live YouTube upload is not enabled for the standard public build.
+- A Google project in External Testing expires refresh tokens after seven days
+  when Momento's YouTube scopes are present. Users must reconnect or complete
+  the applicable production and verification process.
+- Google restricts uploads from unaudited API projects created after 28 July
+  2020 to private visibility until the project passes an audit.
 - The package is unsigned. Code signing would remove the Unknown Publisher
   warning, but it requires a paid certificate. One clean Windows VM test remains
   useful field evidence; Windows Sandbox is not available on the current machine.

@@ -55,10 +55,9 @@ recordings/
 tmp_*/
 tmp/
 
-# Phase 11 — Google OAuth client credentials. App-specific identity that
-# distinguishes Momento builds; should not be in version control. The
-# Settings → YouTube flow expects this at resources/youtube/client_secrets.json
-# (or via PyInstaller resource bundling for the frozen build).
+# Optional source-only Google OAuth fallback. Public builds never bundle or
+# read this file; installed users import their own Desktop OAuth JSON through
+# Settings > YouTube and Momento stores a DPAPI-protected AppData copy.
 resources/youtube/client_secrets.json
 momento/youtube/client_secrets.json
 # DPAPI-encrypted token blob lives in %APPDATA%/Momento/, never in the repo,

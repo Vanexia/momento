@@ -16,7 +16,6 @@ needed on the target machine.
 """
 
 import json
-import os
 import re
 import sys
 from importlib.metadata import PackageNotFoundError, distribution
@@ -82,9 +81,6 @@ datas = [
     (str(PROJECT_ROOT / "BUILD_INFO.txt"), "."),
     (str(Path(sys.base_prefix) / "LICENSE.txt"), "licenses/CPython"),
 ]
-
-youtube_secrets = RESOURCES / "youtube" / "client_secrets.json"
-include_youtube_oauth = os.environ.get("MOMENTO_INCLUDE_YOUTUBE_OAUTH") == "1"
 
 locked_distributions = []
 seen_distributions = set()
@@ -159,12 +155,6 @@ if icons_dir.is_dir() and any(icons_dir.iterdir()):
 fonts_dir = RESOURCES / "fonts"
 if fonts_dir.is_dir() and any(fonts_dir.iterdir()):
     datas.append((str(fonts_dir), "resources/fonts"))
-# A public build must not silently inherit a developer's OAuth identity from
-# an ignored local file. Distributors opt in deliberately for an approved
-# production OAuth project; ordinary builds omit the identity and the UI.
-if include_youtube_oauth and youtube_secrets.is_file():
-    datas.append((str(youtube_secrets), "resources/youtube"))
-
 # Hidden imports — most stuff PyInstaller finds automatically; this is a
 # safety net for COM/ctypes-loaded modules.
 hiddenimports = [
@@ -195,16 +185,25 @@ hiddenimports = [
     "av.filter",
     "av.codec",
     "av.codec.context",
+    # YouTube is configured at runtime with the user's own DPAPI-protected
+    # Desktop OAuth client. These libraries ship in every build; no OAuth
+    # identity or user account data is bundled.
+    "googleapiclient",
+    "googleapiclient.discovery",
+    "googleapiclient.http",
+    "googleapiclient.errors",
+    "google.auth",
+    "google.auth.transport.requests",
+    "google.oauth2.credentials",
+    "google_auth_oauthlib",
+    "google_auth_oauthlib.flow",
+    "google_auth_httplib2",
+    "httplib2",
+    "oauthlib",
+    "requests_oauthlib",
+    "requests",
+    "urllib3",
 ]
-
-if include_youtube_oauth:
-    hiddenimports += [
-        "googleapiclient", "googleapiclient.discovery", "googleapiclient.http",
-        "googleapiclient.errors", "google.auth",
-        "google.auth.transport.requests", "google.oauth2.credentials",
-        "google_auth_oauthlib", "google_auth_oauthlib.flow",
-        "google_auth_httplib2", "requests", "urllib3",
-    ]
 
 # Skip pulling in stuff we don't use to keep the bundle smaller.
 excludes = [
@@ -221,13 +220,6 @@ excludes = [
     "PyQt6.QtPdf",
     "PyQt6.QtPdfWidgets",
 ]
-if not include_youtube_oauth:
-    excludes += [
-        "google", "googleapiclient", "google_auth_oauthlib",
-        "google_auth_httplib2", "httplib2",
-        "oauthlib", "requests_oauthlib",
-    ]
-
 block_cipher = None
 
 # PyAudioWPatch ships its own PortAudio DLL alongside the _portaudio extension;

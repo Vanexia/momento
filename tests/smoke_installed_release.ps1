@@ -216,7 +216,9 @@ try {
     }
 
     $sentinel = Join-Path $appData "Momento\preserve-on-default-uninstall.txt"
+    $oauthSentinel = Join-Path $appData "Momento\youtube_oauth_client.dat"
     Set-Content -LiteralPath $sentinel -Encoding ascii -Value "preserve"
+    Set-Content -LiteralPath $oauthSentinel -Encoding ascii -Value "preserve-oauth"
     $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
         "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
     ) -PassThru -Wait -WindowStyle Hidden
@@ -228,6 +230,9 @@ try {
     }
     if (-not (Test-Path -LiteralPath $sentinel)) {
         throw "Default uninstall removed user data."
+    }
+    if (-not (Test-Path -LiteralPath $oauthSentinel)) {
+        throw "Default uninstall removed the user's Google OAuth setup."
     }
     if (-not (Test-Path -LiteralPath $recording.FullName)) {
         throw "Default uninstall removed the mock recording."
@@ -245,6 +250,8 @@ try {
         (Join-Path $stateDir "youtube_token.dat.tmp"),
         (Join-Path $stateDir "youtube_avatar.png"),
         (Join-Path $stateDir "youtube_avatar.png.tmp"),
+        (Join-Path $stateDir "youtube_oauth_client.dat"),
+        (Join-Path $stateDir "youtube_oauth_client.dat.tmp"),
         (Join-Path $stateDir "momento.lock"),
         (Join-Path $stateDir "logs\momento.log")
     )

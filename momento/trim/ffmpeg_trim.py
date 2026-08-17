@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import secrets
 import subprocess
 import sys
 from datetime import datetime
@@ -25,9 +26,14 @@ from PyQt6.QtCore import QObject, pyqtSignal
 
 from momento.core.media_validation import validate_trim_candidate
 from momento.util.ffmpeg_path import ffmpeg_exe
+from momento.util.logging_setup import redact_log_text
 from momento.util.paths import logs_dir
 
 logger = logging.getLogger(__name__)
+
+_MAX_TRIM_LOG_BYTES = 512 * 1024
+_MAX_TRIM_LOG_FILES = 5
+_TRIM_LOG_EXIT_RESERVE_BYTES = 128
 
 
 def clips_dir_for(input_path: Path) -> Path:
@@ -144,12 +150,14 @@ class TrimWorker(QObject):
             str(self._temp_output),
         ]
 
-        log_path = _new_log_path(self._output)
-        log_fh = open(log_path, "wb")
-        log_fh.write(
-            ("ffmpeg args: " + " ".join(_quote_for_log(a) for a in args) + "\n\n").encode("utf-8")
+        log_path = _new_log_path()
+        log_writer = _BoundedTrimLog(log_path)
+        _prune_trim_logs(log_path)
+        log_writer.write(
+            f"trim start={self._start:.3f}s end={self._end:.3f}s "
+            f"duration={total:.3f}s\n\n"
         )
-        log_fh.flush()
+        log_writer.flush()
 
         creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         try:
@@ -164,7 +172,7 @@ class TrimWorker(QObject):
                 creationflags=creationflags,
             )
         except OSError as e:
-            log_fh.close()
+            log_writer.close()
             self.failed.emit(f"Could not start ffmpeg: {e}")
             return
 
@@ -178,14 +186,17 @@ class TrimWorker(QObject):
             for line in proc.stderr:
                 if self._cancelled:
                     break
-                log_fh.write(line.encode("utf-8", errors="replace"))
+                log_writer.write(line)
                 cur = _parse_time(line)
                 if cur is not None and total > 0:
                     self.progress.emit(min(cur, total), total)
         finally:
-            log_fh.flush()
-            log_fh.close()
             rc = proc.wait()
+            log_writer.write_final(
+                f"\ntrim exit={rc} cancelled={str(self._cancelled).lower()}\n"
+            )
+            log_writer.flush()
+            log_writer.close()
 
         if self._cancelled:
             self.failed.emit("Cancelled")
@@ -230,7 +241,7 @@ class TrimWorker(QObject):
         try:
             self._temp_output.unlink(missing_ok=True)
         except OSError:
-            logger.warning("Could not remove partial trim output %s", self._temp_output)
+            logger.warning("Could not remove partial trim output")
 
 
 # ----------------------------------------------------------------- helpers
@@ -251,10 +262,60 @@ def _parse_time(line: str) -> float | None:
     return float(seconds)
 
 
-def _new_log_path(output_path: Path) -> Path:
+class _BoundedTrimLog:
+    """Write redacted UTF-8 diagnostics up to one fixed byte limit."""
+
+    def __init__(self, path: Path) -> None:
+        self._remaining = _MAX_TRIM_LOG_BYTES
+        self._handle = open(path, "wb")
+
+    def write(self, value: str) -> None:
+        available = max(0, self._remaining - _TRIM_LOG_EXIT_RESERVE_BYTES)
+        if available <= 0:
+            return
+        payload = redact_log_text(value).encode("utf-8", errors="replace")
+        payload = payload[:available]
+        if payload:
+            self._handle.write(payload)
+            self._remaining -= len(payload)
+
+    def write_final(self, value: str) -> None:
+        """Use the reserved tail so the exit result is always recorded."""
+        if self._remaining <= 0:
+            return
+        payload = redact_log_text(value).encode("utf-8", errors="replace")
+        payload = payload[:self._remaining]
+        if payload:
+            self._handle.write(payload)
+            self._remaining -= len(payload)
+
+    def flush(self) -> None:
+        self._handle.flush()
+
+    def close(self) -> None:
+        self._handle.close()
+
+
+def _new_log_path() -> Path:
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    return logs_dir() / f"trim_{output_path.stem}_{stamp}.log"
+    nonce = secrets.token_hex(3)
+    return logs_dir() / f"trim_{stamp}_{nonce}.log"
 
 
-def _quote_for_log(arg: str) -> str:
-    return f'"{arg}"' if " " in arg or "=" in arg else arg
+def _prune_trim_logs(current: Path) -> None:
+    """Keep the active diagnostic plus the four newest older logs."""
+    older: list[Path] = []
+    for path in current.parent.glob("trim_*.log"):
+        if path == current or not path.is_file():
+            continue
+        older.append(path)
+    try:
+        older.sort(key=lambda path: path.stat().st_mtime_ns, reverse=True)
+    except OSError:
+        logger.warning("Could not inspect old trim diagnostics for pruning")
+        return
+    for stale in older[_MAX_TRIM_LOG_FILES - 1:]:
+        try:
+            stale.unlink()
+        except OSError:
+            logger.warning("Could not prune an old trim diagnostic")

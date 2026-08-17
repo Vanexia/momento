@@ -25,12 +25,23 @@
 
 ## Download
 
-Download **[MomentoSetup-0.2.4.exe](https://github.com/Vanexia/momento/releases/download/v0.2.4/MomentoSetup-0.2.4.exe)** from the latest release.
+Download **[MomentoSetup-0.2.5.exe](https://github.com/Vanexia/momento/releases/download/v0.2.5/MomentoSetup-0.2.5.exe)** from the latest release.
 
 The installer includes everything Momento needs. Python and administrator access are not required.
 
 > [!IMPORTANT]
 > Momento's installer is not code-signed yet. Windows may show **Unknown Publisher** or a SmartScreen warning. Confirm that the download came from this repository, select **More info**, then **Run anyway**. The release includes a SHA-256 checksum for integrity checking.
+
+Download `SHA256SUMS-0.2.5.txt` from the same release and compare the listed
+installer hash before running it:
+
+```powershell
+Get-FileHash .\MomentoSetup-0.2.5.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS-0.2.5.txt
+```
+
+The two SHA-256 values must match. A checksum detects a damaged or replaced
+download; it does not give the unsigned installer a publisher identity.
 
 ![Momento recording library and clip editor](docs/screenshots/library.png)
 
@@ -58,12 +69,32 @@ Recordings use MKV for better crash tolerance. Finished clips use MP4 for straig
 
 ![Momento capture settings](docs/screenshots/settings-capture.png)
 
+## YouTube Uploads
+
+YouTube upload is optional. The public installer includes the upload controls
+and Google client libraries, but it does not contain a Google OAuth project or
+developer identity. Create a Desktop OAuth client in a Google Cloud project
+you control, then import its JSON file in **Settings > YouTube**.
+
+Momento validates the file and stores a DPAPI-encrypted copy at
+`%APPDATA%\Momento\youtube_oauth_client.dat`. It never places the client file in
+the installer, source archive, logs, or release assets. The connected account
+token uses a separate DPAPI-encrypted file.
+
+Read [Set up YouTube uploads](docs/youtube-setup.md) for the Google Cloud steps,
+the two requested scopes, Testing-mode token expiry, upload visibility limits,
+and removal instructions.
+
 ## Updates
 
 The installed build checks the latest stable GitHub Release once when Momento
 starts. It does not poll for updates while it runs. You can also choose **Check
 for updates...** from the tray menu or **Help > Check for updates...** in the
 editor.
+
+GitHub receives the connection's IP address and the fixed User-Agent
+`Momento-Updater/1`, as it does for an ordinary HTTPS request. Momento sends no
+recording, account, game-list, or device data with the check.
 
 Momento accepts an update only after it verifies Ed25519-signed release metadata
 and the installer's exact size and SHA-256. If recording, finalization, repair,
@@ -108,10 +139,10 @@ NVIDIA NVENC has passed physical hardware testing. AMD AMF, Intel QuickSync, Med
 ## Privacy
 
 The standard public build stores settings, logs, thumbnails, recordings, and
-clips on your computer. It does not include the optional distributor YouTube
-identity or its upload controls. Installed builds contact GitHub Releases once
-at startup to check for a signed update; the updater sends no Momento account
-or recording data.
+clips on your computer. It includes optional, user-configured YouTube upload
+controls but no Google OAuth identity. Installed builds contact GitHub Releases
+once at startup to check for a signed update. GitHub receives the source IP and
+`Momento-Updater/1` User-Agent; Momento sends no account or recording data.
 
 - No Momento account
 - No telemetry or analytics
@@ -120,6 +151,16 @@ or recording data.
 - No background cloud library
 
 Read the full [privacy policy](https://vanexia.github.io/momento/privacy.html).
+
+## Uninstalling
+
+The uninstaller asks whether to remove Momento's settings, logs, and local
+YouTube account state. The default choice preserves them. Silent uninstall also
+preserves them unless it uses `/PURGEUSERDATA`. Neither choice deletes
+recordings or exported clips.
+
+Use `/PURGEUSERDATA` only when you want to remove Momento's AppData state,
+including the imported Google OAuth client and connected-account token.
 
 ## Known Limitations
 
@@ -188,3 +229,5 @@ archive, installer, log, or release asset.
 ## License
 
 Momento is licensed under [GPL-3.0-only](LICENSE). The installer includes the corresponding Momento source, build information, and third-party notices. Bundled components retain their own copyright and licence terms.
+
+Report security problems through the private process in [SECURITY.md](SECURITY.md).

@@ -3,13 +3,13 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momento — Local game recorder for Windows</title>
-<meta name="description" content="Momento is a local Windows desktop app that auto-records games to MKV and includes a built-in clip editor. No telemetry, no cloud, no account required.">
+<title>Momento | Local game recorder for Windows</title>
+<meta name="description" content="Momento is a local Windows desktop app that records games to MKV and includes a clip editor with optional user-configured YouTube upload. No telemetry or Momento account required.">
 <link rel="icon" type="image/png" href="momento-256.png">
 <link rel="apple-touch-icon" href="momento-256.png">
 <meta property="og:image" content="momento-256.png">
-<meta property="og:title" content="Momento — Local game recorder for Windows">
-<meta property="og:description" content="Local Windows game recorder with a built-in clip editor and no telemetry.">
+<meta property="og:title" content="Momento | Local game recorder for Windows">
+<meta property="og:description" content="Local Windows game recorder with a clip editor, optional YouTube upload, and no telemetry.">
 <style>
   :root {
     --accent: #a78bfa;
@@ -97,7 +97,7 @@
   <header>
     <img src="momento-256.png" alt="Momento logo" class="logo" width="160" height="160">
     <h1>Momento<span class="dot">.</span></h1>
-    <p class="tagline">A local Windows game recorder with a built-in clip editor. Everything stays on your machine.</p>
+    <p class="tagline">A local Windows game recorder with a built-in clip editor. Upload only the clips you choose.</p>
     <div class="badges">
       <span class="badge">Windows 10/11</span>
       <span class="badge">NVIDIA / AMD / Intel GPU</span>
@@ -146,7 +146,7 @@
       </div>
       <div class="feature">
         <h3>Local by default</h3>
-        <p>Recordings and clips stay on your PC. Approved distributor builds can add explicit YouTube upload, but it is never automatic.</p>
+        <p>Recordings and clips stay on your PC unless you select one for YouTube upload. Momento has no cloud library or background upload.</p>
       </div>
     </div>
   </section>
@@ -159,13 +159,13 @@
         <li>No telemetry. No analytics. No usage tracking.</li>
         <li>No account required to use Momento.</li>
         <li>Recordings are stored only on your machine, in a folder you choose.</li>
-        <li>The standard public build makes no application network requests.</li>
+        <li>The installed build checks GitHub Releases once at startup. GitHub receives the source IP and <code>Momento-Updater/1</code> User-Agent.</li>
       </ul>
     </div>
 
     <div class="yt-note">
-      <p><strong>Optional distributor feature: YouTube upload.</strong></p>
-      <p>Some approved builds can add explicit YouTube upload. Sign-in happens in your browser on Google's site, and the local sign-in token is encrypted with Windows DPAPI. Standard public builds do not include an OAuth identity or upload controls. See the <a href="privacy.html" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">privacy policy</a> for the full breakdown.</p>
+      <p><strong>Optional YouTube upload with your Google project.</strong></p>
+      <p>The public build includes upload controls but no Google OAuth identity. Import a Desktop OAuth JSON from a project you control, then connect through Google's browser flow. Momento encrypts the imported client and account token with Windows DPAPI. Read the <a href="https://github.com/Vanexia/momento/blob/main/docs/youtube-setup.md" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">setup guide</a> or the <a href="privacy.html" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">privacy policy</a>.</p>
     </div>
   </section>
 
@@ -180,6 +180,7 @@
     <div class="links">
       <a href="https://github.com/Vanexia/momento/releases/latest">Download</a>
       <a href="https://github.com/Vanexia/momento">Source</a>
+      <a href="https://github.com/Vanexia/momento/blob/main/docs/youtube-setup.md">YouTube Setup</a>
       <a href="privacy.html">Privacy Policy</a>
     </div>
     <p>© 2026 Momento. Local game recording for Windows.</p>

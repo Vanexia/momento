@@ -225,7 +225,7 @@ class SingleInstance:
         fh.write(str(os.getpid()).encode("ascii"))
         fh.flush()
         self._fh = fh
-        logger.info("Acquired single-instance lock at %s (pid=%d)", self._lock_path, os.getpid())
+        logger.info("Acquired single-instance lock (pid=%d)", os.getpid())
 
     def release(self) -> None:
         fh = self._fh

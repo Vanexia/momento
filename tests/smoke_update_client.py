@@ -539,12 +539,11 @@ def main() -> int:
     spec = (Path(__file__).resolve().parents[1] / "build" / "pyinstaller.spec").read_text(
         encoding="utf-8"
     )
-    no_oauth_excludes = spec.split("if not include_youtube_oauth:", 1)[1].split(
-        "block_cipher", 1
-    )[0]
     check(
         "public builds retain requests and urllib3 for the updater",
-        '"requests"' not in no_oauth_excludes and '"urllib3"' not in no_oauth_excludes,
+        '"requests"' in spec
+        and '"urllib3"' in spec
+        and '"requests_oauthlib"' not in spec.split("excludes =", 1)[1],
     )
 
     private_key = Ed25519PrivateKey.generate()

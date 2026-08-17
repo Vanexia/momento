@@ -15,11 +15,12 @@ from privacy_scan import (
 RUNTIME_NAMES = {
     "config.json", "momento.log", "momento.lock", "window_state.ini",
     "youtube_token.dat", "youtube_avatar.png", "client_secrets.json",
+    "youtube_oauth_client.dat", "youtube_oauth_client.dat.tmp",
 }
 RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json")
 PRIVATE_ROOTS = {".agents", ".claude"}
 REQUIRED_RELEASE_FILES = {
-    "Momento-0.2.4-source.zip": {
+    "Momento-0.2.5-source.zip": {
         "build/pyav_runtime.json",
         "scripts/build_pyav_runtime.ps1",
         "scripts/build_pyav_runtime.sh",

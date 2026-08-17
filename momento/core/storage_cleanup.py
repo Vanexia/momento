@@ -79,14 +79,12 @@ def enforce_storage_limit(folder: Path, max_gb: int) -> int:
         if total <= limit_bytes:
             break
         if is_file_active(path):
-            logger.info(
-                "Storage cleanup: skipping %s — file activity in flight", path.name
-            )
+            logger.info("Storage cleanup: skipping media with file activity in flight")
             continue
         try:
             path.unlink()
         except OSError as e:
-            logger.warning("Storage cleanup: couldn't delete %s: %s", path.name, e)
+            logger.warning("Storage cleanup could not delete media: %s", e)
             continue
         for suffix in _SIDECAR_SUFFIXES:
             sidecar = path.with_name(path.name + suffix)
@@ -97,8 +95,8 @@ def enforce_storage_limit(folder: Path, max_gb: int) -> int:
         total -= size
         deleted += 1
         logger.info(
-            "Storage cleanup: removed %s (%.1f MiB) — over %d GiB limit",
-            path.name, size / (1024 ** 2), max_gb,
+            "Storage cleanup removed media (%.1f MiB) over the %d GiB limit",
+            size / (1024 ** 2), max_gb,
         )
     return deleted
 
@@ -134,19 +132,19 @@ class MigrationWorker:
             if progress_callback is not None:
                 progress_callback(i, total, src.name)
             if is_file_active(src) or is_file_active(dst):
-                logger.info("Migrate: skipping %s — file activity in flight", src.name)
+                logger.info("Migration skipped media with file activity in flight")
                 failed += 1
                 continue
             was_owned = has_valid_ownership_marker(src) or is_momento_owned(src)
             try:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 if dst.exists():
-                    logger.info("Migrate: %s already at destination, skipping", src.name)
+                    logger.info("Migration skipped media already at destination")
                     failed += 1
                     continue
                 shutil.move(str(src), str(dst))
             except OSError as e:
-                logger.warning("Migrate: couldn't move %s: %s", src.name, e)
+                logger.warning("Migration could not move media: %s", e)
                 failed += 1
                 continue
             moved += 1
@@ -157,15 +155,14 @@ class MigrationWorker:
                 sidecar_dst = dst.parent / sidecar.name
                 if sidecar_dst.exists():
                     logger.warning(
-                        "Migrate: sidecar %s already at destination, skipping",
-                        sidecar.name,
+                        "Migration skipped a sidecar already at destination"
                     )
                     failed += 1
                     continue
                 try:
                     shutil.move(str(sidecar), str(sidecar_dst))
                 except OSError as e:
-                    logger.warning("Migrate: sidecar %s: %s", sidecar.name, e)
+                    logger.warning("Migration could not move a sidecar: %s", e)
                     # The media was moved successfully, but leaving an original
                     # sidecar behind is a partial migration and must be visible
                     # to the caller. The source sidecar remains recoverable.

@@ -88,7 +88,7 @@ def resolve_mic_device(name_or_id: str) -> MicDevice | None:
             for d in devices:
                 bare = d.name.split("  (default)")[0]
                 if bare == migrated or d.id == migrated:
-                    logger.info("Migrated mic endpoint id %s -> %r", name_or_id, migrated)
+                    logger.info("Migrated legacy microphone endpoint")
                     return d
     return None
 
@@ -135,7 +135,7 @@ class MicStreamer:
             raise RuntimeError("MicStreamer already started")
         d = resolve_mic_device(self._device_key)
         if d is None:
-            raise ValueError(f"Mic device not found: {self._device_key!r}")
+            raise ValueError("Selected microphone was not found")
         self._resolved_name = d.id
 
         self._sink = sink
@@ -159,17 +159,17 @@ class MicStreamer:
         if self._open_error is not None:
             self._stop_event.set()
             raise RuntimeError(
-                f"Could not open mic device {d.name!r}: {_format_error(self._open_error)}"
-            ) from self._open_error
+                "Could not open the selected microphone. It may be unavailable or in use."
+            ) from None
         if not opened:
             self._stop_event.set()
             raise RuntimeError(
-                f"Mic device {d.name!r} did not open within {_OPEN_TIMEOUT_S:.0f}s"
+                f"The selected microphone did not open within {_OPEN_TIMEOUT_S:.0f}s"
             )
         self._started = True
         logger.info(
-            "MicStreamer started: device=%s sr=%d ch=%d",
-            self._resolved_name, self._sample_rate, self._channels,
+            "MicStreamer started: sr=%d ch=%d",
+            self._sample_rate, self._channels,
         )
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -245,7 +245,9 @@ class MicStreamer:
             if not self._open_event.is_set():
                 # Failed during device open — hand the error to start() so it
                 # raises instead of reporting a phantom-started stream.
-                logger.exception("Failed to open mic %r", self._device_key)
+                logger.warning(
+                    "Failed to open selected microphone (%s)", type(e).__name__
+                )
                 self._open_error = e
             else:
                 # Crash after a successful open is a mid-recording failure.

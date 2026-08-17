@@ -15,6 +15,7 @@ the API:
 
 from __future__ import annotations
 
+import html
 from dataclasses import replace
 from pathlib import Path
 from typing import Optional
@@ -39,7 +40,11 @@ from momento.config import Config
 from momento.core.game_names import friendly_recording_title
 from momento.ui.widgets import AnchoredComboBox
 from momento.util.format import format_bytes
-from momento.youtube.uploader import UploadOptions
+from momento.youtube.uploader import (
+    ThumbnailValidationError,
+    UploadOptions,
+    validate_thumbnail,
+)
 
 # Subset of YouTube's video categories most relevant to a game recorder.
 # Full list: https://developers.google.com/youtube/v3/docs/videoCategories/list
@@ -148,8 +153,8 @@ class YouTubeUploadDialog(QDialog):
         header.setTextFormat(Qt.TextFormat.RichText)
         size = clip_path.stat().st_size if clip_path.is_file() else 0
         header.setText(
-            f"<b>Uploading to:</b> {channel_name or 'YouTube'}<br>"
-            f"<b>File:</b> {clip_path.name} "
+            f"<b>Uploading to:</b> {html.escape(channel_name or 'YouTube')}<br>"
+            f"<b>File:</b> {html.escape(clip_path.name)} "
             f"<span style='color:#888'>· {format_bytes(size)}</span>"
         )
 
@@ -296,9 +301,11 @@ class YouTubeUploadDialog(QDialog):
             return
 
         thumb_text = self._thumb_edit.text().strip()
-        if thumb_text and not Path(thumb_text).is_file():
-            QMessageBox.warning(self, "Thumbnail not found",
-                                "Chosen thumbnail file no longer exists.")
-            return
+        if thumb_text:
+            try:
+                validate_thumbnail(Path(thumb_text))
+            except ThumbnailValidationError as exc:
+                QMessageBox.warning(self, "Invalid thumbnail", str(exc))
+                return
 
         self.accept()

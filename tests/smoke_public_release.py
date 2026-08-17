@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import sys
-import os
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -40,6 +39,8 @@ RUNTIME_NAMES = {
     "window_state.ini",
     "youtube_token.dat",
     "youtube_avatar.png",
+    "youtube_oauth_client.dat",
+    "youtube_oauth_client.dat.tmp",
     "Momento-update.json",
     "Momento-update.json.sig",
     "update-signing-key.pem",
@@ -116,8 +117,35 @@ def main() -> int:
     )
 
     spec = (ROOT / "build" / "pyinstaller.spec").read_text(encoding="utf-8")
-    check("privacy: OAuth bundling requires an explicit environment flag", "MOMENTO_INCLUDE_YOUTUBE_OAUTH" in spec)
-    check("privacy: public build defaults to no OAuth identity", "== \"1\"" in spec or "== '1'" in spec)
+    check(
+        "privacy: PyInstaller has no OAuth identity bundle path",
+        "client_secrets.json" not in spec and "MOMENTO_INCLUDE_YOUTUBE_OAUTH" not in spec,
+    )
+    builder = (ROOT / "scripts" / "build_installer.ps1").read_text(encoding="utf-8")
+    check(
+        "privacy: public builder rejects the obsolete OAuth bundling flag",
+        "MOMENTO_INCLUDE_YOUTUBE_OAUTH" in builder and "will not include" in builder,
+    )
+    check(
+        "YouTube: Google client runtime is included for every installer",
+        all(
+            name in spec
+            for name in (
+                '"googleapiclient"',
+                '"google_auth_oauthlib"',
+                '"google_auth_httplib2"',
+                '"requests"',
+            )
+        ),
+    )
+    resources_module = (ROOT / "momento" / "util" / "resources.py").read_text(
+        encoding="utf-8"
+    )
+    check(
+        "YouTube: legacy feature probes remain safe and compatible",
+        "def youtube_client_secrets_path" in resources_module
+        and "def youtube_upload_available" in resources_module,
+    )
 
     cfg = Config()
     check(
@@ -134,10 +162,11 @@ def main() -> int:
             not (names & RUNTIME_NAMES)
             and not any(name.endswith(RUNTIME_SUFFIXES) for name in names),
         )
-        oauth_enabled = os.environ.get("MOMENTO_INCLUDE_YOUTUBE_OAUTH") == "1"
         check(
-            "bundle: OAuth identity matches the explicit build profile",
-            ("client_secrets.json" in names) == oauth_enabled,
+            "bundle: no OAuth client identity or imported client state",
+            "client_secrets.json" not in names
+            and "youtube_oauth_client.dat" not in names
+            and "youtube_oauth_client.dat.tmp" not in names,
         )
         check("bundle: no private identity strings", not _bundle_has_private_identity(dist))
         check(

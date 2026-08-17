@@ -52,6 +52,8 @@ jobs:
           python tests/smoke_settings_save.py
           python tests/smoke_worker_lifecycle.py
           python tests/smoke_capture_safety.py
+          python tests/smoke_log_privacy.py
+          python tests/smoke_pyav_runtime_contract.py --unit-only
           python tests/smoke_editor_live_recording.py
           python tests/smoke_bookmarks.py
           python tests/smoke_audio_resync.py
@@ -63,6 +65,10 @@ jobs:
           python tests/smoke_repair_lock.py
           python tests/smoke_uploader_resume.py
           python tests/smoke_upload_cancel.py
+          python tests/smoke_youtube_thumbnail.py
+          python tests/smoke_youtube_client_config.py
+          python tests/smoke_youtube_auth_config.py
+          python tests/smoke_youtube_setup.py
           python tests/smoke_youtube_auth_async.py
           python tests/smoke_youtube_avatar.py
           python tests/smoke_timeline_trim.py

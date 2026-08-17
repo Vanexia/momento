@@ -371,7 +371,7 @@ class SessionManager:
             return False
         added = store.add(elapsed)
         if added:
-            logger.info("Bookmark @ %.2fs in %s", elapsed, store.recording_path.name)
+            logger.info("Bookmark @ %.2fs", elapsed)
             cb = self._on_bookmark
             if game is not None and cb is not None:
                 try:
@@ -817,7 +817,7 @@ class SessionManager:
             if finished is not None:
                 self._emit_recording_finished(finished)
             if final is not None:
-                logger.info("Recording for %s finalised (%s) at %s", name, source, final)
+                logger.info("Recording for %s finalised (%s)", name, source)
             self._emit_status(STATUS_IDLE, None)
             if final is not None:
                 try:

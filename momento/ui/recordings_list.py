@@ -38,7 +38,6 @@ from PyQt6.QtWidgets import QListView, QMenu, QStyledItemDelegate, QStyle, QStyl
 from momento.core.game_names import friendly_recording_title
 from momento.ui import theme as _theme
 from momento.util.format import format_bytes
-from momento.util.resources import youtube_upload_available
 from momento.util.time_format import fmt_time
 
 # Data roles
@@ -460,8 +459,7 @@ class RecordingsList(QListView):
             rename_action = menu.addAction("Rename…")
             reveal_action = menu.addAction("Open file location")
             export_action = menu.addAction("Export clip…")
-            if youtube_upload_available():
-                upload_action = menu.addAction("Upload to YouTube…")
+            upload_action = menu.addAction("Upload to YouTube…")
             if selected[0].suffix.lower() == ".mkv":
                 repair_action = menu.addAction("Repair recording…")
             menu.addSeparator()

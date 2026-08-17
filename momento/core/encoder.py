@@ -457,10 +457,9 @@ class InProcessEncoder:
         self._audio_thread.start()
         self._started = True
         logger.info(
-            "InProcessEncoder started: %s %dx%d@%d %s -> %s",
+            "InProcessEncoder started: %s %dx%d@%d %s",
             self._video_codec_name, self._video_width, self._video_height,
             self._video_framerate, self._video_options.get("preset", "?"),
-            self._path,
         )
 
     def submit_video(self, frame: np.ndarray, pts_seconds: float | None = None) -> bool:
@@ -612,11 +611,10 @@ class InProcessEncoder:
             self._stats.duration_s = time.monotonic() - self._t0_monotonic
         if self._stats.video_health_degraded:
             logger.warning(
-                "Final video health DEGRADED: %d/%d frames dropped (%.1f%%) for %s",
+                "Final video health DEGRADED: %d/%d frames dropped (%.1f%%)",
                 self._stats.video_frames_dropped,
                 self._stats.video_frames_submitted,
                 self._stats.video_drop_rate * 100.0,
-                self._path,
             )
         logger.info("InProcessEncoder stopped: %s", self._stats.summary())
         return self._stats
@@ -638,7 +636,7 @@ class InProcessEncoder:
                     return
                 try:
                     container.close()
-                    logger.info("Closed timed-out encoder container after workers exited: %s", self._path)
+                    logger.info("Closed timed-out encoder container after workers exited")
                 except Exception:
                     logger.exception("Late close of timed-out encoder container failed")
                 finally:
@@ -743,7 +741,7 @@ class InProcessEncoder:
             self._video_q.qsize(),
             _VIDEO_QUEUE_MAX,
             self._video_codec_name,
-            self._path,
+            "recording",
         )
         if self._video_degradation_notified:
             return

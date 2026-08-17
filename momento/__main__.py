@@ -41,9 +41,9 @@ logger = logging.getLogger("momento")
 
 def _log_auto_repair_done(path_str: str, ok: bool, err: str) -> None:
     if ok:
-        logger.info("Auto-repair finished: %s", Path(path_str).name)
+        logger.info("Auto-repair finished")
     else:
-        logger.warning("Auto-repair failed for %s: %s", Path(path_str).name, err[:200])
+        logger.warning("Auto-repair failed: %s", err[:200])
 
 
 def _warn_if_low_disk(tray, config) -> None:
@@ -123,7 +123,7 @@ def _first_openable_mic_name(p) -> str:
     for name, _is_default in devices:
         if audio_devices.probe_open(p, name, loopback=False):
             return name
-        logger.warning("Skipping non-openable first-run mic default %r", name)
+        logger.warning("Skipping non-openable first-run microphone default")
     return ""
 
 
@@ -134,7 +134,7 @@ def _first_openable_loopback_name(p) -> str:
     for name, _ in audio_devices.list_output_device_names(p):
         if audio_devices.probe_open(p, name, loopback=True):
             return name
-        logger.warning("Skipping non-openable first-run system-audio default %r", name)
+        logger.warning("Skipping non-openable first-run system-audio default")
     return ""
 
 
@@ -306,7 +306,7 @@ def main() -> int:
                     len(broken),
                 )
                 for p in broken:
-                    logger.info("Auto-repair queued: %s", p.name)
+                    logger.info("Auto-repair queued")
                     repair_async(p, _log_auto_repair_done)
         except Exception:
             logger.exception("Crash-recovery scan raised")

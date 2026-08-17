@@ -191,8 +191,8 @@ def open_input_stream(
             except Exception as e:  # noqa: BLE001 — try the next channel layout
                 last_err = e
                 logger.info(
-                    "Open %r at %d ch / %d Hz failed (%s); trying next layout",
-                    name, open_ch, rate, _format_error(e),
+                    "Audio open at %d ch / %d Hz failed (%s); trying next layout",
+                    open_ch, rate, _format_error(e),
                 )
         assert last_err is not None
         raise last_err
@@ -251,7 +251,7 @@ def native_sample_rate(name_or_id: str, *, loopback: bool) -> int | None:
             with _pa_lock:
                 found = _find_capture_device(p, dev.id, loopback=loopback)
     except Exception:
-        logger.exception("native_sample_rate failed for %r", name_or_id)
+        logger.exception("native_sample_rate failed for selected device")
         return None
     return int(round(found[2])) if found else None
 

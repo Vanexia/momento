@@ -14,9 +14,8 @@ Security posture:
   encrypted with Windows DPAPI before writing to disk — bound to the
   current Windows user account, undecryptable from another account or
   another machine.
-- ``client_secrets.json`` is the *app's* identity to Google, not the user's.
-  Google's docs explicitly support shipping it inside distributed desktop
-  binaries (the "installed application" OAuth flow).
+- Each installation uses the Desktop OAuth client imported by its Windows
+  user. Frozen public builds never load a bundled distributor identity.
 
 Until a distributor's OAuth project clears Google's verification, its consent
 screen can show an "unverified app" warning. Accounts registered as test users
@@ -26,7 +25,10 @@ can complete the flow while that project remains in Testing mode.
 from __future__ import annotations
 
 import json
+import hashlib
+import hmac
 import logging
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -42,7 +44,7 @@ from googleapiclient.errors import HttpError
 
 from momento.util.dpapi import DPAPIError, protect, unprotect
 from momento.util.paths import youtube_token_path
-from momento.util.resources import youtube_client_secrets_path
+from momento.youtube import client_config
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +65,9 @@ SCOPES = [
 # left the UI stuck for 5 min if the user abandoned the consent page.)
 _FLOW_TIMEOUT_SECONDS = 90
 _MAX_CHANNEL_AVATAR_BYTES = 5 * 1024 * 1024
+_MAX_TOKEN_BLOB_BYTES = 256 * 1024
+_TOKEN_FILE_LOCK = threading.RLock()
+_TOKEN_GENERATION = 0
 
 
 class YouTubeAuthError(RuntimeError):
@@ -88,7 +93,11 @@ def is_connected() -> bool:
     Callers that need a working credential should use
     ``get_authorized_credentials()`` and handle its ``None`` return.
     """
-    return youtube_token_path().is_file()
+    try:
+        configured = client_config.load_active_client_config() is not None
+    except client_config.OAuthClientConfigError:
+        return False
+    return configured and youtube_token_path().is_file()
 
 
 def connect_account() -> ChannelInfo:
@@ -100,21 +109,26 @@ def connect_account() -> ChannelInfo:
     connected channel's display info.
 
     Raises ``YouTubeAuthError`` if:
-      - ``client_secrets.json`` is missing from the bundle
+      - A Google Desktop OAuth file has not been imported
       - The user cancels / closes the browser before consent
       - The token exchange fails
       - The follow-up channels.list call fails
     """
-    secrets = youtube_client_secrets_path()
-    if secrets is None:
+    try:
+        active_client = client_config.load_active_client_config()
+    except client_config.OAuthClientConfigError as exc:
         raise YouTubeAuthError(
-            "YouTube upload is unavailable in this build — "
-            "client_secrets.json is missing from resources/youtube/. "
-            "Reinstall Momento or contact whoever shipped you this build."
+            "The saved Google OAuth setup needs attention. Replace or remove it "
+            "in Settings > YouTube."
+        ) from exc
+    if active_client is None:
+        raise YouTubeAuthError(
+            "Import a Google Desktop OAuth JSON file in Settings > YouTube "
+            "before connecting an account."
         )
 
     try:
-        flow = InstalledAppFlow.from_client_secrets_file(str(secrets), SCOPES)
+        flow = InstalledAppFlow.from_client_config(active_client.document, SCOPES)
         # port=0 → OS picks a free port. open_browser=True spawns the user's
         # default browser. prompt='consent' forces the refresh-token grant
         # even if the user has previously authorized — without this,
@@ -130,8 +144,19 @@ def connect_account() -> ChannelInfo:
             ),
         )
     except Exception as exc:  # noqa: BLE001 — third-party can raise anything
-        logger.exception("OAuth flow failed")
-        raise YouTubeAuthError(f"Sign-in did not complete: {exc}") from exc
+        logger.warning("OAuth flow failed (%s)", type(exc).__name__)
+        raise YouTubeAuthError(
+            "Couldn't complete YouTube sign-in. Return to Momento and try again."
+        ) from None
+
+    try:
+        current_client = client_config.load_active_client_config()
+    except client_config.OAuthClientConfigError:
+        current_client = None
+    if current_client is None or current_client.document != active_client.document:
+        raise YouTubeAuthError(
+            "The Google OAuth setup changed during sign-in. Start the connection again."
+        ) from None
 
     # Persist before fetching channel info — if channels.list fails we still
     # want the token saved so the user doesn't have to re-auth.
@@ -149,34 +174,87 @@ def connect_account() -> ChannelInfo:
 
 def disconnect_account() -> None:
     """Delete the local token blob. Best-effort, never raises."""
+    global _TOKEN_GENERATION
+
     path = youtube_token_path()
-    try:
-        if path.is_file():
-            path.unlink()
-            logger.info("YouTube token deleted")
-    except OSError:
-        logger.exception("Could not delete the YouTube token")
+    with _TOKEN_FILE_LOCK:
+        # Increment even when the file is already absent. An in-flight refresh
+        # may have loaded it just before this call and must not recreate it.
+        _TOKEN_GENERATION += 1
+        try:
+            if path.is_file():
+                path.unlink()
+                logger.info("YouTube token deleted")
+        except OSError:
+            logger.exception("Could not delete the YouTube token")
 
 
 def get_authorized_credentials() -> Optional[Credentials]:
     """Load saved credentials, refreshing the access token if expired.
 
     Returns ``None`` when there is no saved token, the blob is corrupt, the
-    refresh token has been revoked, or the client_secrets file is missing.
+    refresh token has been revoked, or the active client configuration is missing.
     Callers should treat ``None`` as "user is not connected, surface the
     Connect button" — never as a retryable error.
     """
+    try:
+        active_client = client_config.load_active_client_config()
+    except client_config.OAuthClientConfigError:
+        logger.warning("Saved YouTube OAuth setup is invalid")
+        return None
+    if active_client is None:
+        return None
+
     creds = _load_credentials()
     if creds is None:
+        return None
+    if not _credentials_match_client(creds, active_client):
+        logger.info("Discarding YouTube token tied to a different OAuth client")
+        disconnect_account()
         return None
 
     # Refresh if expired (or about to expire). Credentials.expired considers
     # tokens within a small window of expiry as expired, so this catches
     # the "we're about to upload, don't fail mid-call" case.
     if creds.expired and creds.refresh_token:
+        with _TOKEN_FILE_LOCK:
+            refresh_generation = _TOKEN_GENERATION
         try:
             creds.refresh(Request())
-            _save_credentials(creds)  # persists the new access token + expiry
+            try:
+                current_client = client_config.load_active_client_config()
+            except client_config.OAuthClientConfigError:
+                current_client = None
+            if (
+                current_client is None
+                or current_client.document != active_client.document
+                or not _credentials_match_client(creds, current_client)
+            ):
+                logger.info(
+                    "Discarding refreshed credentials because the OAuth setup changed"
+                )
+                return None
+            saved_fingerprint = _save_credentials(
+                creds, expected_generation=refresh_generation
+            )
+            if saved_fingerprint is None:
+                logger.info("Discarding refreshed credentials after account disconnect")
+                return None
+
+            try:
+                current_client = client_config.load_active_client_config()
+            except client_config.OAuthClientConfigError:
+                current_client = None
+            if (
+                current_client is None
+                or current_client.document != active_client.document
+                or not _credentials_match_client(creds, current_client)
+            ):
+                _delete_credentials_if_current(saved_fingerprint)
+                logger.info(
+                    "Discarding refreshed credentials because the OAuth setup changed"
+                )
+                return None
         except RefreshError:
             logger.warning(
                 "Refresh token rejected — user likely revoked access. "
@@ -184,18 +262,37 @@ def get_authorized_credentials() -> Optional[Credentials]:
             )
             disconnect_account()
             return None
-        except Exception:  # noqa: BLE001
-            logger.exception("Token refresh failed unexpectedly")
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Token refresh failed unexpectedly (%s)", type(exc).__name__)
             return None
 
     return creds
 
 
+def credentials_match_active_client(creds: Credentials) -> bool:
+    """Return whether credentials still belong to the current OAuth setup."""
+    try:
+        active_client = client_config.load_active_client_config()
+    except client_config.OAuthClientConfigError:
+        return False
+    return active_client is not None and _credentials_match_client(creds, active_client)
+
+
+def _credentials_match_client(
+    creds: Credentials, active_client: client_config.OAuthClientConfig
+) -> bool:
+    installed = active_client.document["installed"]
+    return (
+        getattr(creds, "client_id", None) == installed["client_id"]
+        and getattr(creds, "client_secret", None) == installed["client_secret"]
+    )
+
+
 def fetch_channel_info(creds: Credentials) -> ChannelInfo:
     """One youtube.channels.list call to fetch the connected channel's name.
 
-    Costs 1 quota unit (vs 1600 for an upload), so cheap to call on Settings
-    open. Raises ``YouTubeAuthError`` on API failure; the caller decides
+    Costs one quota unit, so it is inexpensive to call on Settings open.
+    Raises ``YouTubeAuthError`` on API failure; the caller decides
     whether to surface it or fall back to cached config values.
     """
     try:
@@ -206,13 +303,15 @@ def fetch_channel_info(creds: Credentials) -> ChannelInfo:
             .execute()
         )
     except HttpError as exc:
-        logger.warning("channels.list failed: %s", exc)
+        logger.warning("channels.list failed with HTTP %s", exc.resp.status)
         raise YouTubeAuthError(
             f"Could not fetch your channel info: HTTP {exc.resp.status}"
         ) from exc
     except Exception as exc:  # noqa: BLE001
-        logger.exception("channels.list failed unexpectedly")
-        raise YouTubeAuthError(f"Could not reach YouTube: {exc}") from exc
+        logger.warning("channels.list failed unexpectedly (%s)", type(exc).__name__)
+        raise YouTubeAuthError(
+            "Couldn't reach YouTube. Check your connection and try again."
+        ) from exc
 
     items = resp.get("items") or []
     if not items:
@@ -327,8 +426,17 @@ def delete_cached_avatar() -> None:
 _TOKEN_ENTROPY = b"Momento/youtube_token/v1"
 
 
-def _save_credentials(creds: Credentials) -> None:
-    """Serialise → DPAPI encrypt → write atomically."""
+def _save_credentials(
+    creds: Credentials, *, expected_generation: int | None = None
+) -> bytes | None:
+    """Serialise, protect, and atomically write credentials.
+
+    When ``expected_generation`` is supplied, a disconnect or newer token
+    write cancels this save. The returned fingerprint identifies only this
+    exact encrypted write so a later cleanup cannot remove a newer sign-in.
+    """
+    global _TOKEN_GENERATION
+
     data = creds.to_json().encode("utf-8")
     try:
         encrypted = protect(data, entropy=_TOKEN_ENTROPY)
@@ -341,18 +449,53 @@ def _save_credentials(creds: Credentials) -> None:
 
     path = youtube_token_path()
     tmp = path.with_suffix(path.suffix + ".tmp")
-    try:
-        tmp.write_bytes(encrypted)
-        tmp.replace(path)  # atomic on Windows when both paths are on same vol
-    except OSError as exc:
-        logger.exception("Could not write the YouTube token")
+    fingerprint = hashlib.sha256(encrypted).digest()
+    with _TOKEN_FILE_LOCK:
+        if (
+            expected_generation is not None
+            and expected_generation != _TOKEN_GENERATION
+        ):
+            return None
         try:
-            tmp.unlink(missing_ok=True)
+            tmp.write_bytes(encrypted)
+            tmp.replace(path)  # atomic on Windows when both paths are on same vol
+            _TOKEN_GENERATION += 1
+        except OSError as exc:
+            logger.exception("Could not write the YouTube token")
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise YouTubeAuthError(
+                "Couldn't save the YouTube sign-in securely. "
+                "Check AppData access and try again."
+            ) from exc
+    return fingerprint
+
+
+def _delete_credentials_if_current(expected_fingerprint: bytes) -> bool:
+    """Delete the token only if it is the exact write being invalidated."""
+    global _TOKEN_GENERATION
+
+    path = youtube_token_path()
+    with _TOKEN_FILE_LOCK:
+        try:
+            with path.open("rb") as handle:
+                encrypted = handle.read(_MAX_TOKEN_BLOB_BYTES + 1)
+            if len(encrypted) > _MAX_TOKEN_BLOB_BYTES:
+                return False
+            if not hmac.compare_digest(
+                hashlib.sha256(encrypted).digest(), expected_fingerprint
+            ):
+                return False
+            path.unlink()
+            _TOKEN_GENERATION += 1
+            return True
+        except FileNotFoundError:
+            return False
         except OSError:
-            pass
-        raise YouTubeAuthError(
-            f"Could not save the YouTube token to disk: {exc}"
-        ) from exc
+            logger.warning("Could not remove an invalidated YouTube token")
+            return False
 
 
 def _load_credentials() -> Optional[Credentials]:

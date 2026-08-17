@@ -933,7 +933,7 @@ class VideoPreview(QWidget):
         self._audio.setMuted(False)
         self._player.setAudioOutput(self._audio)
         self._media_devices.audioOutputsChanged.connect(self._sync_audio_to_default)
-        logger.info("Preview audio bound to default: %r", self._audio.device().description())
+        logger.info("Preview audio bound to the Windows default output")
         self._video_widget = _VideoArea(self)
         self._video_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -1427,7 +1427,7 @@ class VideoPreview(QWidget):
         if bytes(new_default.id()) == bytes(self._audio.device().id()):
             return  # default didn't actually change
         self._audio.setDevice(new_default)
-        logger.info("Preview audio re-routed to %r", new_default.description())
+        logger.info("Preview audio re-routed to the new Windows default output")
 
     # --------------------------------------------------------- volume
     def _on_volume_changed(self, value: int) -> None:

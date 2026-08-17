@@ -110,6 +110,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Update runtime checks failed." }
     & $python "tests\smoke_single_instance.py"
     if ($LASTEXITCODE -ne 0) { throw "Update single-instance checks failed." }
+    & $python "tests\smoke_log_privacy.py"
+    if ($LASTEXITCODE -ne 0) { throw "Persistent-log privacy checks failed." }
+    & $python "tests\smoke_youtube_client_config.py"
+    if ($LASTEXITCODE -ne 0) { throw "YouTube OAuth client checks failed." }
+    & $python "tests\smoke_youtube_auth_config.py"
+    if ($LASTEXITCODE -ne 0) { throw "YouTube OAuth authentication checks failed." }
+    & $python "tests\smoke_youtube_setup.py"
+    if ($LASTEXITCODE -ne 0) { throw "YouTube setup UI checks failed." }
+    & $python "tests\smoke_youtube_thumbnail.py"
+    if ($LASTEXITCODE -ne 0) { throw "YouTube thumbnail safety checks failed." }
     & $python "tests\smoke_update_release_tools.py"
     if ($LASTEXITCODE -ne 0) { throw "Update release tooling checks failed." }
     & $python "tests\smoke_pyav_runtime_contract.py" $pyavWheel
@@ -152,7 +162,7 @@ try {
 
     $manifest = Join-Path $bundle "RELEASE_MANIFEST.txt"
     $manifestLines = @(
-        "Momento 0.2.4 release manifest",
+        "Momento 0.2.5 release manifest",
         "Git commit: $(git rev-parse HEAD)",
         "Format: SHA256  bytes  relative path",
         ""
@@ -173,13 +183,13 @@ try {
     & $python "tests\smoke_git_history_privacy.py"
     if ($LASTEXITCODE -ne 0) { throw "The Git-history privacy scan failed." }
 
-    $sourceArchive = Join-Path $sourceDir "Momento-0.2.4-source.zip"
+    $sourceArchive = Join-Path $sourceDir "Momento-0.2.5-source.zip"
     & git archive --format=zip --output=$sourceArchive HEAD
     if ($LASTEXITCODE -ne 0) { throw "Could not create the corresponding source archive." }
     & $python "tests\smoke_source_archive.py" $sourceArchive
     if ($LASTEXITCODE -ne 0) { throw "The corresponding source privacy scan failed." }
 
-    $thirdPartySource = Join-Path $sourceDir "Momento-0.2.4-third-party-source.zip"
+    $thirdPartySource = Join-Path $sourceDir "Momento-0.2.5-third-party-source.zip"
     & $python "scripts\build_corresponding_source.py" --output $thirdPartySource
     if ($LASTEXITCODE -ne 0) { throw "Could not build the third-party source bundle." }
     & $python "tests\smoke_corresponding_source.py" $thirdPartySource
@@ -196,7 +206,7 @@ try {
     & $iscc "build\installer.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
 
-    $installer = Join-Path $installerDir "MomentoSetup-0.2.4.exe"
+    $installer = Join-Path $installerDir "MomentoSetup-0.2.5.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "The installer was not produced."
     }
@@ -213,10 +223,10 @@ try {
     )
     # Stable SemVer components map to a monotonic integer while leaving ample
     # room for future minor and patch releases.
-    $metadataVersion = [Int64](0 * 1000000000000 + 2 * 1000000 + 4)
+    $metadataVersion = [Int64](0 * 1000000000000 + 2 * 1000000 + 5)
     & $python "scripts\build_update_metadata.py" `
         --installer $installer `
-        --version "0.2.4" `
+        --version "0.2.5" `
         --minimum-updater-version "0.2.2" `
         --metadata-version $metadataVersion `
         --published-at $publishedAt `
@@ -230,8 +240,8 @@ try {
         throw "The signed update release assets were not produced."
     }
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash
-    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MomentoSetup-0.2.4.exe"
-    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.4.txt"
+    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MomentoSetup-0.2.5.exe"
+    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.5.txt"
     $checksumLines = @(
         $installer,
         $sourceArchive,

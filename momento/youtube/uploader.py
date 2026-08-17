@@ -16,10 +16,10 @@ the upload use the user's full bandwidth — the way YouTube Studio's own upload
 does. We still chunk (rather than one giant PUT) so the live progress bar, the
 Cancel button, and resume-on-network-drop all keep working.
 
-Quota cost reminder: each upload is **1600 units**. The default project quota is
-10000 units / day — i.e. **6 uploads / day across ALL users of one Google Cloud
-project**. After Google verification we'll request a quota increase based on real
-usage data.
+YouTube now applies a separate Video Uploads quota bucket. Google currently
+documents a default allowance of 100 ``videos.insert`` calls per day for each
+project, but users should treat the Cloud Console as authoritative because
+Google can change or customise project quotas.
 
 Public surface:
 
@@ -75,6 +75,60 @@ _READ_TIMEOUT = 300
 # errors. 4xx (auth, quota, validation) are caller-actionable and not retried.
 _MAX_RETRIES = 8
 _RETRIABLE_STATUS_CODES = {500, 502, 503, 504}
+
+# YouTube accepts custom JPEG/PNG thumbnails up to 2 MiB.  Read one byte past
+# the limit so oversized files are rejected without ever loading an unbounded
+# path into memory.
+MAX_THUMBNAIL_BYTES = 2 * 1024 * 1024
+_PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+_JPEG_MAGIC = b"\xff\xd8\xff"
+
+
+class ThumbnailValidationError(ValueError):
+    """A selected thumbnail is not safe or supported for upload."""
+
+
+def validate_thumbnail(path: Path) -> tuple[str, bytes]:
+    """Return ``(content_type, bytes)`` for a bounded JPEG/PNG thumbnail.
+
+    The MIME type comes from file magic, with the suffix checked separately so
+    a renamed arbitrary file cannot be presented to YouTube as an image.
+    """
+    suffix = path.suffix.lower()
+    if suffix not in {".jpg", ".jpeg", ".png"}:
+        raise ThumbnailValidationError(
+            "Thumbnail must use a .jpg, .jpeg, or .png file extension."
+        )
+
+    try:
+        with path.open("rb") as source:
+            data = source.read(MAX_THUMBNAIL_BYTES + 1)
+    except OSError as exc:
+        raise ThumbnailValidationError(
+            "Thumbnail file could not be read. Choose it again and retry."
+        ) from exc
+
+    if not data:
+        raise ThumbnailValidationError("Thumbnail file is empty.")
+    if len(data) > MAX_THUMBNAIL_BYTES:
+        raise ThumbnailValidationError("Thumbnail must be 2 MiB or smaller.")
+
+    if data.startswith(_PNG_MAGIC):
+        content_type = "image/png"
+        suffix_matches = suffix == ".png"
+    elif data.startswith(_JPEG_MAGIC):
+        content_type = "image/jpeg"
+        suffix_matches = suffix in {".jpg", ".jpeg"}
+    else:
+        raise ThumbnailValidationError(
+            "Thumbnail content must be a JPEG or PNG image."
+        )
+
+    if not suffix_matches:
+        raise ThumbnailValidationError(
+            "Thumbnail file extension does not match its image content."
+        )
+    return content_type, data
 
 
 @dataclass
@@ -240,10 +294,12 @@ class UploadJob(QObject):
             # Thumbnail is best-effort. If it fails we still consider the upload a
             # success — the video is up; the user can swap the thumbnail later from
             # YouTube Studio.
-            if opts.thumbnail_path and opts.thumbnail_path.is_file():
+            if opts.thumbnail_path:
                 self.state_changed.emit("Setting thumbnail")
                 try:
                     self._set_thumbnail(session, video_id, opts.thumbnail_path)
+                except ThumbnailValidationError as exc:
+                    logger.warning("Thumbnail validation failed (continuing): %s", exc)
                 except Exception:  # noqa: BLE001
                     logger.exception("Thumbnail upload failed (continuing)")
 
@@ -465,12 +521,12 @@ class UploadJob(QObject):
     def _set_thumbnail(
         self, session: AuthorizedSession, video_id: str, thumb_path: Path
     ) -> None:
-        ctype = "image/png" if thumb_path.suffix.lower() == ".png" else "image/jpeg"
+        content_type, data = validate_thumbnail(thumb_path)
         resp = session.post(
             _THUMBNAIL_UPLOAD_URL,
             params={"videoId": video_id, "uploadType": "media"},
-            data=thumb_path.read_bytes(),
-            headers={"Content-Type": ctype},
+            data=data,
+            headers={"Content-Type": content_type},
             timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
             allow_redirects=False,
         )
@@ -544,9 +600,9 @@ def _error_message(status: int, reason: str) -> str:
     if status == 403:
         if reason in ("quotaExceeded", "dailyLimitExceeded"):
             return (
-                "Daily YouTube upload quota exceeded. The quota resets at "
-                "midnight Pacific time (08:00 UTC). Try again then, or ask "
-                "the Momento developer to request a higher quota."
+                "This Google Cloud project's daily YouTube upload quota is "
+                "exhausted. Check YouTube Data API v3 quotas in your own "
+                "Google Cloud project, or try again after Google resets it."
             )
         if reason == "youtubeSignupRequired":
             return (

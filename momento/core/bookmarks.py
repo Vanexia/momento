@@ -37,7 +37,7 @@ def load_bookmarks(recording_path: Path | str) -> list[float]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        logger.exception("Bookmark file %s is unreadable; ignoring", path)
+        logger.exception("Bookmark file is unreadable; ignoring")
         return []
     raw = data.get("bookmarks") if isinstance(data, dict) else None
     if not isinstance(raw, list):
@@ -99,7 +99,7 @@ class BookmarkStore:
             try:
                 save_bookmarks(self._path, list(self._items))
             except OSError:
-                logger.exception("Could not write bookmarks sidecar for %s", self._path)
+                logger.exception("Could not write bookmarks sidecar")
                 self._items.remove(seconds)
                 return False
         return True

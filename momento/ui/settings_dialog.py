@@ -67,8 +67,7 @@ from momento.ui.level_meter import LevelMeter
 from momento.ui.widgets import AnchoredComboBox, match_audio_output
 from momento.util.autostart import set_autostart
 from momento.util.format import format_bytes, free_bytes_for
-from momento.util.paths import window_state_path
-from momento.util.resources import youtube_upload_available
+from momento.util.paths import window_state_path, youtube_oauth_client_path
 from momento.util.windows_api import logical_drives
 from momento.util.hotkey import HotkeyError, parse_hotkey
 
@@ -154,10 +153,7 @@ _ALL_NAV_ITEMS = (
     ("Startup", "Startup", "power"),
     ("YouTube", "YouTube", "youtube-box"),
 )
-_NAV_ITEMS = tuple(
-    item for item in _ALL_NAV_ITEMS
-    if item[0] != "YouTube" or youtube_upload_available()
-)
+_NAV_ITEMS = _ALL_NAV_ITEMS
 
 
 class _NavItem(QFrame):
@@ -236,6 +232,7 @@ class SettingsPanel(QWidget):
 
     settings_saved = pyqtSignal(object)  # emits the new Config
     done = pyqtSignal()
+    youtube_configuration_changed = pyqtSignal()
 
     def __init__(
         self,
@@ -456,6 +453,7 @@ class SettingsPanel(QWidget):
 
     def _build_youtube_tab(self) -> QWidget:
         return _tab_with_groups(
+            self._build_youtube_setup_group(),
             self._build_youtube_account_group(),
             self._build_youtube_defaults_group(),
             on_save=self._on_save,
@@ -941,6 +939,56 @@ class SettingsPanel(QWidget):
             QMessageBox.warning(self, "Momento", f"Couldn't open the folder:\n{e}")
 
     # ----------------------------------------------------------- YouTube
+    def _build_youtube_setup_group(self) -> QGroupBox:
+        box = QGroupBox("Google Cloud project")
+        layout = QVBoxLayout(box)
+
+        self._yt_setup_status_label = QLabel()
+        self._yt_setup_status_label.setWordWrap(True)
+        self._yt_setup_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._yt_setup_status_label.setAccessibleName("Google OAuth setup status")
+        layout.addWidget(self._yt_setup_status_label)
+
+        button_row = QHBoxLayout()
+        self._yt_import_btn = QPushButton("Import OAuth JSON…")
+        self._yt_import_btn.setMinimumHeight(38)
+        self._yt_import_btn.setAccessibleName("Import Google OAuth JSON")
+        self._yt_import_btn.setAccessibleDescription(
+            "Choose the Desktop app OAuth JSON downloaded from Google Cloud"
+        )
+        self._yt_import_btn.clicked.connect(self._on_yt_import_clicked)
+
+        self._yt_remove_client_btn = QPushButton("Remove OAuth setup")
+        self._yt_remove_client_btn.setMinimumHeight(38)
+        self._yt_remove_client_btn.setAccessibleName("Remove Google OAuth setup")
+        self._yt_remove_client_btn.setAccessibleDescription(
+            "Delete Momento's protected OAuth client and disconnect YouTube"
+        )
+        self._yt_remove_client_btn.clicked.connect(self._on_yt_remove_client_clicked)
+
+        self._yt_guide_btn = QPushButton("Open setup guide")
+        self._yt_guide_btn.setMinimumHeight(38)
+        self._yt_guide_btn.setAccessibleName("Open YouTube setup guide")
+        self._yt_guide_btn.setAccessibleDescription(
+            "Show the steps for creating a personal Google Cloud project"
+        )
+        self._yt_guide_btn.clicked.connect(self._on_yt_guide_clicked)
+
+        button_row.addWidget(self._yt_import_btn)
+        button_row.addWidget(self._yt_remove_client_btn)
+        button_row.addWidget(self._yt_guide_btn)
+        button_row.addStretch(1)
+        layout.addLayout(button_row)
+
+        layout.addWidget(
+            _hint_label(
+                "Each person uses their own Google project. Momento protects the "
+                "imported client with Windows DPAPI and never adds it to a recording "
+                "or public release."
+            )
+        )
+        return box
+
     def _build_youtube_account_group(self) -> QGroupBox:
         box = QGroupBox("Account")
         layout = QVBoxLayout(box)
@@ -955,7 +1003,7 @@ class SettingsPanel(QWidget):
         identity_row.addWidget(self._yt_avatar_label, 0, Qt.AlignmentFlag.AlignVCenter)
         self._yt_status_label = QLabel("")
         self._yt_status_label.setWordWrap(True)
-        self._yt_status_label.setTextFormat(Qt.TextFormat.RichText)
+        self._yt_status_label.setTextFormat(Qt.TextFormat.PlainText)
         identity_row.addWidget(self._yt_status_label, 1)
         layout.addLayout(identity_row)
 
@@ -964,6 +1012,10 @@ class SettingsPanel(QWidget):
         # the actions that apply right now.
         btn_row = QHBoxLayout()
         self._yt_connect_btn = QPushButton("Connect YouTube account…")
+        self._yt_connect_btn.setAccessibleName("Connect YouTube account")
+        self._yt_connect_btn.setAccessibleDescription(
+            "Open Google's browser sign-in for the configured project"
+        )
         self._yt_connect_btn.clicked.connect(self._on_yt_connect_clicked)
         self._yt_switch_btn = QPushButton("Switch account…")
         self._yt_switch_btn.clicked.connect(self._on_yt_connect_clicked)
@@ -1024,6 +1076,143 @@ class SettingsPanel(QWidget):
         layout.addRow("", hint)
         return box
 
+    def _on_yt_guide_clicked(self) -> None:
+        from momento.ui.youtube_setup_dialog import YouTubeSetupDialog
+
+        dialog = YouTubeSetupDialog(self)
+        dialog.exec()
+        if dialog.import_requested:
+            self._on_yt_import_clicked()
+
+    def _on_yt_import_clicked(self) -> None:
+        from momento.youtube import auth as yt_auth
+        from momento.youtube import client_config
+
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Import Google Desktop OAuth JSON",
+            str(Path.home()),
+            "Google OAuth JSON (*.json)",
+        )
+        if not path:
+            return
+
+        replacing = youtube_oauth_client_path().exists() or yt_auth.is_connected()
+        if replacing:
+            reply = QMessageBox.question(
+                self,
+                "Replace Google OAuth setup?",
+                "Replacing the Google OAuth setup will disconnect the current "
+                "YouTube account on this machine. Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                return
+
+        try:
+            client_config.import_user_client_config(Path(path))
+        except client_config.OAuthClientConfigError as exc:
+            self._refresh_yt_setup_state()
+            QMessageBox.warning(self, "Couldn't import OAuth JSON", str(exc))
+            self._yt_import_btn.setFocus(Qt.FocusReason.OtherFocusReason)
+            return
+
+        self._clear_yt_account_state()
+        self._refresh_yt_setup_state()
+        self.youtube_configuration_changed.emit()
+        QMessageBox.information(
+            self,
+            "Google OAuth setup ready",
+            "Momento stored a protected copy for this Windows account. You may "
+            "delete the downloaded JSON file. Next, connect your YouTube account.",
+        )
+        self._yt_connect_btn.setFocus(Qt.FocusReason.OtherFocusReason)
+
+    def _on_yt_remove_client_clicked(self) -> None:
+        from momento.youtube import client_config
+
+        reply = QMessageBox.question(
+            self,
+            "Remove Google OAuth setup?",
+            "This deletes Momento's protected OAuth client and disconnects the "
+            "current YouTube account on this machine. Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            client_config.remove_user_client_config()
+        except client_config.OAuthClientConfigError as exc:
+            QMessageBox.warning(self, "Couldn't remove OAuth setup", str(exc))
+            return
+        self._clear_yt_account_state()
+        self._refresh_yt_setup_state()
+        self.youtube_configuration_changed.emit()
+
+    def _clear_yt_account_state(self) -> None:
+        from momento.youtube import auth as yt_auth
+
+        yt_auth.disconnect_account()
+        yt_auth.delete_cached_avatar()
+        had_channel = bool(
+            self._config.youtube_channel_name or self._config.youtube_channel_id
+        )
+        self._config = replace(
+            self._config, youtube_channel_name="", youtube_channel_id=""
+        )
+        if had_channel:
+            try:
+                save_config(self._config)
+            except OSError:
+                logger.exception("Could not persist cleared YouTube channel state")
+            self.settings_saved.emit(self._config)
+        self._update_yt_status_label()
+
+    def _refresh_yt_setup_state(self) -> None:
+        from momento.youtube import client_config
+
+        user_file_exists = youtube_oauth_client_path().is_file()
+        try:
+            active = client_config.load_active_client_config()
+        except client_config.OAuthClientConfigError:
+            active = None
+            state = "invalid"
+        else:
+            if active is None:
+                state = "missing"
+            elif active.source == "developer":
+                state = "developer"
+            else:
+                state = "user"
+
+        if state == "invalid":
+            self._yt_setup_status_label.setText(
+                "Needs attention: the saved Google OAuth setup cannot be read. "
+                "Replace or remove it before connecting."
+            )
+        elif state == "missing":
+            self._yt_setup_status_label.setText(
+                "Not set up. Import a Desktop app OAuth JSON from your own Google "
+                "Cloud project."
+            )
+        elif state == "developer":
+            self._yt_setup_status_label.setText(
+                "Ready for this source checkout using its local developer OAuth setup."
+            )
+        else:
+            self._yt_setup_status_label.setText(
+                "Ready. Momento has a protected OAuth setup for this Windows account."
+            )
+
+        self._yt_import_btn.setText(
+            "Replace OAuth JSON…" if state in {"user", "invalid"} else "Import OAuth JSON…"
+        )
+        self._yt_remove_client_btn.setVisible(user_file_exists)
+        self._yt_connect_btn.setEnabled(active is not None)
+        self._yt_switch_btn.setEnabled(active is not None)
+
     # ---- YouTube connect/disconnect handlers (worker-thread blocking) ----
 
     def _on_yt_connect_clicked(self) -> None:
@@ -1033,6 +1222,16 @@ class SettingsPanel(QWidget):
         ``run_local_server`` blocks until the user finishes the browser
         consent, which can take a minute and would freeze the Settings UI.
         """
+        from momento.youtube import client_config
+
+        if not client_config.has_configured_client():
+            self._refresh_yt_setup_state()
+            QMessageBox.information(
+                self,
+                "Set up YouTube first",
+                "Import your Google Desktop OAuth JSON before connecting an account.",
+            )
+            return
         self._yt_set_busy(True, "Opening your browser to sign in to YouTube…")
 
         self._yt_worker = _YouTubeConnectWorker()
@@ -1113,12 +1312,23 @@ class SettingsPanel(QWidget):
 
     def _yt_set_busy(self, busy: bool, status: str = "") -> None:
         """Toggle button-disabled state during the OAuth flow."""
-        for btn in (self._yt_connect_btn, self._yt_switch_btn, self._yt_disconnect_btn):
+        for btn in (
+            self._yt_connect_btn,
+            self._yt_switch_btn,
+            self._yt_disconnect_btn,
+            self._yt_import_btn,
+            self._yt_remove_client_btn,
+        ):
             btn.setEnabled(not busy)
         if busy and status:
-            self._yt_status_label.setText(
-                f"<span style='color:#aaa'><i>{status}</i></span>"
-            )
+            self._yt_status_label.setText(status)
+        elif not busy:
+            self._refresh_yt_setup_state()
+
+    def has_active_youtube_auth(self) -> bool:
+        """Return whether the external browser sign-in is still in flight."""
+        thread = getattr(self, "_yt_thread", None)
+        return bool(thread is not None and thread.is_alive())
 
     def _update_yt_status_label(self) -> None:
         """Repaint the connection state + button visibility."""
@@ -1128,9 +1338,7 @@ class SettingsPanel(QWidget):
         name = self._config.youtube_channel_name
         if connected:
             display = name or "(unnamed channel)"
-            self._yt_status_label.setText(
-                f"<b>Signed in as:</b> {display}"
-            )
+            self._yt_status_label.setText(f"Signed in as: {display}")
             self._yt_connect_btn.setVisible(False)
             self._yt_switch_btn.setVisible(True)
             self._yt_disconnect_btn.setVisible(True)
@@ -1140,8 +1348,8 @@ class SettingsPanel(QWidget):
             self._maybe_fetch_avatar_async()
         else:
             self._yt_status_label.setText(
-                "<span style='color:#aaa'>Not connected. "
-                "Sign in to enable Upload to YouTube on recordings and clips.</span>"
+                "Not connected. Configure a Google project, then sign in to "
+                "upload recordings and clips."
             )
             self._yt_connect_btn.setVisible(True)
             self._yt_switch_btn.setVisible(False)
@@ -1834,13 +2042,13 @@ class SettingsPanel(QWidget):
         )
         self._refresh_disk_free_hint()
         self._load_games_table(c.known_games, c.disabled_games)
-        if youtube_upload_available():
-            idx = self._yt_privacy_combo.findData(c.youtube_default_privacy)
-            self._yt_privacy_combo.setCurrentIndex(max(0, idx))
-            idx = self._yt_category_combo.findData(int(c.youtube_default_category))
-            self._yt_category_combo.setCurrentIndex(max(0, idx))
-            self._yt_default_tags_edit.setText(c.youtube_default_tags)
-            self._update_yt_status_label()
+        idx = self._yt_privacy_combo.findData(c.youtube_default_privacy)
+        self._yt_privacy_combo.setCurrentIndex(max(0, idx))
+        idx = self._yt_category_combo.findData(int(c.youtube_default_category))
+        self._yt_category_combo.setCurrentIndex(max(0, idx))
+        self._yt_default_tags_edit.setText(c.youtube_default_tags)
+        self._refresh_yt_setup_state()
+        self._update_yt_status_label()
 
     def _on_browse_output(self) -> None:
         start = self._output_edit.text().strip() or str(Path.home())
@@ -2092,19 +2300,11 @@ class SettingsPanel(QWidget):
             custom_bitrate_kbps=int(self._bitrate_spin.value()),
             youtube_default_privacy=(
                 self._yt_privacy_combo.currentData() or "unlisted"
-                if youtube_upload_available()
-                else self._config.youtube_default_privacy
             ),
-            youtube_default_category=(
-                int(self._yt_category_combo.currentData() or 20)
-                if youtube_upload_available()
-                else self._config.youtube_default_category
+            youtube_default_category=int(
+                self._yt_category_combo.currentData() or 20
             ),
-            youtube_default_tags=(
-                self._yt_default_tags_edit.text().strip()
-                if youtube_upload_available()
-                else self._config.youtube_default_tags
-            ),
+            youtube_default_tags=self._yt_default_tags_edit.text().strip(),
             # channel_name / channel_id are managed by the Connect / Disconnect
             # buttons (which save_config directly) — preserve whatever's
             # currently in memory so a normal Save doesn't blow away an
@@ -2245,16 +2445,22 @@ class _YouTubeConnectWorker(QObject):
     failed = pyqtSignal(str)
 
     def run(self) -> None:  # noqa: D401 — Qt slot
+        from momento.youtube import auth as yt_auth
+
         try:
-            from momento.youtube import auth as yt_auth
             info = yt_auth.connect_account()
             # Cache the avatar here (still off the GUI thread) so it's ready
             # by the time `succeeded` repaints the Settings chip.
             yt_auth.cache_channel_avatar(getattr(info, "thumbnail_url", ""))
             self.succeeded.emit(info)
-        except Exception as exc:  # noqa: BLE001 — surface anything to the UI
-            logger.exception("YouTube connect worker failed")
+        except yt_auth.YouTubeAuthError as exc:
+            logger.warning("YouTube connect worker failed (%s)", type(exc).__name__)
             self.failed.emit(str(exc))
+        except Exception as exc:  # noqa: BLE001 — contain third-party failures
+            logger.warning("YouTube connect worker failed (%s)", type(exc).__name__)
+            self.failed.emit(
+                "Couldn't complete YouTube sign-in. Return to Momento and try again."
+            )
 
 
 class _AvatarFetchSignals(QObject):
@@ -2282,8 +2488,10 @@ class _AvatarFetchRunnable(QRunnable):
             if creds is not None:
                 info = yt_auth.fetch_channel_info(creds)
                 ok = yt_auth.cache_channel_avatar(info.thumbnail_url) is not None
-        except Exception:  # noqa: BLE001 — purely cosmetic, never surface
-            logger.warning("Background YouTube avatar fetch failed", exc_info=True)
+        except Exception as exc:  # noqa: BLE001 — purely cosmetic, never surface
+            logger.warning(
+                "Background YouTube avatar fetch failed (%s)", type(exc).__name__
+            )
         self.signals.done.emit(ok)
 
 

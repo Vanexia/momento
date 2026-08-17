@@ -13,7 +13,7 @@ from momento import __version__  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.4"
+EXPECTED_VERSION = "0.2.5"
 
 checks = 0
 failures = 0
@@ -40,6 +40,10 @@ def main() -> int:
     build_info = (ROOT / "BUILD_INFO.txt").read_text(encoding="utf-8")
     notices = (ROOT / "THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
     attributes = (ROOT / ".gitattributes").read_text(encoding="ascii")
+    helper_fetcher = (ROOT / "scripts" / "fetch_ffmpeg.ps1").read_text(encoding="utf-8")
+    release_notes = (ROOT / "docs" / "releases" / f"{EXPECTED_VERSION}.md").read_text(
+        encoding="utf-8"
+    )
     check("version: Python package matches public release", __version__ == EXPECTED_VERSION)
     check("version: pyproject matches public release", pyproject["project"]["version"] == EXPECTED_VERSION)
     check("version: Windows file metadata matches public release", f"'ProductVersion', '{EXPECTED_VERSION}'" in version_info)
@@ -180,6 +184,8 @@ def main() -> int:
         "config.json.tmp",
         "youtube_token.dat.tmp",
         "youtube_avatar.png.tmp",
+        "youtube_oauth_client.dat",
+        "youtube_oauth_client.dat.tmp",
     ):
         check(
             f"installer: purge removes {filename}",
@@ -196,6 +202,33 @@ def main() -> int:
         "third-party-source.zip\"; DestDir" not in installer,
     )
     check("builder: invokes PyInstaller source recipe", "pyinstaller.spec" in builder.casefold())
+    check(
+        "bundle: carries Google upload runtime without an OAuth identity",
+        "MOMENTO_INCLUDE_YOUTUBE_OAUTH" not in spec
+        and "client_secrets.json" not in spec
+        and all(
+            name in spec
+            for name in (
+                '"googleapiclient"',
+                '"google_auth_oauthlib"',
+                '"google_auth_httplib2"',
+            )
+        ),
+    )
+    check(
+        "builder: rejects legacy OAuth identity opt-in",
+        "MOMENTO_INCLUDE_YOUTUBE_OAUTH" in builder and "will not include" in builder,
+    )
+    check(
+        "source bootstrap downloads the reviewed helper from this release",
+        f"/v{EXPECTED_VERSION}/$ArchiveName" in helper_fetcher,
+    )
+    check(
+        "release notes name the updater assets emitted by the builder",
+        "`Momento-update.json`" in release_notes
+        and "`Momento-update.json.sig`" in release_notes
+        and f"Momento-{EXPECTED_VERSION}-update.json" not in release_notes,
+    )
     check("builder: invokes Inno Setup compiler", "ISCC.exe" in builder)
     check(
         "builder: recreates an isolated release environment",
@@ -249,7 +282,7 @@ def main() -> int:
     check(
         "compliance: notices identify the complete native source bundle",
         "PyAV 17.0.1" in notices
-        and "Momento-0.2.4-third-party-source.zip" in notices,
+        and "Momento-0.2.5-third-party-source.zip" in notices,
     )
     check(
         "builder: creates and verifies third-party corresponding source",
@@ -278,7 +311,7 @@ def main() -> int:
     )
     check(
         "builder: emits one checksum list for all release assets",
-        "SHA256SUMS-0.2.4.txt" in builder
+        "SHA256SUMS-0.2.5.txt" in builder
         and all(
             term in builder
             for term in (

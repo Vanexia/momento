@@ -94,7 +94,7 @@ def resolve_loopback_device(name_or_id: str) -> LoopbackDevice | None:
             for d in devices:
                 bare = d.name.split("  (default)")[0]
                 if bare == migrated or d.id == migrated:
-                    logger.info("Migrated loopback endpoint id %s -> %r", name_or_id, migrated)
+                    logger.info("Migrated legacy loopback endpoint")
                     return d
     return None
 
@@ -145,7 +145,7 @@ class LoopbackStreamer:
             raise RuntimeError("LoopbackStreamer already started")
         d = resolve_loopback_device(self._device_key)
         if d is None:
-            raise ValueError(f"Loopback device not found: {self._device_key!r}")
+            raise ValueError("Selected playback device was not found")
         self._resolved_name = d.id
 
         self._sink = sink
@@ -162,18 +162,17 @@ class LoopbackStreamer:
         if self._open_error is not None:
             self._stop_event.set()
             raise RuntimeError(
-                f"Could not open loopback device {d.name!r}: "
-                f"{_format_error(self._open_error)}"
-            ) from self._open_error
+                "Could not open the selected playback device. It may be unavailable or in use."
+            ) from None
         if not opened:
             self._stop_event.set()
             raise RuntimeError(
-                f"Loopback device {d.name!r} did not open within {_OPEN_TIMEOUT_S:.0f}s"
+                f"The selected playback device did not open within {_OPEN_TIMEOUT_S:.0f}s"
             )
         self._started = True
         logger.info(
-            "LoopbackStreamer started: device=%s sr=%d ch=%d",
-            self._resolved_name, self._sample_rate, self._channels,
+            "LoopbackStreamer started: sr=%d ch=%d",
+            self._sample_rate, self._channels,
         )
 
     def stop(self, timeout: float = 5.0) -> None:
@@ -259,7 +258,9 @@ class LoopbackStreamer:
                         stream.close()
         except Exception as e:
             if not self._open_event.is_set():
-                logger.exception("Failed to open loopback device %r", self._device_key)
+                logger.warning(
+                    "Failed to open selected loopback device (%s)", type(e).__name__
+                )
                 self._open_error = e
             else:
                 logger.exception("Loopback capture loop crashed")

@@ -74,7 +74,7 @@ from momento.ui.status_panel import StatusPanel
 from momento.ui.timeline import Timeline
 from momento.ui.widgets import AnchoredComboBox
 from momento.util.paths import window_state_path
-from momento.util.resources import app_icon_path, youtube_upload_available
+from momento.util.resources import app_icon_path
 from momento.util import windows_api
 
 logger = logging.getLogger(__name__)
@@ -101,6 +101,10 @@ class _YouTubeCredentialsBridge(QObject):
     """Carries a credential-refresh result back to the GUI thread."""
 
     completed = pyqtSignal(object, object)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.config_epoch = 0
 
 
 class _LinkLabel(QLabel):
@@ -189,6 +193,7 @@ class EditorWindow(QMainWindow):
         self._parked_preview_position: float = 0.0
         self._youtube_auth_bridge: _YouTubeCredentialsBridge | None = None
         self._youtube_upload_path: Path | None = None
+        self._youtube_config_epoch = 0
 
         self._build_menu()
 
@@ -701,9 +706,14 @@ class EditorWindow(QMainWindow):
     def has_update_blocking_activity(self) -> bool:
         """Return whether editor-owned background work must finish first."""
         trim_thread = getattr(self, "_trim_thread", None)
+        settings_auth_active = bool(
+            self._settings_panel is not None
+            and self._settings_panel.has_active_youtube_auth()
+        )
         return bool(
             (trim_thread is not None and trim_thread.isRunning())
             or self._youtube_auth_bridge is not None
+            or settings_auth_active
         )
 
     def _ensure_settings_panel(self) -> SettingsPanel:
@@ -711,6 +721,9 @@ class EditorWindow(QMainWindow):
         if self._settings_panel is None:
             self._settings_panel = SettingsPanel(self._config, session=self._session)
             self._settings_panel.settings_saved.connect(self._on_settings_saved)
+            self._settings_panel.youtube_configuration_changed.connect(
+                self._on_youtube_configuration_changed
+            )
             self._settings_panel.done.connect(self._show_editor_view)
             self._stack.addWidget(self._settings_panel)
         return self._settings_panel
@@ -1132,7 +1145,9 @@ class EditorWindow(QMainWindow):
 
         self._upload_btn = self._make_action_button("Upload to YouTube", "youtube", primary=True)
         self._upload_btn.setEnabled(False)
-        self._upload_btn.setVisible(youtube_upload_available())
+        self._upload_btn.setAccessibleDescription(
+            "Upload the selected recording or open YouTube setup"
+        )
         self._upload_btn.clicked.connect(self._on_upload_clicked)
         export_row.addWidget(self._upload_btn)
 
@@ -1617,13 +1632,36 @@ class EditorWindow(QMainWindow):
     def _on_upload_to_youtube_requested(self, path: Path) -> None:
         """Right-click → Upload to YouTube. Gate on connection state, then
         open the upload dialog → progress dialog flow."""
-        if not youtube_upload_available() or path is None or not Path(path).is_file():
+        if path is None or not Path(path).is_file():
             return
 
         # Local imports so the YouTube package isn't pulled in just for app
         # startup — and so a missing google-api-python-client install never
         # breaks the editor at launch.
         from momento.youtube import auth as yt_auth
+        from momento.youtube import client_config
+
+        try:
+            active_client = client_config.load_active_client_config()
+        except client_config.OAuthClientConfigError:
+            QMessageBox.warning(
+                self,
+                "YouTube setup needs attention",
+                "Momento can't read the saved Google OAuth setup. Open Settings "
+                "to replace or remove it.",
+            )
+            self.show_settings("YouTube")
+            return
+        if active_client is None:
+            QMessageBox.information(
+                self,
+                "Set up YouTube uploads",
+                "Import a Desktop OAuth JSON from your own Google Cloud project. "
+                "Momento will guide you through the steps.",
+            )
+            self.show_settings("YouTube")
+            return
+
         # 1. Are we connected?
         if not yt_auth.is_connected():
             reply = QMessageBox.question(
@@ -1647,6 +1685,7 @@ class EditorWindow(QMainWindow):
         # Loading credentials may refresh an expired token over the network.
         # Keep that request off Qt's GUI thread so the editor remains responsive.
         bridge = _YouTubeCredentialsBridge()
+        bridge.config_epoch = self._youtube_config_epoch
         bridge.completed.connect(self._on_youtube_credentials_ready)
         self._youtube_auth_bridge = bridge
         self._youtube_upload_path = Path(path)
@@ -1675,6 +1714,13 @@ class EditorWindow(QMainWindow):
         if bridge is not None:
             bridge.deleteLater()
 
+        if (
+            bridge is None
+            or getattr(bridge, "config_epoch", -1) != self._youtube_config_epoch
+        ):
+            self._status.setText("YouTube setup changed; start the upload again")
+            return
+
         if error is not None:
             self._status.setText("Could not check the YouTube connection")
         else:
@@ -1689,6 +1735,18 @@ class EditorWindow(QMainWindow):
             )
             return
 
+        from momento.youtube import auth as yt_auth
+
+        if not yt_auth.credentials_match_active_client(creds):
+            self._status.setText("YouTube setup changed; start the upload again")
+            QMessageBox.information(
+                self,
+                "YouTube setup changed",
+                "The Google OAuth setup changed while Momento checked your sign-in. "
+                "Start the upload again with the current setup.",
+            )
+            return
+
         if path is None or not path.is_file():
             QMessageBox.warning(
                 self,
@@ -1698,6 +1756,12 @@ class EditorWindow(QMainWindow):
             return
 
         self._show_youtube_upload_dialog(path, creds)
+
+    def _on_youtube_configuration_changed(self) -> None:
+        """Invalidate credentials being refreshed under an older client."""
+        self._youtube_config_epoch += 1
+        if self._youtube_auth_bridge is not None:
+            self._status.setText("YouTube setup changed; waiting for the old check to finish")
 
     def _show_youtube_upload_dialog(self, path: Path, creds) -> None:
         from momento.config import save_config

@@ -19,16 +19,21 @@ def main() -> int:
         from PyQt6.QtWidgets import QApplication
         from momento.config import Config
         import momento.ui.settings_dialog as settings_mod
+        from momento.ui.editor import EditorWindow
+        from momento.youtube import client_config
 
         def blocked_connect(self):
             time.sleep(0.4)
             self.failed.emit('simulated completion')
 
         settings_mod._YouTubeConnectWorker.run = blocked_connect
+        client_config.has_configured_client = lambda: True
         app = QApplication([])
-        panel = settings_mod.SettingsPanel(Config())
+        editor = EditorWindow(Config())
+        panel = editor._ensure_settings_panel()
         panel._on_yt_connect_clicked()
-        QTimer.singleShot(50, panel.deleteLater)
+        print(f'update blocked: {editor.has_update_blocking_activity()}', flush=True)
+        QTimer.singleShot(50, editor.deleteLater)
         QTimer.singleShot(800, app.quit)
         rc = app.exec()
         print(f'child completed: {rc}', flush=True)
@@ -48,7 +53,11 @@ def main() -> int:
         print("FAIL - Settings teardown hung while OAuth worker was active")
         return 1
 
-    ok = result.returncode == 0 and "child completed: 0" in result.stdout
+    ok = (
+        result.returncode == 0
+        and "update blocked: True" in result.stdout
+        and "child completed: 0" in result.stdout
+    )
     print(f"{'PASS' if ok else 'FAIL'} - Settings teardown survives active OAuth worker")
     if not ok:
         print(result.stdout)

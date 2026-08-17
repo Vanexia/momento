@@ -128,7 +128,7 @@ def _extract(media_path: Path) -> Path | None:
     # thumb_is_fresh would treat it as a valid cached thumb forever.
     with contextlib.suppress(OSError):
         tp.unlink(missing_ok=True)
-    logger.warning("Thumbnail extraction failed for %s: %s", media_path.name, last_err[:200])
+    logger.warning("Thumbnail extraction failed: %s", last_err[:200])
     return None
 
 
@@ -164,7 +164,7 @@ class ThumbnailJob(QRunnable):
             tp = _extract(self._path)
             self.signals.done.emit(str(self._path), str(tp) if tp else "")
         except Exception:
-            logger.exception("ThumbnailJob crashed for %s", self._path)
+            logger.exception("ThumbnailJob crashed")
             self.signals.done.emit(str(self._path), "")
 
 

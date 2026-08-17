@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import QApplication, QDialog, QMessageBox  # noqa: E402
 from momento.config import load_config  # noqa: E402
 from momento.ui.editor import EditorWindow  # noqa: E402
 from momento.ui import youtube_upload_dialog as upload_dialog  # noqa: E402
-from momento.youtube import auth  # noqa: E402
+from momento.youtube import auth, client_config  # noqa: E402
 
 
 def _pump_until(app, predicate, timeout_s: float = 2.0) -> bool:
@@ -32,6 +32,8 @@ def main() -> int:
     app = QApplication.instance() or QApplication(sys.argv[:1])
     original_connected = auth.is_connected
     original_credentials = auth.get_authorized_credentials
+    original_matcher = auth.credentials_match_active_client
+    original_client = client_config.load_active_client_config
     original_dialog = upload_dialog.YouTubeUploadDialog
     original_warning = QMessageBox.warning
     opened = {"count": 0}
@@ -57,6 +59,8 @@ def main() -> int:
         clip.write_bytes(b"clip")
         auth.is_connected = lambda: True
         auth.get_authorized_credentials = slow_credentials
+        auth.credentials_match_active_client = lambda _creds: True
+        client_config.load_active_client_config = lambda: object()
         upload_dialog.YouTubeUploadDialog = _RejectedDialog
         QMessageBox.warning = lambda *args, **kwargs: warnings.__setitem__(
             "count", warnings["count"] + 1
@@ -79,6 +83,8 @@ def main() -> int:
         finally:
             auth.is_connected = original_connected
             auth.get_authorized_credentials = original_credentials
+            auth.credentials_match_active_client = original_matcher
+            client_config.load_active_client_config = original_client
             upload_dialog.YouTubeUploadDialog = original_dialog
             QMessageBox.warning = original_warning
             editor.deleteLater()

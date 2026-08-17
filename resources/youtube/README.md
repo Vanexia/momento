@@ -1,21 +1,26 @@
-# resources/youtube/
+# YouTube OAuth resources
 
-Drop the OAuth `client_secrets.json` downloaded from Google Cloud Console
-here (Desktop application type). Filename must be exactly
-**`client_secrets.json`**.
+Installed Momento builds do not read an OAuth identity from this directory.
+Use **Settings > YouTube > Import OAuth JSON...** and follow
+[the user setup guide](../../docs/youtube-setup.md).
 
-This file is gitignored — it identifies *your* Momento build to Google's
-OAuth servers and shouldn't be shared via the repository. PyInstaller
-bundles whatever's in this folder into the frozen build.
+Source runs retain a developer fallback for local testing. If no imported
+AppData client exists, a non-frozen source run can read
+`resources/youtube/client_secrets.json`. The file must use Google's Desktop app
+OAuth format.
 
-To produce one:
+`client_secrets.json` is gitignored. Do not commit it, include it in an
+archive, paste it into logs, or share it in an issue. The public PyInstaller
+recipe refuses to bundle it, and frozen builds ignore the fallback path.
 
-1. https://console.cloud.google.com/ → create a project ("Momento")
-2. APIs & Services → Library → enable **YouTube Data API v3**
-3. APIs & Services → OAuth consent screen → External → fill app name,
-   support email, developer email. Add scopes
-   `https://www.googleapis.com/auth/youtube.upload` and
-   `https://www.googleapis.com/auth/youtube.readonly`.
-   Add yourself (and any test users) under **Test users**.
-4. APIs & Services → Credentials → Create Credentials → OAuth client ID
-   → **Desktop app** → download JSON → save here as `client_secrets.json`.
+The Settings import path is preferable for source testing because it exercises
+the same validation, DPAPI storage, replacement, and removal flow as the
+installer.
+
+Momento requests:
+
+- `https://www.googleapis.com/auth/youtube.upload`
+- `https://www.googleapis.com/auth/youtube.readonly`
+
+Google's [installed-app OAuth guide](https://developers.google.com/youtube/v3/guides/auth/installed-apps)
+documents the Desktop client format.

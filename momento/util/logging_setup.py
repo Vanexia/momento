@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import logging.handlers
+import re
 import sys
 import traceback
 from pathlib import Path
@@ -20,6 +21,46 @@ from momento.util.paths import logs_dir
 _FORMAT = "%(asctime)s %(levelname)s %(name)s: %(message)s"
 _logger = logging.getLogger("momento.crash")
 
+_QUOTED_WINDOWS_PATH_RE = re.compile(
+    r'''(?P<quote>["'])(?:[a-z]:[\\/]+|\\\\+)[^"'\r\n]+(?P=quote)''',
+    re.IGNORECASE,
+)
+_WINDOWS_PATH_RE = re.compile(
+    r"(?<![a-z0-9])(?:[a-z]:[\\/]+|\\\\+)[^\r\n]+",
+    re.IGNORECASE,
+)
+_QUOTED_PRIVATE_FILENAME_RE = re.compile(
+    r'''(?P<quote>["'])[^"'\\/\r\n]+\.(?:mkv|mp4|json|log|jpe?g|png)(?P=quote)''',
+    re.IGNORECASE,
+)
+_PRIVATE_FILENAME_RE = re.compile(
+    r"(?P<prefix>^|[=,(;\s])[^\\/:*?\"'<>|\r\n]*?"
+    r"\.(?:mkv|mp4|json|log|jpe?g|png)(?![a-z0-9_.-])",
+    re.IGNORECASE,
+)
+_WASAPI_ENDPOINT_RE = re.compile(
+    r"\{[0-9.]+\}\.\{[0-9a-f-]+\}",
+    re.IGNORECASE,
+)
+
+
+def redact_log_text(value: str) -> str:
+    """Remove share-sensitive paths, filenames, and endpoint identifiers."""
+    redacted = _QUOTED_WINDOWS_PATH_RE.sub('"<path>"', str(value))
+    redacted = _WINDOWS_PATH_RE.sub("<path>", redacted)
+    redacted = _QUOTED_PRIVATE_FILENAME_RE.sub('"<file>"', redacted)
+    redacted = _PRIVATE_FILENAME_RE.sub(
+        lambda match: f"{match.group('prefix')}<file>", redacted
+    )
+    return _WASAPI_ENDPOINT_RE.sub("<audio-endpoint>", redacted)
+
+
+class PrivacyFormatter(logging.Formatter):
+    """Redact the complete rendered record, including exception tracebacks."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        return redact_log_text(super().format(record))
+
 
 def setup_logging(level: int = logging.INFO) -> None:
     root = logging.getLogger()
@@ -28,7 +69,7 @@ def setup_logging(level: int = logging.INFO) -> None:
     for h in list(root.handlers):
         root.removeHandler(h)
 
-    formatter = logging.Formatter(_FORMAT)
+    formatter = PrivacyFormatter(_FORMAT)
 
     stderr_h = logging.StreamHandler(sys.stderr)
     stderr_h.setFormatter(formatter)

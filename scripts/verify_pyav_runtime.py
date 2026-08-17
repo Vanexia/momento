@@ -337,7 +337,10 @@ def verify_runtime(runtime: Path, *, contract_path: Path = DEFAULT_CONTRACT) -> 
         if runtime.suffix.lower() == ".whl":
             expected = contract["artifact"]["sha256"].lower()
             actual = _sha256(runtime)
-            checks.append(CheckResult("artifact", "wheel-hash", runtime.name, bool(expected) and actual == expected, f"sha256={actual}"))
+            hash_matches = bool(expected) and actual == expected
+            checks.append(CheckResult("artifact", "wheel-hash", runtime.name, hash_matches, f"sha256={actual}"))
+            if not hash_matches:
+                return RuntimeReport(checks)
             temp = tempfile.TemporaryDirectory(prefix="momento-pyav-wheel-")
             with zipfile.ZipFile(runtime) as wheel:
                 wheel.extractall(temp.name)

@@ -605,8 +605,8 @@ class Recorder:
                 ) from encoder_failure
             raise RecordingStartCancelled("recording start cancelled at publish")
         logger.info(
-            "Recording started: hwnd=%d size=%dx%d framerate=%d -> %s",
-            params.hwnd, w, h, params.framerate, mkv_path,
+            "Recording started: hwnd=%d size=%dx%d framerate=%d",
+            params.hwnd, w, h, params.framerate,
         )
 
     def _on_video_window_closed(self, generation: int) -> None:
@@ -699,10 +699,10 @@ class Recorder:
             )
 
         if not mkv_path.exists():
-            logger.error("MKV file missing after encoder stop: %s", mkv_path)
+            logger.error("MKV file missing after encoder stop")
             raise RecordingFinalizeError(mkv_path, "output file missing after finalize")
 
-        logger.info("Recording finalised: %s", mkv_path)
+        logger.info("Recording finalised")
         return mkv_path
 
     def cancel_start(self) -> bool:
@@ -784,11 +784,9 @@ def _discard_failed_output(mkv_path: Path) -> None:
     """
     try:
         mkv_path.unlink(missing_ok=True)
-        logger.info("Removed output of failed start: %s", mkv_path)
+        logger.info("Removed output of failed start")
     except OSError:
-        logger.warning(
-            "Could not remove failed-start output %s", mkv_path, exc_info=True
-        )
+        logger.warning("Could not remove failed-start output", exc_info=True)
 
 
 def _is_writable(folder: Path) -> bool:
