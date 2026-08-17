@@ -492,15 +492,20 @@ class MomentoTray(QObject):
 
         if parent is not None:
             def center_on_parent() -> None:
-                dialog_geometry = dialog.frameGeometry()
-                dialog_geometry.moveCenter(parent.frameGeometry().center())
-                dialog.move(dialog_geometry.topLeft())
+                self._center_window_frame(dialog, parent)
 
             # Native window borders do not have their final size until the
             # message box is visible, so centre it on the first event-loop turn.
             QTimer.singleShot(0, center_on_parent)
 
         dialog.exec()
+
+    @staticmethod
+    def _center_window_frame(dialog, parent) -> None:
+        frame_geometry = dialog.frameGeometry()
+        client_frame_offset = dialog.geometry().topLeft() - frame_geometry.topLeft()
+        frame_geometry.moveCenter(parent.frameGeometry().center())
+        dialog.move(frame_geometry.topLeft() + client_frame_offset)
 
     def _on_update_status(self, code: str, message: str, interactive: bool) -> None:
         checking = code == "checking"

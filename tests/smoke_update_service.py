@@ -6,13 +6,13 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace
 
-from PyQt6.QtWidgets import QApplication, QMessageBox, QWidget
+from PyQt6.QtCore import QPoint, QRect
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from momento.updater.client import UpdateResult, UpdateStatus  # noqa: E402
 from momento.updater.service import UpdateService  # noqa: E402
-from momento.ui import tray as tray_module  # noqa: E402
 from momento.ui.tray import MomentoTray  # noqa: E402
 
 
@@ -148,52 +148,36 @@ def test_update_result_is_owned_by_visible_editor() -> None:
     )
 
 
-def test_update_result_is_exactly_centered() -> None:
-    show_message = getattr(MomentoTray, "_show_update_message", None)
-    if show_message is None:
-        check("update result frame is centred on the editor", False)
+def test_centering_compensates_for_native_window_frame() -> None:
+    center_window = getattr(MomentoTray, "_center_window_frame", None)
+    if center_window is None:
+        check("update centering compensates for native window borders", False)
         return
 
-    editor = QWidget()
-    editor.setGeometry(120, 80, 960, 640)
-    editor.show()
-    QApplication.processEvents()
-    offsets: list[tuple[int, int]] = []
+    class FakeParent:
+        @staticmethod
+        def frameGeometry() -> QRect:
+            return QRect(0, 0, 1000, 700)
 
-    class ObservedMessageBox(QMessageBox):
-        def exec(self) -> int:
-            self.show()
-            QApplication.processEvents()
-            QApplication.processEvents()
-            parent = self.parentWidget()
-            assert parent is not None
-            dialog_center = self.frameGeometry().center()
-            parent_center = parent.frameGeometry().center()
-            offsets.append(
-                (
-                    dialog_center.x() - parent_center.x(),
-                    dialog_center.y() - parent_center.y(),
-                )
-            )
-            self.close()
-            return int(QMessageBox.StandardButton.Ok)
+    class FakeDialog:
+        moved_to: QPoint | None = None
 
-    tray = SimpleNamespace(_update_dialog_parent=lambda: editor)
-    original_message_box = tray_module.QMessageBox
-    try:
-        tray_module.QMessageBox = ObservedMessageBox
-        show_message(
-            tray,
-            QMessageBox.Icon.Information,
-            "Momento updates",
-            "You're using the latest version of Momento.",
-        )
-    finally:
-        tray_module.QMessageBox = original_message_box
-        editor.close()
+        @staticmethod
+        def frameGeometry() -> QRect:
+            return QRect(300, 200, 360, 150)
+
+        @staticmethod
+        def geometry() -> QRect:
+            return QRect(308, 231, 344, 111)
+
+        def move(self, point: QPoint) -> None:
+            self.moved_to = point
+
+    dialog = FakeDialog()
+    center_window(dialog, FakeParent())
     check(
-        "update result frame is centred on the editor",
-        len(offsets) == 1 and abs(offsets[0][0]) <= 1 and abs(offsets[0][1]) <= 1,
+        "update centering compensates for native window borders",
+        dialog.moved_to == QPoint(328, 306),
     )
 
 
@@ -284,7 +268,7 @@ def main() -> int:
     _app = QApplication.instance() or QApplication(sys.argv[:1])
     test_manual_current_is_visible()
     test_update_result_is_owned_by_visible_editor()
-    test_update_result_is_exactly_centered()
+    test_centering_compensates_for_native_window_frame()
     test_automatic_check_runs_once_and_stays_noninteractive()
     test_busy_work_defers_without_quiescing()
     test_visible_editor_defers_update_installation()
