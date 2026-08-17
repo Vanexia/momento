@@ -463,8 +463,8 @@ class MomentoTray(QObject):
 
     def _on_check_updates(self) -> None:
         if self._update_service is None:
-            QMessageBox.warning(
-                self._update_dialog_parent(),
+            self._show_update_message(
+                QMessageBox.Icon.Warning,
                 "Momento",
                 "Update checking is not available right now.",
             )
@@ -481,6 +481,27 @@ class MomentoTray(QObject):
                 return active
         return None
 
+    def _show_update_message(
+        self,
+        icon: QMessageBox.Icon,
+        title: str,
+        message: str,
+    ) -> None:
+        parent = self._update_dialog_parent()
+        dialog = QMessageBox(icon, title, message, QMessageBox.StandardButton.Ok, parent)
+
+        if parent is not None:
+            def center_on_parent() -> None:
+                dialog_geometry = dialog.frameGeometry()
+                dialog_geometry.moveCenter(parent.frameGeometry().center())
+                dialog.move(dialog_geometry.topLeft())
+
+            # Native window borders do not have their final size until the
+            # message box is visible, so centre it on the first event-loop turn.
+            QTimer.singleShot(0, center_on_parent)
+
+        dialog.exec()
+
     def _on_update_status(self, code: str, message: str, interactive: bool) -> None:
         checking = code == "checking"
         self._check_updates_action.setEnabled(not checking)
@@ -489,11 +510,11 @@ class MomentoTray(QObject):
         )
         if not interactive or code in {"checking", "installing"}:
             return
-        parent = self._update_dialog_parent()
         if code in {"failed", "unavailable"}:
-            QMessageBox.warning(parent, "Momento updates", message)
+            icon = QMessageBox.Icon.Warning
         else:
-            QMessageBox.information(parent, "Momento updates", message)
+            icon = QMessageBox.Icon.Information
+        self._show_update_message(icon, "Momento updates", message)
 
     # ----------------------------------------------------------- new actions
     def _on_open_folder(self) -> None:

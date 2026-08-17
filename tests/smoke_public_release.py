@@ -106,6 +106,15 @@ def main() -> int:
         (ROOT / "resources" / "update_public_key.pem").is_file(),
     )
 
+    ci_workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(
+        encoding="utf-8"
+    )
+    check(
+        "CI: Windows invokes pip through the active Python interpreter",
+        "python -m pip install -c constraints-release.txt -e .[dev]" in ci_workflow
+        and "\n          pip install " not in ci_workflow,
+    )
+
     spec = (ROOT / "build" / "pyinstaller.spec").read_text(encoding="utf-8")
     check("privacy: OAuth bundling requires an explicit environment flag", "MOMENTO_INCLUDE_YOUTUBE_OAUTH" in spec)
     check("privacy: public build defaults to no OAuth identity", "== \"1\"" in spec or "== '1'" in spec)
