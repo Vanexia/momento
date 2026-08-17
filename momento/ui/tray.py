@@ -464,10 +464,22 @@ class MomentoTray(QObject):
     def _on_check_updates(self) -> None:
         if self._update_service is None:
             QMessageBox.warning(
-                None, "Momento", "Update checking is not available right now."
+                self._update_dialog_parent(),
+                "Momento",
+                "Update checking is not available right now.",
             )
             return
         self._update_service.check_now()
+
+    def _update_dialog_parent(self):
+        if self._editor is not None and self._editor.isVisible():
+            return self._editor
+        app = QApplication.instance()
+        if app is not None:
+            active = app.activeWindow()
+            if active is not None and active.isVisible():
+                return active
+        return None
 
     def _on_update_status(self, code: str, message: str, interactive: bool) -> None:
         checking = code == "checking"
@@ -477,10 +489,11 @@ class MomentoTray(QObject):
         )
         if not interactive or code in {"checking", "installing"}:
             return
+        parent = self._update_dialog_parent()
         if code in {"failed", "unavailable"}:
-            QMessageBox.warning(None, "Momento updates", message)
+            QMessageBox.warning(parent, "Momento updates", message)
         else:
-            QMessageBox.information(None, "Momento updates", message)
+            QMessageBox.information(parent, "Momento updates", message)
 
     # ----------------------------------------------------------- new actions
     def _on_open_folder(self) -> None:

@@ -64,7 +64,8 @@ Product boundaries:
   update timer, background service, scheduled task, or prerelease channel.
 - Users can also run the same check from the tray menu or from **Help > Check
   for updates** in the editor. Momento coalesces concurrent automatic and
-  manual requests into one check.
+  manual requests into one check. Interactive results are owned by the visible
+  editor so Windows centres them over Momento.
 - Every accepted release must include `Momento-update.json`,
   `Momento-update.json.sig`, and the versioned installer. Momento verifies the
   canonical metadata with the Ed25519 public key embedded in the application,

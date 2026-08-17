@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from momento.updater.client import UpdateResult, UpdateStatus  # noqa: E402
 from momento.updater.service import UpdateService  # noqa: E402
+from momento.ui import tray as tray_module  # noqa: E402
 from momento.ui.tray import MomentoTray  # noqa: E402
 
 
@@ -62,6 +63,14 @@ class FakeSession:
         return self.lease
 
 
+class FakeAction:
+    def setEnabled(self, _enabled: bool) -> None:
+        pass
+
+    def setText(self, _text: str) -> None:
+        pass
+
+
 def _staged(version: str = "0.2.3"):
     return SimpleNamespace(
         manifest=SimpleNamespace(version=version),
@@ -107,6 +116,33 @@ def test_manual_current_is_visible() -> None:
     check(
         "manual current result is interactive",
         statuses[-1][0] == "current" and statuses[-1][2],
+    )
+
+
+def test_update_result_is_owned_by_visible_editor() -> None:
+    editor = SimpleNamespace(isVisible=lambda: True)
+    tray = SimpleNamespace(
+        _editor=editor,
+        _check_updates_action=FakeAction(),
+    )
+    tray._update_dialog_parent = lambda: MomentoTray._update_dialog_parent(tray)
+    parents: list[object | None] = []
+    original_information = tray_module.QMessageBox.information
+    try:
+        tray_module.QMessageBox.information = (
+            lambda parent, _title, _message: parents.append(parent)
+        )
+        MomentoTray._on_update_status(
+            tray,
+            "current",
+            "You're using the latest version of Momento.",
+            True,
+        )
+    finally:
+        tray_module.QMessageBox.information = original_information
+    check(
+        "update result is centred against the visible editor",
+        parents == [editor],
     )
 
 
@@ -196,6 +232,7 @@ def test_success_commits_and_failure_releases() -> None:
 def main() -> int:
     _app = QApplication.instance() or QApplication(sys.argv[:1])
     test_manual_current_is_visible()
+    test_update_result_is_owned_by_visible_editor()
     test_automatic_check_runs_once_and_stays_noninteractive()
     test_busy_work_defers_without_quiescing()
     test_visible_editor_defers_update_installation()
