@@ -16,10 +16,22 @@ import shutil
 from pathlib import Path
 
 from momento.core.recording_files import is_repair_temp
+from momento.core.recording_safety import (
+    OWNERSHIP_SIDECAR_SUFFIX,
+    has_valid_ownership_marker,
+    is_file_active,
+    is_momento_owned,
+    mark_recording_owned,
+    ownership_sidecar_path,
+)
 
 logger = logging.getLogger(__name__)
 
-_SIDECAR_SUFFIXES = (".thumb.jpg", ".bookmarks.json")
+_SIDECAR_SUFFIXES = (
+    ".thumb.jpg",
+    ".bookmarks.json",
+    OWNERSHIP_SIDECAR_SUFFIX,
+)
 _MEDIA_SUFFIXES = (".mkv", ".mp4")
 
 
@@ -47,6 +59,8 @@ def enforce_storage_limit(folder: Path, max_gb: int) -> int:
                 continue
             if is_repair_temp(p):
                 continue  # mid-repair work file — not a recording to count/delete
+            if not is_momento_owned(p):
+                continue
             try:
                 st = p.stat()
             except OSError:
@@ -59,21 +73,14 @@ def enforce_storage_limit(folder: Path, max_gb: int) -> int:
     if total <= limit_bytes:
         return 0
 
-    # A file with a repair queued/running must not be deleted out from under
-    # its RepairJob — that wastes the repair and, if the atomic swap lands after
-    # the unlink, resurrects the file with its sidecars already gone. At startup
-    # repair_async registers is_repairing synchronously before this runs, so the
-    # guard closes the race for both the startup and post-recording call sites.
-    from momento.core.media_probe import is_repairing
-
     recordings.sort(key=lambda t: t[0])  # oldest first
     deleted = 0
     for _, path, size in recordings:
         if total <= limit_bytes:
             break
-        if is_repairing(path):
+        if is_file_active(path):
             logger.info(
-                "Storage cleanup: skipping %s — repair in flight", path.name
+                "Storage cleanup: skipping %s — file activity in flight", path.name
             )
             continue
         try:
@@ -123,18 +130,14 @@ class MigrationWorker:
             pairs = self.collect_media_pairs()
         total = len(pairs)
         moved = failed = 0
-        # A repair atomically replaces its source when ffmpeg finishes. Moving
-        # that source concurrently can make the repair resurrect a second copy
-        # at the old location with sidecars split between both folders.
-        from momento.core.media_probe import is_repairing
-
         for i, (src, dst) in enumerate(pairs):
             if progress_callback is not None:
                 progress_callback(i, total, src.name)
-            if is_repairing(src):
-                logger.info("Migrate: skipping %s — repair in flight", src.name)
+            if is_file_active(src) or is_file_active(dst):
+                logger.info("Migrate: skipping %s — file activity in flight", src.name)
                 failed += 1
                 continue
+            was_owned = has_valid_ownership_marker(src) or is_momento_owned(src)
             try:
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 if dst.exists():
@@ -167,6 +170,14 @@ class MigrationWorker:
                     # sidecar behind is a partial migration and must be visible
                     # to the caller. The source sidecar remains recoverable.
                     failed += 1
+            if was_owned and mark_recording_owned(dst):
+                # A cross-volume move may alter timestamp precision. Refreshing
+                # the destination marker keeps it bound to the moved file.
+                source_marker = ownership_sidecar_path(src)
+                try:
+                    source_marker.unlink(missing_ok=True)
+                except OSError:
+                    pass
         if progress_callback is not None:
             progress_callback(total, total, "")
         return moved, failed

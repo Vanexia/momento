@@ -67,9 +67,10 @@ from momento.core.storage_cleanup import (  # noqa: E402
     _count_media,
     enforce_storage_limit,
 )
+from momento.core.recording_safety import mark_recording_owned  # noqa: E402
 from momento.ui.editor import _list_recordings  # noqa: E402
 from momento.ui.recordings_list import RecordingsList  # noqa: E402
-from momento.util.ffmpeg_path import ffmpeg_exe  # noqa: E402
+from media_fixture import make_momento_mkv  # noqa: E402
 
 _results: list[tuple[str, bool]] = []
 _CREATION = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
@@ -90,26 +91,12 @@ def _touch(path: Path, size: int = 2048, *, age_seconds: float = 0.0) -> Path:
 
 
 def _make_broken_mkv(path: Path) -> bool:
-    """Write a genuinely unfinalised MKV (no Segment duration), the same shape a
-    crash leaves behind. Muxing Matroska to a non-seekable pipe stops ffmpeg
-    backfilling the duration, so ffprobe reports duration=N/A — exactly what
-    ``find_broken_recordings`` keys on. Returns False if ffmpeg is unavailable
-    so callers skip the strong assertion rather than fail."""
+    """Write a genuinely truncated MKV with no readable Segment duration."""
     try:
-        proc = subprocess.run(
-            [
-                str(ffmpeg_exe()), "-hide_banner", "-loglevel", "error", "-y",
-                "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=3",
-                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-f", "matroska", "pipe:1",
-            ],
-            capture_output=True, creationflags=_CREATION, timeout=60,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        make_momento_mkv(path, live=True)
+    except OSError:
         return False
-    if proc.returncode != 0 or len(proc.stdout) < 4096:
-        return False
-    path.write_bytes(proc.stdout)
-    return True
+    return path.stat().st_size >= 4096
 
 
 # ---------------------------------------------------------------- classifier
@@ -230,17 +217,22 @@ def test_cleanup_stale_repair_temps_age_gates(tmp: Path) -> None:
     folder = tmp / "sweep"
     folder.mkdir()
     rec = _touch(folder / "game.mkv", age_seconds=600)            # real, old
+    old_rec = _touch(folder / "old.mkv", age_seconds=600)
+    check("sweep fixture: game recording is owned", mark_recording_owned(rec))
+    check("sweep fixture: old recording is owned", mark_recording_owned(old_rec))
     fresh_temp = _touch(folder / "game.repairing.mkv")            # temp, brand new
     stale_temp = _touch(folder / "old.repairing.mkv", age_seconds=600)  # temp, old
     stale_bak = _touch(folder / "old.broken-bak.mkv", age_seconds=600)  # legacy, old
 
+    unrelated = _touch(folder / "unrelated.repairing.mkv", age_seconds=600)
     removed = cleanup_stale_repair_temps(folder, min_age_seconds=120.0)
 
-    check("sweep: removed both stale temps", removed == 2)
+    check("sweep: removed both stale owned temps", removed == 2)
     check("sweep: real recording untouched", rec.exists())
     check("sweep: a fresh temp (live repair) is kept", fresh_temp.exists())
     check("sweep: stale .repairing.mkv removed", not stale_temp.exists())
     check("sweep: stale .broken-bak.mkv removed", not stale_bak.exists())
+    check("sweep: unrelated stale temp is preserved", unrelated.exists())
 
 
 # -------------------------------------------------- crash-recovery scan
@@ -257,21 +249,31 @@ def test_find_broken_excludes_temps(tmp: Path) -> None:
     # flagged, but the SAME broken bytes under a temp name are EXCLUDED — so the
     # test fails if the is_repair_temp guard is removed from the scan.
     real = folder / "broken_2026-01-01_000000.mkv"
-    if not _make_broken_mkv(real):
-        check("recover: (ffmpeg unavailable — strong exclusion proof skipped)", True)
+    generated = _make_broken_mkv(real)
+    check("recover fixture: broken tagged MKV was generated", generated)
+    if not generated:
         return
     os.utime(real, (0, 0))
+    owned = mark_recording_owned(real)
+    check("recover fixture: broken recording has a valid marker", owned)
+    if not owned:
+        return
     flagged = find_broken_recordings(folder, min_age_seconds=0.0, min_size_bytes=1024)
+    check("recover: a real owned broken recording IS flagged", real in flagged)
     if real not in flagged:
-        # Truncation didn't reproduce the N/A-duration signature on this build.
-        check("recover: (broken signature not reproduced — strong proof skipped)", True)
         return
     temp = folder / "broken_2026-01-01_000000.repairing.mkv"
     temp.write_bytes(real.read_bytes())
     os.utime(temp, (0, 0))
     flagged2 = find_broken_recordings(folder, min_age_seconds=0.0, min_size_bytes=1024)
-    check("recover: a real broken recording IS flagged (control)", real in flagged2)
+    check("recover: a real broken recording remains flagged (control)", real in flagged2)
     check("recover: same broken bytes under a temp name are EXCLUDED", temp not in flagged2)
+
+    unrelated = folder / "family-holiday.mkv"
+    unrelated.write_bytes(real.read_bytes())
+    os.utime(unrelated, (0, 0))
+    flagged3 = find_broken_recordings(folder, min_age_seconds=0.0, min_size_bytes=1024)
+    check("recover: an unowned broken MKV is never auto-repaired", unrelated not in flagged3)
 
 
 # ------------------------------------------------------- storage cleanup
@@ -415,12 +417,14 @@ def test_repairjob_unexpected_error_still_completes(tmp: Path) -> None:
     done: list[tuple[bool, str]] = []
     real_run = media_probe.subprocess.run
     real_replace = media_probe._replace_with_retry
+    real_validate = media_probe.validate_repair_candidate
 
     def fake_run(args, **_kwargs):
         Path(args[-1]).write_bytes(b"x" * 8192)
         return SimpleNamespace(returncode=0, stderr="")
 
     media_probe.subprocess.run = fake_run
+    media_probe.validate_repair_candidate = lambda *_args, **_kwargs: None
     media_probe._replace_with_retry = lambda *_args: (_ for _ in ()).throw(
         RuntimeError("simulated unexpected swap crash")
     )
@@ -438,6 +442,43 @@ def test_repairjob_unexpected_error_still_completes(tmp: Path) -> None:
     finally:
         media_probe.subprocess.run = real_run
         media_probe._replace_with_retry = real_replace
+        media_probe.validate_repair_candidate = real_validate
+
+
+def test_repair_rejects_invalid_exit_zero_output(tmp: Path) -> None:
+    src = _touch(tmp / "invalid-success.mkv", size=8192)
+    original = src.read_bytes()
+    done: list[tuple[bool, str]] = []
+    replaced: list[bool] = []
+    real_run = media_probe.subprocess.run
+    real_replace = media_probe._replace_with_retry
+    real_validate = media_probe.validate_repair_candidate
+
+    def fake_run(args, **_kwargs):
+        Path(args[-1]).write_bytes(b"not-media" * 1024)
+        return SimpleNamespace(returncode=0, stderr="")
+
+    media_probe.subprocess.run = fake_run
+    media_probe.validate_repair_candidate = (
+        lambda *_args, **_kwargs: "candidate is not readable media"
+    )
+    media_probe._replace_with_retry = lambda *_args: (replaced.append(True) or None)
+    try:
+        job = RepairJob(src)
+        job.signals.done.connect(lambda _p, ok, err: done.append((ok, err)))
+        job.run()
+    finally:
+        media_probe.subprocess.run = real_run
+        media_probe._replace_with_retry = real_replace
+        media_probe.validate_repair_candidate = real_validate
+
+    check("repair validation: corrupt exit-zero output is rejected", bool(done) and not done[0][0])
+    check("repair validation: original bytes remain unchanged", src.read_bytes() == original)
+    check("repair validation: invalid candidate never reaches atomic replace", not replaced)
+    check(
+        "repair validation: rejected temp is cleaned",
+        not src.with_name(src.stem + REPAIR_TMP_SUFFIX).exists(),
+    )
 
 
 def test_folder_migration_skips_inflight_repair(tmp: Path) -> None:
@@ -497,6 +538,7 @@ def main() -> int:
             test_repair_async_rejects_mp4_before_queue,
             test_recordings_menu_hides_repair_for_mp4,
             test_repairjob_unexpected_error_still_completes,
+            test_repair_rejects_invalid_exit_zero_output,
             test_folder_migration_skips_inflight_repair,
             test_repair_dedup_blocks_double_queue,
         ):

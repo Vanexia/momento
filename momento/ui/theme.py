@@ -54,6 +54,7 @@ TEXT_DIM = "#9a9ca8"
 TEXT_LOW = "#7d8088"         # meta text
 TEXT_DIM_2 = "#6b6d78"
 TEXT_FAINT = "#5a5c66"       # ruler ticks, captions
+SETTINGS_GROUP_LABEL = "#858893"
 
 # Accent — violet → magenta
 ACCENT = "#a78bfa"           # primary accent (icons, slider start, handles)
@@ -234,7 +235,7 @@ QGroupBox::title {{
     subcontrol-position: top left;
     left: 16px;
     padding: 0 6px;
-    color: {TEXT_FAINT};
+    color: {SETTINGS_GROUP_LABEL};
     font-weight: 700;
     background: transparent;
     text-transform: uppercase;

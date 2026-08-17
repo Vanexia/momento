@@ -187,6 +187,26 @@ def main() -> None:
     check("mic stall: stream closed by capture thread, NOT stop()'s thread",
           fake.closed and fake.close_thread_ident != threading.get_ident())
 
+    # A stream can remain "active" while its driver delivers no samples.
+    # Treat that as a real mid-recording loss so the owner can warn the user.
+    fake = FakeStream("idle")
+    m = mic_capture.MicStreamer("Fake Mic")
+    failed = threading.Event()
+    real_stall_warn = mic_capture._STALL_WARN_S
+    mic_capture._STALL_WARN_S = 0.05
+    try:
+        with _Patched(fake):
+            m.on_capture_failed = lambda _e: failed.set()
+            m.start(lambda *_a: True)
+            got_failure = failed.wait(timeout=1.0)
+            m.stop()
+    finally:
+        mic_capture._STALL_WARN_S = real_stall_warn
+    check("mic active stall: on_capture_failed fires", got_failure)
+    check("mic active stall: capture thread exits", not any(
+        "MicCapture" in t.name for t in threading.enumerate()
+    ))
+
     # ---- mic with data ----
     fake = FakeStream("data")
     m = mic_capture.MicStreamer("Fake Mic")

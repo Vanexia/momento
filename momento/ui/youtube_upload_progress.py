@@ -54,6 +54,11 @@ def _release_worker(thread, job) -> None:
     _ACTIVE_WORKERS.discard((thread, job))
 
 
+def has_active_uploads() -> bool:
+    """Return whether an upload worker is still running or winding down."""
+    return bool(_ACTIVE_WORKERS)
+
+
 class YouTubeUploadProgressDialog(QDialog):
     """Modal that runs a single UploadJob to completion.
 

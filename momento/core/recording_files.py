@@ -50,3 +50,14 @@ def is_recording_file(path: Path | str) -> bool:
     """
     p = Path(path)
     return p.suffix.lower() in RECORDING_SUFFIXES and not is_repair_temp(p)
+
+
+def recording_path_for_repair_temp(path: Path | str) -> Path | None:
+    """Return the original ``.mkv`` path represented by a repair work file."""
+    temp = Path(path)
+    lowered = temp.name.casefold()
+    for suffix in _REPAIR_TEMP_SUFFIXES:
+        if lowered.endswith(suffix):
+            stem = temp.name[: -len(suffix)]
+            return temp.with_name(stem + ".mkv")
+    return None

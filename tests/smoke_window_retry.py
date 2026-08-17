@@ -45,6 +45,7 @@ class FakeRecorder:
     def __init__(self) -> None:
         self.start_calls: list[dict] = []
         self._recording = False
+        self._busy = False
         self.on_window_closed = None
         self.start_error: Exception | None = None
 
@@ -54,7 +55,7 @@ class FakeRecorder:
 
     @property
     def is_busy(self) -> bool:
-        return self._recording
+        return self._recording or self._busy
 
     def start(self, **kwargs) -> None:
         self.start_calls.append(kwargs)
@@ -278,6 +279,98 @@ def test_concurrent_finalize_only_emits_once(tmp: Path) -> None:
     check("finalize race: one finished path emitted", finished == [final])
 
 
+def test_closed_window_releases_live_process_for_retry(tmp: Path) -> None:
+    """A game that recreates its HWND must get a fresh capture session."""
+    s, rec, failures, _ = _make_session(tmp)
+    game = _game()
+    rec._recording = True
+    with s._lock:
+        s._current_game = game
+        s._current_output = tmp / "recreated-window.mkv"
+
+    s._finalize(game, source="window closed")
+
+    check("window recreation: finalization is clean", failures == [])
+    check(
+        "window recreation: live process is released for retry",
+        s._watcher.released == [
+            (game.pid, sess._WINDOW_RECREATE_RETRY_COOLDOWN_S)
+        ],
+    )
+
+
+def test_starting_output_is_protected_before_publish(tmp: Path) -> None:
+    """Settings/library code must see a pipeline-owned path during start()."""
+    s, rec, _failures, _statuses = _make_session(tmp)
+    entered = threading.Event()
+    release = threading.Event()
+    real_start = rec.start
+
+    def slow_start(**kwargs) -> None:
+        rec.start_calls.append(kwargs)
+        entered.set()
+        release.wait(timeout=3.0)
+        rec._recording = True
+
+    rec.start = slow_start  # type: ignore[method-assign]
+    sess._game_still_running = lambda game: True
+    thread = threading.Thread(
+        target=s._start_recording, args=(_game(), 4242), daemon=True
+    )
+    try:
+        thread.start()
+        started = entered.wait(timeout=2.0)
+        protected = s.current_output
+        check("startup media guard: recorder entered start", started)
+        check(
+            "startup media guard: pending output is visible",
+            protected is not None and protected.parent == tmp,
+        )
+    finally:
+        release.set()
+        thread.join(timeout=3.0)
+        rec.start = real_start  # type: ignore[method-assign]
+
+
+def test_shutdown_waits_for_startup_cleanup(tmp: Path) -> None:
+    s, rec, _failures, _statuses = _make_session(tmp)
+    entered = threading.Event()
+    release = threading.Event()
+    stop_called = threading.Event()
+
+    def slow_start(**kwargs) -> None:
+        rec.start_calls.append(kwargs)
+        rec._busy = True
+        entered.set()
+        release.wait(timeout=3.0)
+        rec._busy = False
+
+    def request_stop():
+        stop_called.set()
+        return None
+
+    rec.start = slow_start  # type: ignore[method-assign]
+    rec.stop = request_stop  # type: ignore[method-assign]
+    s._watcher.stop = lambda: setattr(s._watcher, "is_running", False)
+    sess.wait_for_window = lambda *_args, **_kwargs: 4242
+    sess._game_still_running = lambda _game: True
+
+    s._on_game_start(_game())
+    started = entered.wait(timeout=2.0)
+    shutdown = threading.Thread(target=s.shutdown, daemon=True)
+    shutdown.start()
+    requested = stop_called.wait(timeout=2.0)
+    time.sleep(0.05)
+    waited_for_cleanup = shutdown.is_alive()
+    release.set()
+    shutdown.join(timeout=3.0)
+
+    check("shutdown startup: slow start was active", started)
+    check("shutdown startup: cancellation reached Recorder", requested)
+    check("shutdown startup: shutdown waits for cleanup", waited_for_cleanup)
+    check("shutdown startup: shutdown completes after cleanup", not shutdown.is_alive())
+
+
 def main() -> int:
     real_wait = sess.wait_for_window
     real_alive = sess._game_still_running
@@ -298,6 +391,9 @@ def main() -> int:
                 test_output_folder_failure_does_not_retry_loop,
                 test_duplicate_start_ignored_while_window_pending,
                 test_concurrent_finalize_only_emits_once,
+                test_closed_window_releases_live_process_for_retry,
+                test_starting_output_is_protected_before_publish,
+                test_shutdown_waits_for_startup_cleanup,
             ):
                 try:
                     fn(tmp)

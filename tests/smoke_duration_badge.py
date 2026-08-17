@@ -18,7 +18,6 @@ is None.
 from __future__ import annotations
 
 import dataclasses
-import subprocess
 import sys
 import tempfile
 import time
@@ -34,9 +33,8 @@ _app = QApplication.instance() or QApplication(sys.argv[:1])
 from momento.config import load_config  # noqa: E402
 from momento.ui.editor import EditorWindow  # noqa: E402
 from momento.ui.recordings_list import _ROLE_DURATION  # noqa: E402
-from momento.util.ffmpeg_path import ffmpeg_exe  # noqa: E402
+from media_fixture import make_momento_mkv  # noqa: E402
 
-_CREATION = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
 _results: list[tuple[str, bool]] = []
 
 
@@ -46,14 +44,7 @@ def check(name: str, ok: bool) -> None:
 
 
 def _make_finalised_mkv(path: Path) -> None:
-    subprocess.run(
-        [
-            str(ffmpeg_exe()), "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "testsrc=size=320x240:rate=30:duration=3",
-            "-c:v", "libx264", "-pix_fmt", "yuv420p", str(path),
-        ],
-        check=True, creationflags=_CREATION, timeout=60,
-    )
+    make_momento_mkv(path, with_audio=False)
 
 
 def _row0_duration(ed: EditorWindow):

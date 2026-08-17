@@ -16,7 +16,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PyQt6.QtCore import (
-    QEvent, QObject, QRectF, QRunnable, QSettings, QSize, QStandardPaths, Qt,
+    QEvent, QObject, QPoint, QRect, QRectF, QRunnable, QSettings, QSize, QStandardPaths, Qt,
     QThread, QThreadPool, QTimer, QUrl, pyqtSignal,
 )
 from PyQt6.QtWidgets import (
@@ -33,6 +33,8 @@ from PyQt6.QtWidgets import (
     QHeaderView,
     QInputDialog,
     QLabel,
+    QLayout,
+    QLayoutItem,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
@@ -169,6 +171,9 @@ class _NavItem(QFrame):
         self._index = index
         self._glyph = glyph
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(label)
+        self.setAccessibleDescription(f"Open the {label} settings page")
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 10, 12, 10)
         lay.setSpacing(11)
@@ -190,6 +195,7 @@ class _NavItem(QFrame):
                 "stop:1 rgba(217,70,239,0.08)); border: 1px solid rgba(168,85,247,0.35); }"
                 "_NavItem QLabel { background: transparent; color: #f0e8ff; "
                 "font-weight: 700; font-size: 13.5px; }"
+                f"_NavItem:focus {{ border: 2px solid {_theme.ACCENT_VIOLET_TINT}; }}"
             )
             self._icon.setPixmap(icons.pixmap(self._glyph, 17, _theme.ACCENT_VIOLET_TINT))
         else:
@@ -198,11 +204,24 @@ class _NavItem(QFrame):
                 "_NavItem:hover { background: #131319; }"
                 "_NavItem QLabel { background: transparent; color: #b6b8c2; "
                 "font-weight: 600; font-size: 13.5px; }"
+                f"_NavItem:focus {{ border: 2px solid {_theme.ACCENT_VIOLET_TINT}; }}"
             )
             self._icon.setPixmap(icons.pixmap(self._glyph, 17, _theme.TEXT_LOW))
 
     def mousePressEvent(self, _event) -> None:  # noqa: N802
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
         self.clicked.emit(self._index)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        if event.key() in (
+            Qt.Key.Key_Enter,
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Space,
+        ):
+            self.clicked.emit(self._index)
+            event.accept()
+            return
+        super().keyPressEvent(event)
 
 
 class SettingsPanel(QWidget):
@@ -383,10 +402,10 @@ class SettingsPanel(QWidget):
                 [
                     "Higher framerates need more GPU and produce larger files. "
                     "Match-the-display is a sensible default for most games.",
-                    "Recording locks to the game's native window size — no "
-                    "downscale, no upscale.",
-                    "MKV is crash-safe: if Windows panics mid-game, the "
-                    "partial recording is still playable.",
+                    "Target presets may downscale games above the selected "
+                    "resolution. Momento never upscales.",
+                    "Interrupted MKV recordings are often recoverable, but "
+                    "severe truncation can still prevent playback.",
                 ],
             ),
             on_save=self._on_save,
@@ -554,7 +573,7 @@ class SettingsPanel(QWidget):
         return box
 
     def _refresh_device_status_labels(self) -> None:
-        """Surface "Connected" / "Not detected" next to each device combo so
+        """Surface "Detected" / "Not detected" next to each device combo so
         the user can tell at a glance whether the saved device id resolves
         to a real device today."""
         def fmt(active_ids: set[str], current: str, label: QLabel) -> None:
@@ -563,7 +582,7 @@ class SettingsPanel(QWidget):
                 label.setStyleSheet("color: #d4a64a; font-size: 9pt;")
                 return
             if current in active_ids:
-                label.setText("✓ Connected")
+                label.setText("✓ Detected")
                 label.setStyleSheet("color: #5cb85c; font-size: 9pt;")
             else:
                 label.setText("✕ Not detected — pick another device above")
@@ -875,10 +894,11 @@ class SettingsPanel(QWidget):
         for label, value in _LOW_DISK_PRESETS:
             self._low_disk_combo.addItem(label, value)
         self._low_disk_combo.setToolTip(
-            "Show a warning notification on Momento startup when the output "
-            "drive has less free space than this."
+            "Warn at startup and stop an active recording when the output "
+            "drive reaches this free-space threshold. Off (0 GB) disables "
+            "the configurable threshold; the 1 GB hard safety floor remains."
         )
-        layout.addRow("Low-disk warning at:", self._low_disk_combo)
+        layout.addRow("Stop recording below:", self._low_disk_combo)
         self._low_disk_custom_label = QLabel("Custom (GB):")
         self._low_disk_custom_spin = QSpinBox()
         self._low_disk_custom_spin.setRange(1, 1024)
@@ -1372,17 +1392,15 @@ class SettingsPanel(QWidget):
         self._pill_delegate = _OnOffPillDelegate(self._games_table)
         self._pill_delegate.toggled.connect(self._on_game_row_toggled)
         self._games_table.setItemDelegateForColumn(2, self._pill_delegate)
+        self._games_table.installEventFilter(self._pill_delegate)
         layout.addWidget(self._games_table, stretch=1)
         layout.addWidget(_hint_label(
             f"Tick the box to auto-record that game. Momento ships a curated "
             f"list of {len(DEFAULT_KNOWN_GAMES)} popular titles."
         ))
 
-        # Single row with a stretch separator. Left cluster: per-row
-        # actions. Right cluster: list-maintenance actions. The wider
-        # Games-tab cap (1280 px) gives them room without truncation.
-        btn_row = QHBoxLayout()
-        btn_row.setSpacing(10)
+        actions = QWidget()
+        btn_row = _FlowLayout(actions, spacing=10)
         add_btn = QPushButton("Add game…")
         add_btn.setToolTip("Add a game by typing its executable filename.")
         add_btn.clicked.connect(self._on_add_game_manually)
@@ -1397,7 +1415,6 @@ class SettingsPanel(QWidget):
         remove_btn = QPushButton("Remove selected")
         remove_btn.clicked.connect(self._on_remove_selected_games)
         btn_row.addWidget(remove_btn)
-        btn_row.addStretch(1)
         restore_btn = QPushButton("Restore defaults (merge)")
         restore_btn.setToolTip(
             "Add every entry from Momento's bundled list, keeping yours."
@@ -1410,7 +1427,7 @@ class SettingsPanel(QWidget):
         export_btn = QPushButton("Export…")
         export_btn.clicked.connect(self._on_export_games)
         btn_row.addWidget(export_btn)
-        layout.addLayout(btn_row)
+        layout.addWidget(actions)
 
         # Belt-and-braces minimum width so "Restore defaults (merge)" can
         # never get clipped to "estore defaults" if the user narrows the
@@ -2104,58 +2121,84 @@ class SettingsPanel(QWidget):
         if migrate is None:
             return
 
-        try:
-            output_folder.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            QMessageBox.warning(self, "Momento", f"Cannot create output folder:\n{e}")
-            return
+        resume_monitoring = False
+        if folder_changed and self._session is not None:
+            was_monitoring = bool(getattr(self._session, "is_monitoring", False))
+            pause = getattr(self._session, "pause_monitoring", None)
+            if was_monitoring and callable(pause):
+                paused = pause()
+                resume_monitoring = True
+                if paused is False:
+                    QMessageBox.warning(
+                        self,
+                        "Momento",
+                        "Momento could not pause game monitoring safely. The output "
+                        "folder and your other settings have not been changed.",
+                    )
+                    getattr(self._session, "resume_monitoring", lambda: None)()
+                    return
 
-        # The recording may have started while the migration prompt was open.
-        # Re-check at the commit boundary so neither the configured folder nor
-        # any live media is changed underneath the recorder.
-        active_output = (
-            getattr(self._session, "current_output", None)
-            if self._session is not None
-            else None
-        )
-        if active_output is not None and folder_changed:
-            QMessageBox.warning(
-                self,
-                "Momento",
-                "Wait for the current recording to finish before changing the "
-                "output folder. Your other settings have not been changed.",
+        try:
+            try:
+                output_folder.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                QMessageBox.warning(self, "Momento", f"Cannot create output folder:\n{e}")
+                return
+
+            # Pausing drains any startup that entered the recorder just before
+            # the migration prompt closed. Re-check only after that drain.
+            active_output = (
+                getattr(self._session, "current_output", None)
+                if self._session is not None
+                else None
             )
-            return
-
-        try:
-            save_config(new_cfg)
-        except OSError as e:
-            QMessageBox.critical(self, "Momento", f"Could not save settings:\n{e}")
-            return
-
-        if migrate:
-            old_folder = Path(self._config.output_folder).expanduser()
-            moved, failed = self._run_migration_with_progress(old_folder, output_folder)
-            if failed:
+            if active_output is not None and folder_changed:
                 QMessageBox.warning(
                     self,
                     "Momento",
-                    f"Moved {moved} media file(s); {failed} media or sidecar "
-                    f"item(s) could not be moved "
-                    f"(in use, permission denied, under repair, or already present "
-                    f"at the destination). Check the log for details.",
+                    "Wait for the current recording to finish before changing the "
+                    "output folder. Your other settings have not been changed.",
+                )
+                return
+
+            try:
+                save_config(new_cfg)
+            except OSError as e:
+                QMessageBox.critical(self, "Momento", f"Could not save settings:\n{e}")
+                return
+
+            if migrate:
+                old_folder = Path(self._config.output_folder).expanduser()
+                moved, failed = self._run_migration_with_progress(
+                    old_folder, output_folder
+                )
+                if failed:
+                    QMessageBox.warning(
+                        self,
+                        "Momento",
+                        f"Moved {moved} media file(s); {failed} media or sidecar "
+                        f"item(s) could not be moved "
+                        f"(in use, permission denied, under repair, or already present "
+                        f"at the destination). Check the log for details.",
+                    )
+
+            try:
+                set_autostart(new_cfg.autostart_with_windows)
+            except OSError as e:
+                QMessageBox.warning(
+                    self, "Momento", f"Settings saved, but autostart change failed:\n{e}"
                 )
 
-        try:
-            set_autostart(new_cfg.autostart_with_windows)
-        except OSError as e:
-            QMessageBox.warning(
-                self, "Momento", f"Settings saved, but autostart change failed:\n{e}"
-            )
-
-        self._stop_mic_test()
-        self.settings_saved.emit(new_cfg)
-        self.done.emit()
+            self._stop_mic_test()
+            # Qt direct connections apply the new session config before this
+            # returns; monitoring resumes only after that synchronous handoff.
+            self.settings_saved.emit(new_cfg)
+            self.done.emit()
+        finally:
+            if resume_monitoring:
+                resume = getattr(self._session, "resume_monitoring", None)
+                if callable(resume):
+                    resume()
 
 
 # ---------------------------------------------------------------- helpers
@@ -2379,6 +2422,70 @@ _PILL_OFF_BORDER = QColor("#6e5a2a")
 _PILL_OFF_TEXT = QColor("#d4a64a")
 
 
+class _FlowLayout(QLayout):
+    """Compact wrapping layout used by the Games action buttons."""
+
+    def __init__(self, parent=None, *, spacing: int = 0) -> None:
+        super().__init__(parent)
+        self._items: list[QLayoutItem] = []
+        self.setSpacing(spacing)
+
+    def addItem(self, item: QLayoutItem) -> None:  # noqa: N802 - Qt virtual name
+        self._items.append(item)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def itemAt(self, index: int):  # noqa: N802 - Qt virtual name
+        return self._items[index] if 0 <= index < len(self._items) else None
+
+    def takeAt(self, index: int):  # noqa: N802 - Qt virtual name
+        return self._items.pop(index) if 0 <= index < len(self._items) else None
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802 - Qt virtual name
+        return True
+
+    def heightForWidth(self, width: int) -> int:  # noqa: N802 - Qt virtual name
+        return self._do_layout(QRect(0, 0, width, 0), test_only=True)
+
+    def setGeometry(self, rect: QRect) -> None:  # noqa: N802 - Qt virtual name
+        super().setGeometry(rect)
+        self._do_layout(rect, test_only=False)
+
+    def sizeHint(self) -> QSize:  # noqa: N802 - Qt virtual name
+        return self.minimumSize()
+
+    def minimumSize(self) -> QSize:  # noqa: N802 - Qt virtual name
+        size = QSize()
+        for item in self._items:
+            size = size.expandedTo(item.minimumSize())
+        left, top, right, bottom = self.getContentsMargins()
+        return size + QSize(left + right, top + bottom)
+
+    def _do_layout(self, rect: QRect, *, test_only: bool) -> int:
+        left, top, right, bottom = self.getContentsMargins()
+        available = rect.adjusted(left, top, -right, -bottom)
+        x = available.x()
+        y = available.y()
+        line_height = 0
+        spacing = max(0, self.spacing())
+
+        for item in self._items:
+            item_size = item.sizeHint()
+            next_x = x + item_size.width() + spacing
+            if line_height and next_x - spacing > available.right() + 1:
+                x = available.x()
+                y += line_height + spacing
+                next_x = x + item_size.width() + spacing
+                line_height = 0
+            if not test_only:
+                item.setGeometry(QRect(QPoint(x, y), item_size))
+            x = next_x
+            line_height = max(line_height, item_size.height())
+
+        return y + line_height + bottom - rect.y()
+
+
 class _OnOffPillDelegate(QStyledItemDelegate):
     """Paints the auto-record On/Off pill for the Games table's column 2 and
     toggles it on click — replacing a per-row QPushButton cell widget, which
@@ -2419,14 +2526,35 @@ class _OnOffPillDelegate(QStyledItemDelegate):
     def editorEvent(self, event, model, option, index) -> bool:  # noqa: N802
         # A click anywhere in the cell flips the state — bigger target than the
         # pill itself, and no widget to manage.
-        if (
+        mouse_toggle = (
             event.type() == QEvent.Type.MouseButtonRelease
             and event.button() == Qt.MouseButton.LeftButton
-        ):
-            model.setData(index, not bool(index.data(_AUTO_RECORD_ROLE)), _AUTO_RECORD_ROLE)
-            self.toggled.emit(index.row())
-            return True
+        )
+        key_toggle = (
+            event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Space)
+        )
+        if mouse_toggle or key_toggle:
+            return self._toggle(model, index)
         return super().editorEvent(event, model, option, index)
+
+    def eventFilter(self, watched, event) -> bool:  # noqa: N802 - Qt virtual name
+        if (
+            watched is self.parent()
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return, Qt.Key.Key_Space)
+        ):
+            index = watched.currentIndex()
+            if self._toggle(watched.model(), index):
+                return True
+        return super().eventFilter(watched, event)
+
+    def _toggle(self, model, index) -> bool:
+        if not index.isValid() or index.column() != 2:
+            return False
+        model.setData(index, not bool(index.data(_AUTO_RECORD_ROLE)), _AUTO_RECORD_ROLE)
+        self.toggled.emit(index.row())
+        return True
 
 
 def _action_button_row(on_save, on_cancel) -> QHBoxLayout:

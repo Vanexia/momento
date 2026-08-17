@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import tempfile
 import time
 from pathlib import Path
 
@@ -10,24 +11,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from PyQt6.QtCore import QCoreApplication
 
-from momento.core.thumbnails import extract_async, thumb_path_for
+from momento.core.thumbnails import extract_async
+from media_fixture import make_momento_mkv
 
 
 def main() -> int:
-    folder = Path("C:/dev/Momento/recordings")
-    mp4s = [
-        p for p in folder.iterdir()
-        if p.suffix.lower() == ".mp4" and not p.name.endswith(".thumb.jpg")
+    temp = tempfile.TemporaryDirectory(prefix="momento_thumbpool_")
+    folder = Path(temp.name)
+    recordings = [
+        make_momento_mkv(folder / f"fixture-{index}.mkv", duration_seconds=1.0)
+        for index in range(2)
     ]
-    if not mp4s:
-        print("No recordings to test")
-        return 2
 
-    # Clear any existing thumbs so we exercise the extract path for all.
-    for p in mp4s:
-        thumb_path_for(p).unlink(missing_ok=True)
-
-    print(f"Submitting {len(mp4s)} thumbnail jobs ...")
+    print(f"Submitting {len(recordings)} thumbnail jobs ...")
 
     app = QCoreApplication(sys.argv)
     results: list[tuple[str, str]] = []
@@ -35,22 +31,24 @@ def main() -> int:
     def on_done(path: str, thumb: str) -> None:
         results.append((path, thumb))
         tag = Path(thumb).name if thumb else "FAIL"
-        print(f"  [{len(results)}/{len(mp4s)}] {Path(path).name} -> {tag}")
-        if len(results) == len(mp4s):
+        print(f"  [{len(results)}/{len(recordings)}] {Path(path).name} -> {tag}")
+        if len(results) == len(recordings):
             QCoreApplication.quit()
 
-    for p in mp4s:
+    for p in recordings:
         extract_async(p, on_done)
 
     # 60s safety timeout
     deadline = time.time() + 60
-    while len(results) < len(mp4s) and time.time() < deadline:
+    while len(results) < len(recordings) and time.time() < deadline:
         app.processEvents()
         time.sleep(0.05)
 
     succeeded = sum(1 for _, t in results if t)
-    print(f"\nResults: {succeeded}/{len(mp4s)} succeeded")
-    return 0 if succeeded == len(mp4s) else 3
+    print(f"\nResults: {succeeded}/{len(recordings)} succeeded")
+    complete = len(results) == len(recordings)
+    temp.cleanup()
+    return 0 if complete and succeeded == len(recordings) else 3
 
 
 if __name__ == "__main__":

@@ -1,0 +1,174 @@
+{
+  "schema_version": 1,
+  "release": "0.2.2",
+  "bundle_name": "Momento-0.2.2-third-party-source.zip",
+  "binary_provenance": {
+    "pyav_wheel": {
+      "filename": "av-17.0.1-cp311-abi3-win_amd64.whl",
+      "sha256": "fd605ec4ab782c3829bfb4f11c512d7db3bc230d0f889a28f29aab0fb793bf3b",
+      "size_bytes": 6636889,
+      "runtime_manifest": "build/pyav_runtime.json",
+      "build_recipe": "scripts/build_pyav_runtime.ps1",
+      "native_build_recipe": "scripts/build_pyav_runtime.sh",
+      "source_date_epoch": 1767139200,
+      "native_runtime_bytes": 13058674,
+      "stock_native_runtime_bytes": 67351552,
+      "native_runtime_reduction_percent": 80.6
+    },
+    "pyqt6_wheel": {
+      "filename": "pyqt6-6.11.0-cp310-abi3-win_amd64.whl",
+      "sha256": "bd11b459c54dca068e988a42cf838303334f0d441b9d16d92ae6719fcb5ac6ba",
+      "url": "https://files.pythonhosted.org/packages/6f/85/dd9f03d78d87460e109e0121cd6201c5802bdd655656bf2780e964870fea/pyqt6-6.11.0-cp310-abi3-win_amd64.whl"
+    },
+    "pyqt6_qt6_wheel": {
+      "filename": "pyqt6_qt6-6.11.1-py3-none-win_amd64.whl",
+      "sha256": "7486c80512e823f2d3087e67f854f0556b345f4368040a853c8dc4d30fd3fe69",
+      "url": "https://files.pythonhosted.org/packages/fa/f1/70e83c23bf897c7f5025aa100482f482038ef70232dc27b407659d941fbf/pyqt6_qt6-6.11.1-py3-none-win_amd64.whl"
+    },
+    "pyqt6_sip_wheel": {
+      "filename": "pyqt6_sip-13.11.1-cp312-cp312-win_amd64.whl",
+      "sha256": "1d1c67179c1924b28e3d7f04585639e7a7c0946f62390efc6ccf2a6206e595d3",
+      "url": "https://files.pythonhosted.org/packages/ec/9b/7d4b10f9cba1b6f581dfb4860b9d11898da55a5ed3b8a6e7a1bf9f7084d0/pyqt6_sip-13.11.1-cp312-cp312-win_amd64.whl"
+    },
+    "qt_multimedia_ffmpeg_version": "7.1.3",
+    "qt_multimedia_ffmpeg_configure": "--prefix=/c/FFmpeg-n7.1.3/build/msvc/installed --disable-programs --disable-doc --disable-debug --enable-network --disable-lzma --enable-pic --disable-vulkan --disable-v4l2-m2m --disable-decoder=truemotion1 --enable-zlib --extra-cflags='-IC:/zlib-1.3.1/build/amd64' --extra-ldflags='-LIBPATH:C:/zlib-1.3.1/build/amd64' --toolchain=msvc --enable-shared --disable-static"
+  },
+  "sources": [
+    {
+      "name": "Momento FFmpeg helper",
+      "version": "8.1.2",
+      "role": "helper",
+      "filename": "ffmpeg-8.1.2.tar.xz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz",
+      "sha256": "464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c"
+    },
+    {
+      "name": "PyAV",
+      "version": "17.0.1",
+      "role": "python-runtime",
+      "filename": "av-17.0.1.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/4e/f0/8c8dca97ae0cf00e8e2a53bb5cb9aca5fd484f585ef3e9b412200aff3ebd/av-17.0.1.tar.gz",
+      "sha256": "fbcbd4aa43bca6a8691816283112d1659a27f407bbeb66d1397023691339f5d4"
+    },
+    {
+      "name": "PyQt6",
+      "version": "6.11.0",
+      "role": "python-runtime",
+      "filename": "pyqt6-6.11.0.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/8b/47/b25c13eca5bebc6505394d0223e46d7ebf0c57dcac2ed908d7d19b18ab6b/pyqt6-6.11.0.tar.gz",
+      "sha256": "45dd60aa69976de1918b5ced6b4e7b6a25abd2a919ecef5fd5826ecc76718889"
+    },
+    {
+      "name": "PyQt6 SIP",
+      "version": "13.11.1",
+      "role": "python-runtime",
+      "filename": "pyqt6_sip-13.11.1.tar.gz",
+      "url": "https://files.pythonhosted.org/packages/90/24/a753e1af94b9ae5b2da63d4598457308da3cdbf0838c959381db086ccc86/pyqt6_sip-13.11.1.tar.gz",
+      "sha256": "869c5b48afe38e55b1ee0dd72182b0886e968cc509b98023ff50010b013ce1be"
+    },
+    {
+      "name": "x264",
+      "version": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+      "role": "pyav-runtime-input",
+      "filename": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2",
+      "url": "https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2",
+      "sha256": "6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224"
+    },
+    {
+      "name": "NVIDIA codec headers",
+      "version": "13.0.19.0",
+      "role": "pyav-runtime-input",
+      "filename": "nv-codec-headers-13.0.19.0.tar.gz",
+      "url": "https://github.com/FFmpeg/nv-codec-headers/archive/refs/tags/n13.0.19.0.tar.gz",
+      "sha256": "86d15d1a7c0ac73a0eafdfc57bebfeba7da8264595bf531cf4d8db1c22940116"
+    },
+    {
+      "name": "AMD AMF headers",
+      "version": "1.5.0",
+      "role": "pyav-runtime-input",
+      "filename": "AMF-headers-v1.5.0.tar.gz",
+      "url": "https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v1.5.0/AMF-headers-v1.5.0.tar.gz",
+      "sha256": "d569647fa26f289affe81a206259fa92f819d06db1e80cc334559953e82a3f01"
+    },
+    {
+      "name": "Intel oneVPL",
+      "version": "2.16.0",
+      "role": "pyav-runtime-input",
+      "filename": "libvpl-2.16.0.tar.gz",
+      "url": "https://github.com/intel/libvpl/archive/refs/tags/v2.16.0.tar.gz",
+      "sha256": "d60931937426130ddad9f1975c010543f0da99e67edb1c6070656b7947f633b6"
+    },
+    {
+      "name": "FFmpeg for PyAV",
+      "version": "8.0.1",
+      "role": "pyav-runtime-input",
+      "filename": "ffmpeg-8.0.1.tar.xz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz",
+      "sha256": "05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41"
+    },
+    {
+      "name": "Qt Base",
+      "version": "6.11.1",
+      "role": "qt-runtime",
+      "filename": "qtbase-everywhere-src-6.11.1.tar.xz",
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtbase-everywhere-src-6.11.1.tar.xz",
+      "sha256": "d9594a31228aa23ad6b531719a29b45f0f3989fe6c136d45767ea179f233c1ac"
+    },
+    {
+      "name": "Qt SVG",
+      "version": "6.11.1",
+      "role": "qt-runtime",
+      "filename": "qtsvg-everywhere-src-6.11.1.tar.xz",
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtsvg-everywhere-src-6.11.1.tar.xz",
+      "sha256": "7f3cf02f4824bf03c2c5859ea6db173bf1482a1daf24e6cdf7bc78cfa26a8a94"
+    },
+    {
+      "name": "Qt Multimedia",
+      "version": "6.11.1",
+      "role": "qt-runtime",
+      "filename": "qtmultimedia-everywhere-src-6.11.1.tar.xz",
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qtmultimedia-everywhere-src-6.11.1.tar.xz",
+      "sha256": "390f8e52ddee3aca5c4de7eead900c84c4fa61ff6d1f0ebea9c7543365c09b0a"
+    },
+    {
+      "name": "Qt Translations",
+      "version": "6.11.1",
+      "role": "qt-runtime",
+      "filename": "qttranslations-everywhere-src-6.11.1.tar.xz",
+      "url": "https://download.qt.io/official_releases/qt/6.11/6.11.1/submodules/qttranslations-everywhere-src-6.11.1.tar.xz",
+      "sha256": "37c02c81206594c7bb4edca85ac93e8e55a9836b70c960fde6cb0f8623ec5677"
+    },
+    {
+      "name": "FFmpeg for Qt Multimedia",
+      "version": "7.1.3",
+      "role": "qt-multimedia-input",
+      "filename": "ffmpeg-7.1.3.tar.xz",
+      "url": "https://ffmpeg.org/releases/ffmpeg-7.1.3.tar.xz",
+      "sha256": "f0bf043299db9e3caacb435a712fc541fbb07df613c4b893e8b77e67baf3adbe"
+    },
+    {
+      "name": "zlib for Qt Multimedia FFmpeg",
+      "version": "1.3.1",
+      "role": "qt-multimedia-input",
+      "filename": "zlib-1.3.1.tar.gz",
+      "url": "https://zlib.net/fossils/zlib-1.3.1.tar.gz",
+      "sha256": "9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23"
+    },
+    {
+      "name": "MSYS2 GCC runtime source package",
+      "version": "15.2.0-8",
+      "role": "windows-runtime",
+      "filename": "mingw-w64-gcc-15.2.0-8.src.tar.zst",
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-gcc-15.2.0-8.src.tar.zst",
+      "sha256": "5c723ca641e699ad06da0a9954b5df50963565529691ee1e7844fe0e4730f369"
+    },
+    {
+      "name": "MSYS2 winpthreads source package",
+      "version": "13.0.0.r354.g40ab95d18-1",
+      "role": "windows-runtime",
+      "filename": "mingw-w64-winpthreads-13.0.0.r354.g40ab95d18-1.src.tar.zst",
+      "url": "https://repo.msys2.org/mingw/sources/mingw-w64-winpthreads-13.0.0.r354.g40ab95d18-1.src.tar.zst",
+      "sha256": "455fd8fbd33850bc9b7292c6b0d9a4fcd03b4b6f76c0d4f93f3d0288a1053b46"
+    }
+  ]
+}

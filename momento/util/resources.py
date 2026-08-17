@@ -21,6 +21,14 @@ def known_games_path() -> Path:
     return resources_dir() / "known_games.json"
 
 
+def update_public_key_path() -> Path:
+    """Return the Ed25519 public key used to authenticate release metadata."""
+    path = resources_dir() / "update_public_key.pem"
+    if not path.is_file():
+        raise RuntimeError("Momento's update verification key is missing")
+    return path
+
+
 def icons_dir() -> Path:
     return resources_dir() / "icons"
 

@@ -1,0 +1,26 @@
+Momento 0.2.2 corresponding source
+=================================
+
+The complete, matching source for this binary release is available at no
+charge from the same GitHub release page as the installer:
+
+https://github.com/Vanexia/momento/releases/tag/v0.2.2
+
+Release assets:
+
+  Momento-0.2.2-source.zip
+  Momento-0.2.2-third-party-source.zip
+  SHA256SUMS-0.2.2.txt
+
+The first archive contains Momento's source at the exact release commit. The
+second contains the hash-verified corresponding source and native build inputs
+for Momento's minimal FFmpeg helper, custom FFmpeg/PyAV recording runtime, and
+PyQt/Qt multimedia runtime. It includes source for the shipped x264, oneVPL,
+GCC, and winpthreads libraries and the NVIDIA and AMD interface headers used at
+build time. The Momento source archive contains the complete reproducible build
+recipes and runtime contract. SHA256SUMS-0.2.2.txt authenticates all release
+assets.
+
+Source may also be inspected at:
+
+https://github.com/Vanexia/momento/tree/v0.2.2

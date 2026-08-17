@@ -77,11 +77,11 @@ try {
         (Join-Path $installDir "LICENSE"),
         (Join-Path $installDir "THIRD_PARTY_NOTICES.txt"),
         (Join-Path $installDir "BUILD_INFO.txt"),
+        (Join-Path $installDir "SOURCE_OFFER.txt"),
         (Join-Path $installDir "_internal\licenses\FFmpeg\LICENSE.txt"),
         (Join-Path $installDir "_internal\licenses\FFmpeg\README.txt"),
-        (Join-Path $installDir "_internal\resources\fonts\OFL.txt"),
-        (Join-Path $installDir "source\Momento-0.2.1-source.zip"),
-        (Join-Path $installDir "source\ffmpeg-8.1.2.tar.xz")
+        (Join-Path $installDir "_internal\licenses\FFmpeg\SHA256SUMS.txt"),
+        (Join-Path $installDir "_internal\resources\fonts\OFL.txt")
     )) {
         if (-not (Test-Path -LiteralPath $required)) {
             throw "Installed release is missing: $required"
@@ -232,7 +232,40 @@ try {
     if (-not (Test-Path -LiteralPath $recording.FullName)) {
         throw "Default uninstall removed the mock recording."
     }
-    Write-Host "Installer, fresh profile, mock recording, upgrade, and uninstall checks passed."
+
+    Invoke-Installer
+    $stateDir = Join-Path $appData "Momento"
+    New-Item -ItemType Directory -Path (Join-Path $stateDir "logs") -Force | Out-Null
+    $purgeTargets = @(
+        (Join-Path $stateDir "config.json"),
+        (Join-Path $stateDir "config.json.tmp"),
+        (Join-Path $stateDir "config.json.broken-test.txt"),
+        (Join-Path $stateDir "window_state.ini"),
+        (Join-Path $stateDir "youtube_token.dat"),
+        (Join-Path $stateDir "youtube_token.dat.tmp"),
+        (Join-Path $stateDir "youtube_avatar.png"),
+        (Join-Path $stateDir "youtube_avatar.png.tmp"),
+        (Join-Path $stateDir "momento.lock"),
+        (Join-Path $stateDir "logs\momento.log")
+    )
+    foreach ($targetPath in $purgeTargets) {
+        Set-Content -LiteralPath $targetPath -Encoding ascii -Value "purge-test"
+    }
+    $purge = Start-Process -FilePath $uninstaller -ArgumentList @(
+        "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/PURGEUSERDATA"
+    ) -PassThru -Wait -WindowStyle Hidden
+    if ($purge.ExitCode -ne 0) {
+        throw "Purge uninstall failed with exit code $($purge.ExitCode)."
+    }
+    foreach ($targetPath in $purgeTargets) {
+        if (Test-Path -LiteralPath $targetPath) {
+            throw "Purge uninstall left user state behind: $targetPath"
+        }
+    }
+    if (-not (Test-Path -LiteralPath $recording.FullName)) {
+        throw "Purge uninstall removed the mock recording."
+    }
+    Write-Host "Installer, fresh profile, mock recording, upgrade, default uninstall, and purge checks passed."
 }
 finally {
     if ($target -and -not $target.HasExited) {

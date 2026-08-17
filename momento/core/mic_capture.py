@@ -40,7 +40,8 @@ _OPEN_TIMEOUT_S = 5.0
 # Poll cadence while no full chunk is available (~20 ms chunks; 5 ms keeps the
 # loop responsive to stop() without meaningful CPU cost).
 _POLL_INTERVAL_S = 0.005
-# A healthy mic delivers continuously; log (once per stall) if one goes quiet.
+# A healthy mic delivers continuously, including silent samples. An active
+# stream that produces nothing for this long has stalled and must fail loudly.
 _STALL_WARN_S = 10.0
 
 
@@ -205,7 +206,6 @@ class MicStreamer:
                     self._open_event.set()
                     sink = self._sink
                     last_data = time.monotonic()
-                    stall_logged = False
                     # pts_seconds=None — encoder stamps with shared t0.
                     # Never a blocking read: a silently-stalling driver delivers
                     # nothing forever, and a thread stuck inside Pa_ReadStream
@@ -218,7 +218,6 @@ class MicStreamer:
                             arr = np.frombuffer(raw, dtype=np.float32).reshape(-1, native_ch)
                             data = audio_devices.to_channels(arr, self._channels)
                             last_data = time.monotonic()
-                            stall_logged = False
                             try:
                                 sink(np.ascontiguousarray(data, dtype=np.float32), None)
                                 self._chunks_submitted += 1
@@ -229,12 +228,11 @@ class MicStreamer:
                             continue
                         if not stream.is_active():
                             raise RuntimeError("mic stream stopped delivering (device lost?)")
-                        if not stall_logged and time.monotonic() - last_data >= _STALL_WARN_S:
-                            logger.warning(
-                                "Mic %r has delivered no audio for %.0fs (driver stall?)",
-                                self._resolved_name, _STALL_WARN_S,
+                        if time.monotonic() - last_data >= _STALL_WARN_S:
+                            raise RuntimeError(
+                                f"mic stream remained active but delivered no audio "
+                                f"for {_STALL_WARN_S:.0f}s (driver stall)"
                             )
-                            stall_logged = True
                         self._stop_event.wait(_POLL_INTERVAL_S)
                 finally:
                     # The loop is the stream's only owner; nobody else may touch

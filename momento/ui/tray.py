@@ -18,7 +18,8 @@ from momento.config import Config
 from momento.core.game_names import humanise_game_name
 from momento.core.game_watcher import ActiveGame
 from momento.core.session import (
-    FAILURE_AUDIO, FAILURE_FINALIZE, FAILURE_SOFTWARE_ENCODER, FAILURE_VIDEO_CAPTURE,
+    FAILURE_AUDIO, FAILURE_FINALIZE, FAILURE_LOW_DISK, FAILURE_OUTPUT_FOLDER,
+    FAILURE_SOFTWARE_ENCODER, FAILURE_VIDEO_CAPTURE, FAILURE_VIDEO_PERFORMANCE,
     STATUS_IDLE, STATUS_RECORDING, SessionManager,
 )
 from momento.ui.editor import EditorWindow
@@ -75,6 +76,7 @@ class MomentoTray(QObject):
 
         self._editor: EditorWindow | None = None
         self._hotkey_service: HotkeyService | None = None
+        self._update_service = None
         self._toast: RecordingToast | None = None
         self._bookmark_sound: QSoundEffect | None = None
         self._last_game_name: str | None = None  # so the stop-toast can name it
@@ -115,6 +117,10 @@ class MomentoTray(QObject):
         self._menu.addAction(self._monitor_action)
 
         self._menu.addSeparator()
+        self._check_updates_action = QAction("Check for updates...", self._menu)
+        self._check_updates_action.triggered.connect(self._on_check_updates)
+        self._menu.addAction(self._check_updates_action)
+
         self._quit_action = QAction("Quit", self._menu)
         self._quit_action.triggered.connect(self._on_quit)
         self._menu.addAction(self._quit_action)
@@ -149,6 +155,32 @@ class MomentoTray(QObject):
         """Used so Settings saves can re-apply the bookmark hotkey live."""
         self._hotkey_service = svc
 
+    def set_update_service(self, service) -> None:
+        self._update_service = service
+        service.status_changed.connect(self._on_update_status)
+
+    def is_update_install_ready(self) -> bool:
+        """True only when no UI or media worker would be interrupted."""
+        app = QApplication.instance()
+        if app is not None and app.activeModalWidget() is not None:
+            return False
+        from momento.core.media_probe import has_in_flight_repairs
+        from momento.core.recording_safety import has_active_file_activity
+
+        if has_in_flight_repairs() or has_active_file_activity():
+            return False
+        if self._editor is not None:
+            if self._editor.isVisible() or self._editor.has_update_blocking_activity():
+                return False
+        try:
+            from momento.ui.youtube_upload_progress import has_active_uploads
+
+            if has_active_uploads():
+                return False
+        except ImportError:
+            pass
+        return True
+
     def on_session_failure(self, reason: str, game: ActiveGame, detail: str) -> None:
         """Session callback for unrecoverable start failures — surface as a
         warning toast so the user sees it without needing to dig through logs.
@@ -170,7 +202,12 @@ class MomentoTray(QObject):
         # "saved" toast (driven by the recording->idle transition in
         # _apply_status) so we never claim a clean save for an incomplete file
         # — do this even when failure toasts are muted.
-        if reason in {FAILURE_FINALIZE, FAILURE_VIDEO_CAPTURE}:
+        if reason in {
+            FAILURE_FINALIZE,
+            FAILURE_LOW_DISK,
+            FAILURE_OUTPUT_FOLDER,
+            FAILURE_VIDEO_CAPTURE,
+        }:
             self._last_game_name = None
             # The recoverable file is surfaced by on_recording_finished(path);
             # avoid a full folder rescan on the failure path.
@@ -191,6 +228,10 @@ class MomentoTray(QObject):
                 title = f"{display}: using CPU encoding"
             elif reason == FAILURE_VIDEO_CAPTURE:
                 title = f"{display}: capture interrupted"
+            elif reason == FAILURE_VIDEO_PERFORMANCE:
+                title = f"{display}: recording performance reduced"
+            elif reason == FAILURE_LOW_DISK:
+                title = f"{display}: recording stopped for disk space"
             else:
                 title = f"Couldn't record {display}"
             self._ensure_toast().show_warning(title, detail)
@@ -340,6 +381,7 @@ class MomentoTray(QObject):
         if self._editor is None:
             self._editor = EditorWindow(self._config, session=self._session)
             self._editor.settings_saved.connect(self._apply_new_config)
+            self._editor.check_updates_requested.connect(self._on_check_updates)
             # Seed the status strip with whatever we currently know — the
             # tray was the only listener until now, so the editor would
             # otherwise wait for the next session signal before showing
@@ -418,6 +460,27 @@ class MomentoTray(QObject):
         app = QApplication.instance()
         if app is not None:
             app.quit()
+
+    def _on_check_updates(self) -> None:
+        if self._update_service is None:
+            QMessageBox.warning(
+                None, "Momento", "Update checking is not available right now."
+            )
+            return
+        self._update_service.check_now()
+
+    def _on_update_status(self, code: str, message: str, interactive: bool) -> None:
+        checking = code == "checking"
+        self._check_updates_action.setEnabled(not checking)
+        self._check_updates_action.setText(
+            "Checking for updates..." if checking else "Check for updates..."
+        )
+        if not interactive or code in {"checking", "installing"}:
+            return
+        if code in {"failed", "unavailable"}:
+            QMessageBox.warning(None, "Momento updates", message)
+        else:
+            QMessageBox.information(None, "Momento updates", message)
 
     # ----------------------------------------------------------- new actions
     def _on_open_folder(self) -> None:

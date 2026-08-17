@@ -14,6 +14,7 @@ venv/
 build/*
 !build/pyinstaller.spec
 !build/installer.iss
+!build/corresponding_sources.json
 dist/
 
 # PyInstaller
@@ -22,6 +23,11 @@ dist/
 # IDE
 .vscode/
 .idea/
+
+# Local agent tooling. These are workstation instructions and third-party
+# design skills, not Momento source or release inputs.
+.agents/
+.claude/
 
 # OS
 Thumbs.db
@@ -40,6 +46,7 @@ recordings/
 *.mkv
 *.thumb.jpg
 *.bookmarks.json
+*.momento.json
 *.wav
 !resources/sounds/bookmark.wav
 

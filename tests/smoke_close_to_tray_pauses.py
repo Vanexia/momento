@@ -23,6 +23,7 @@ from momento.ui.theme import apply_dark_theme  # noqa: E402
 
 def main() -> int:
     app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
     if app.platformName() == "offscreen":
         print("FAIL: running offscreen - close/hide behaviour is unreliable.")
         return 2
@@ -47,16 +48,37 @@ def main() -> int:
 
     def close_editor() -> None:
         result["close_returned"] = ed.close()
-        QTimer.singleShot(150, check)
+        QTimer.singleShot(150, check_tray_close)
 
-    def check() -> None:
+    def check_tray_close() -> None:
         result["paused"] = paused["called"]
         result["hidden"] = not ed.isVisible()
-        print(f"close returned: {result.get('close_returned')}")
-        print(f"preview paused: {result['paused']}")
-        print(f"window hidden: {result['hidden']}")
+        print(f"tray close returned: {result.get('close_returned')}")
+        print(f"tray preview paused: {result['paused']}")
+        print(f"tray window hidden: {result['hidden']}")
+        result["tray_ok"] = result["paused"] and result["hidden"]
+
+        paused["called"] = False
+        ed._config = dataclasses.replace(ed._config, close_to_tray=False)
+        ed.show()
+        QTimer.singleShot(150, close_without_tray_mode)
+
+    def close_without_tray_mode() -> None:
+        result["normal_close_returned"] = ed.close()
+        QTimer.singleShot(150, check_normal_close)
+
+    def check_normal_close() -> None:
+        result["normal_paused"] = paused["called"]
+        result["normal_hidden"] = not ed.isVisible()
+        print(f"normal close returned: {result.get('normal_close_returned')}")
+        print(f"normal preview paused: {result['normal_paused']}")
+        print(f"normal window hidden: {result['normal_hidden']}")
         print("-" * 60)
-        result["ok"] = result["paused"] and result["hidden"]
+        result["ok"] = bool(
+            result.get("tray_ok")
+            and result["normal_paused"]
+            and result["normal_hidden"]
+        )
         print("PASS" if result["ok"] else "FAIL")
         app.quit()
 

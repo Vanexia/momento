@@ -10,27 +10,39 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import av  # noqa: E402
 from PyQt6.QtWidgets import QApplication, QMessageBox  # noqa: E402
 
 import momento.trim.ffmpeg_trim as ffmpeg_trim  # noqa: E402
 import momento.ui.editor as editor_module  # noqa: E402
+import momento.core.recording_safety as safety_module  # noqa: E402
+from momento.core.storage_cleanup import (  # noqa: E402
+    MigrationWorker,
+    enforce_storage_limit,
+)
 from momento.trim.ffmpeg_trim import TrimWorker  # noqa: E402
 from momento.ui.editor import EditorWindow, _list_recordings  # noqa: E402
-from momento.util.ffmpeg_path import ffmpeg_exe  # noqa: E402
+from media_fixture import make_momento_mkv  # noqa: E402
 
 _app = QApplication.instance() or QApplication(sys.argv[:1])
 _results: list[tuple[str, bool]] = []
+_OWNERSHIP_SUFFIX = ".momento.json"
 
 
 def check(name: str, ok: bool) -> None:
     _results.append((name, bool(ok)))
     print(f"{'PASS' if ok else 'FAIL'} - {name}")
+
+
+def _ownership_sidecar(path: Path) -> Path:
+    return path.with_name(path.name + _OWNERSHIP_SUFFIX)
 
 
 class _FakeProcess:
@@ -66,7 +78,11 @@ class _FakeProcess:
 
 
 def _run_worker_with_fake_process(
-    tmp: Path, *, returncode: int, cancel_during_read: bool = False
+    tmp: Path,
+    *,
+    returncode: int,
+    cancel_during_read: bool = False,
+    validation_error: str | None = None,
 ) -> tuple[Path, Path | None, list[str], list[str]]:
     src = tmp / "source.mkv"
     src.write_bytes(b"source")
@@ -76,6 +92,7 @@ def _run_worker_with_fake_process(
     launched_targets: list[Path] = []
     worker = TrimWorker(src, 0.0, 2.0, output)
     real_popen = ffmpeg_trim.subprocess.Popen
+    real_validate = ffmpeg_trim.validate_trim_candidate
 
     def fake_popen(args, **_kwargs):
         proc = _FakeProcess(
@@ -88,12 +105,16 @@ def _run_worker_with_fake_process(
         return proc
 
     ffmpeg_trim.subprocess.Popen = fake_popen
+    ffmpeg_trim.validate_trim_candidate = (
+        lambda *_args, **_kwargs: validation_error
+    )
     try:
         worker.done.connect(outputs.append)
         worker.failed.connect(failures.append)
         worker.run()
     finally:
         ffmpeg_trim.subprocess.Popen = real_popen
+        ffmpeg_trim.validate_trim_candidate = real_validate
 
     target = launched_targets[0] if launched_targets else None
     return output, target, outputs, failures
@@ -125,43 +146,32 @@ def test_trim_uses_atomic_temporary_output(tmp: Path) -> None:
     check("trim-cancel: partial final output is absent", not output.exists() and not done and failed == ["Cancelled"])
     check("trim-cancel: temporary output is cleaned", target is not None and not target.exists())
 
+    invalid = tmp / "invalid"
+    invalid.mkdir()
+    output, target, done, failed = _run_worker_with_fake_process(
+        invalid,
+        returncode=0,
+        validation_error="candidate is not readable media",
+    )
+    check(
+        "trim-validation: exit-zero corrupt bytes are never published",
+        not output.exists() and not done and bool(failed),
+    )
+    check(
+        "trim-validation: rejected temporary output is removed",
+        target is not None and not target.exists(),
+    )
+
 
 def test_real_ffmpeg_publishes_completed_clip(tmp: Path) -> None:
     source = tmp / "source.mkv"
     output = tmp / "clips" / "real-result.mp4"
-    creationflags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
-    generated = subprocess.run(
-        [
-            str(ffmpeg_exe()),
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            "testsrc=size=320x240:rate=30:duration=3",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=440:duration=3",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "ultrafast",
-            "-pix_fmt",
-            "yuv420p",
-            "-c:a",
-            "aac",
-            str(source),
-        ],
-        capture_output=True,
-        creationflags=creationflags,
-        timeout=60,
-    )
-    check("real-trim: synthetic source was generated", generated.returncode == 0)
-    if generated.returncode != 0:
+    try:
+        make_momento_mkv(source, game_slug="trim-fixture")
+    except Exception:
+        check("real-trim: recording-shaped source was generated", False)
         return
+    check("real-trim: recording-shaped source was generated", source.stat().st_size >= 4096)
 
     done: list[str] = []
     failed: list[str] = []
@@ -177,6 +187,22 @@ def test_real_ffmpeg_publishes_completed_clip(tmp: Path) -> None:
     check(
         "real-trim: no temporary export remains",
         not output.with_name(f".{output.name}.partial").exists(),
+    )
+    media = av.open(str(output))
+    try:
+        stream_codecs = {(stream.type, stream.codec_context.name) for stream in media.streams}
+        preserved_tag = media.metadata.get("MOMENTO_GAME") == "trim-fixture"
+    finally:
+        media.close()
+    check(
+        "real-trim: H.264 and AAC were stream-copied",
+        {("video", "h264"), ("audio", "aac")} <= stream_codecs,
+    )
+    check("real-trim: MOMENTO_GAME metadata survives MP4 export", preserved_tag)
+    payload = output.read_bytes()
+    check(
+        "real-trim: fast-start places moov before media data",
+        0 <= payload.find(b"moov") < payload.find(b"mdat"),
     )
 
 
@@ -245,6 +271,7 @@ def _editor_harness(trimmed: set[str]):
     class Harness:
         if busy_method is not None:
             _is_file_busy = busy_method
+        _refresh_and_reselect = EditorWindow._refresh_and_reselect
 
         def refresh(self) -> None:
             raise AssertionError("busy file operation must return before refresh")
@@ -317,6 +344,303 @@ def test_delete_and_rename_refuse_busy_files(tmp: Path) -> None:
         editor_module.is_repairing = real_is_repairing
 
 
+def test_ownership_sidecar_follows_rename_and_delete(tmp: Path) -> None:
+    source = tmp / "owned.mkv"
+    source.write_bytes(b"media")
+    thumb = editor_module.thumb_path_for(source)
+    bookmark = editor_module.bookmark_sidecar(source)
+    owner = _ownership_sidecar(source)
+    thumb.write_bytes(b"thumb")
+    bookmark.write_text("[]", encoding="utf-8")
+    marker_created = safety_module.mark_recording_owned(source)
+    check("ownership fixture: source has a valid bound marker", marker_created)
+    if not marker_created:
+        return
+
+    class AcceptRename:
+        @staticmethod
+        def getText(*_args, **_kwargs):
+            return "renamed", True
+
+    class AcceptDelete(_Dialogs):
+        @classmethod
+        def question(cls, *_args, **_kwargs):
+            cls.question_calls += 1
+            return cls.StandardButton.Yes
+
+    real_message_box = editor_module.QMessageBox
+    real_input_dialog = editor_module.QInputDialog
+    real_is_repairing = editor_module.is_repairing
+    editor_module.QMessageBox = AcceptDelete
+    editor_module.QInputDialog = AcceptRename
+    editor_module.is_repairing = lambda _path: False
+    host = _editor_harness(set())
+    host.refresh = lambda *args, **kwargs: None
+    try:
+        EditorWindow._on_rename_requested(host, source)
+        renamed = tmp / "renamed.mkv"
+        check(
+            "ownership marker follows rename with existing sidecars",
+            renamed.exists()
+            and editor_module.thumb_path_for(renamed).exists()
+            and editor_module.bookmark_sidecar(renamed).exists()
+            and _ownership_sidecar(renamed).exists()
+            and safety_module.has_valid_ownership_marker(renamed)
+            and not owner.exists(),
+        )
+
+        EditorWindow._on_delete_requested(host, [renamed])
+        check(
+            "ownership marker is removed with a deleted recording",
+            not renamed.exists()
+            and not editor_module.thumb_path_for(renamed).exists()
+            and not editor_module.bookmark_sidecar(renamed).exists()
+            and not _ownership_sidecar(renamed).exists(),
+        )
+    finally:
+        editor_module.QMessageBox = real_message_box
+        editor_module.QInputDialog = real_input_dialog
+        editor_module.is_repairing = real_is_repairing
+
+
+def test_mutation_refresh_keeps_list_and_preview_in_sync(tmp: Path) -> None:
+    target = tmp / "target.mkv"
+    other = tmp / "other.mkv"
+    target.write_bytes(b"target")
+    other.write_bytes(b"other")
+
+    class SelectedSignal:
+        def __init__(self, owner) -> None:
+            self.owner = owner
+            self.emitted: list[Path] = []
+
+        def emit(self, path: Path) -> None:
+            self.emitted.append(path)
+            self.owner._current_selection = path
+
+    class Host:
+        def __init__(self, filtered: bool) -> None:
+            self._current_selection = None
+            self.filtered = filtered
+            self.refresh_calls: list[bool] = []
+            self.selected_changed = SelectedSignal(self)
+
+        def refresh(self, preserve_selection: bool = False) -> None:
+            self.refresh_calls.append(preserve_selection)
+            if self.filtered:
+                self._current_selection = other
+
+    visible = Host(filtered=False)
+    EditorWindow._refresh_and_reselect(visible, target)
+    check(
+        "mutation selection: visible target is both preserved and reloaded",
+        visible.refresh_calls == [True]
+        and visible._current_selection == target
+        and visible.selected_changed.emitted == [target],
+    )
+
+    filtered = Host(filtered=True)
+    EditorWindow._refresh_and_reselect(filtered, target)
+    check(
+        "mutation selection: filtered target never overrides the highlighted row",
+        filtered.refresh_calls == [True]
+        and filtered._current_selection == other
+        and filtered.selected_changed.emitted == [],
+    )
+
+
+def test_shared_activity_registry_and_editor_trim_lifecycle(tmp: Path) -> None:
+    source = tmp / "source.mkv"
+    output = tmp / "clips" / "result.mp4"
+    source.write_bytes(b"source")
+    first = safety_module.begin_file_activity(source)
+    second_ready = threading.Event()
+    release_second = threading.Event()
+
+    def overlap_activity() -> None:
+        second = safety_module.begin_file_activity(source)
+        second_ready.set()
+        release_second.wait(5)
+        second.release()
+
+    thread = threading.Thread(target=overlap_activity)
+    thread.start()
+    second_ready.wait(5)
+    first.release()
+    check(
+        "activity registry is thread-safe and reference-counted",
+        safety_module.is_file_active(source),
+    )
+    release_second.set()
+    thread.join(5)
+    check(
+        "activity registry clears after every holder releases",
+        not thread.is_alive() and not safety_module.is_file_active(source),
+    )
+
+    class Signal:
+        def __init__(self) -> None:
+            self.callbacks = []
+
+        def connect(self, callback) -> None:
+            self.callbacks.append(callback)
+
+    class FakeWorker:
+        def __init__(self, *_args) -> None:
+            self.progress = Signal()
+            self.done = Signal()
+            self.failed = Signal()
+            self.finished = Signal()
+
+        def moveToThread(self, _thread) -> None:
+            pass
+
+        def run(self) -> None:
+            pass
+
+        def deleteLater(self) -> None:
+            pass
+
+    class FakeThread:
+        def __init__(self, _parent=None) -> None:
+            self.started = Signal()
+            self.finished = Signal()
+
+        def start(self) -> None:
+            pass
+
+        def quit(self) -> None:
+            pass
+
+        def deleteLater(self) -> None:
+            pass
+
+    class WidgetState:
+        def setEnabled(self, _enabled: bool) -> None:
+            pass
+
+        def setVisible(self, _visible: bool) -> None:
+            pass
+
+        def setValue(self, _value: int) -> None:
+            pass
+
+        def setFormat(self, _text: str) -> None:
+            pass
+
+    real_worker = editor_module.TrimWorker
+    real_thread = editor_module.QThread
+    real_is_repairing = editor_module.is_repairing
+    editor_module.TrimWorker = FakeWorker
+    editor_module.QThread = FakeThread
+    editor_module.is_repairing = lambda _path: False
+    host = SimpleNamespace(
+        _trim_thread=None,
+        _trim_worker=None,
+        _trim_input_key=None,
+        _trimming_paths=set(),
+        _app_quitting=False,
+        _status=_Status(),
+        _export_btn=WidgetState(),
+        _export_progress=WidgetState(),
+        preview=SimpleNamespace(duration=lambda: 1.0),
+        refresh=lambda **_kwargs: None,
+        _file_key=EditorWindow._file_key,
+        _on_trim_progress=lambda *_args: None,
+        _on_trim_done=lambda *_args: None,
+        _on_trim_failed=lambda *_args: None,
+        _on_trim_thread_finished=lambda: None,
+    )
+    try:
+        EditorWindow._launch_trim(host, source, 0.0, 1.0, output)
+        check(
+            "editor registers trim input and output as active before launch",
+            safety_module.is_file_active(source)
+            and safety_module.is_file_active(output),
+        )
+        with source.open("r+b") as fh:
+            fh.truncate(2 * 1024**3)
+        safety_module.mark_recording_owned(source)
+        deleted = enforce_storage_limit(tmp, max_gb=1)
+        check(
+            "active export input is protected from quota eviction",
+            deleted == 0 and source.exists(),
+        )
+        migration_dst = tmp / "migrated" / source.name
+        moved, failed = MigrationWorker(tmp, tmp / "migrated").run(
+            pairs=[(source, migration_dst)]
+        )
+        check(
+            "active export input is protected from folder migration",
+            moved == 0
+            and failed == 1
+            and source.exists()
+            and not migration_dst.exists(),
+        )
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(b"clip")
+        EditorWindow._on_trim_done(host, str(output))
+        check(
+            "successful export receives a durable ownership marker",
+            _ownership_sidecar(output).exists(),
+        )
+        EditorWindow._on_trim_thread_finished(host)
+        check(
+            "editor releases trim activity only after its thread finishes",
+            not safety_module.is_file_active(source)
+            and not safety_module.is_file_active(output),
+        )
+    finally:
+        activity = getattr(host, "_trim_activity", None)
+        if activity is not None:
+            activity.release()
+        editor_module.TrimWorker = real_worker
+        editor_module.QThread = real_thread
+        editor_module.is_repairing = real_is_repairing
+
+
+def test_repair_does_not_claim_unrelated_media(tmp: Path) -> None:
+    unrelated = tmp / "unrelated.mkv"
+    unrelated.write_bytes(b"media")
+    host = SimpleNamespace(
+        _repair_target=unrelated,
+        _repair_was_owned=False,
+        _repair_tick=None,
+        _repair_progress=None,
+        _status=_Status(),
+        _game_slug_cache={},
+        _duration_cache={},
+        _duration_hint_cache={},
+        _thumb_submitted=set(),
+        _current_selection=None,
+        refresh=lambda **_kwargs: None,
+        preview=SimpleNamespace(load=lambda _path: None),
+        _restore_splitter_after_repair=lambda: None,
+    )
+    host.selected_changed = SimpleNamespace(
+        emit=lambda path: setattr(host, "_current_selection", path)
+    )
+    host._refresh_and_reselect = lambda path: EditorWindow._refresh_and_reselect(
+        host, path
+    )
+
+    EditorWindow._on_repair_done(host, str(unrelated), True, "")
+    check(
+        "repair does not create ownership for unrelated media",
+        not _ownership_sidecar(unrelated).exists(),
+    )
+
+    owned = tmp / "owned.mkv"
+    owned.write_bytes(b"media")
+    host._repair_target = owned
+    host._repair_was_owned = True
+    EditorWindow._on_repair_done(host, str(owned), True, "")
+    check(
+        "repair refreshes ownership for an existing Momento recording",
+        _ownership_sidecar(owned).exists(),
+    )
+
+
 def test_close_to_tray_keeps_trim_running(_tmp: Path) -> None:
     cancel_calls: list[bool] = []
 
@@ -359,7 +683,7 @@ from pathlib import Path
 from types import MethodType
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-sys.path.insert(0, r"C:\\dev\\Momento")
+sys.path.insert(0, sys.argv[2])
 
 from PyQt6.QtCore import QThread, QTimer
 from PyQt6.QtWidgets import QApplication
@@ -427,7 +751,12 @@ raise SystemExit(0 if ok else 3)
         encoding="utf-8",
     )
     proc = subprocess.run(
-        [sys.executable, str(child), str(tmp)],
+        [
+            sys.executable,
+            str(child),
+            str(tmp),
+            str(Path(__file__).resolve().parents[1]),
+        ],
         capture_output=True,
         text=True,
         timeout=20,
@@ -445,10 +774,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="momento_trim_lifecycle_") as d:
         tmp = Path(d)
         for fn in (
-            test_trim_uses_atomic_temporary_output,
+        test_trim_uses_atomic_temporary_output,
             test_real_ffmpeg_publishes_completed_clip,
             test_partial_trim_is_not_library_media,
             test_delete_and_rename_refuse_busy_files,
+            test_ownership_sidecar_follows_rename_and_delete,
+            test_mutation_refresh_keeps_list_and_preview_in_sync,
+            test_shared_activity_registry_and_editor_trim_lifecycle,
+            test_repair_does_not_claim_unrelated_media,
             test_close_to_tray_keeps_trim_running,
             test_quit_cancels_and_drains_active_trim,
         ):

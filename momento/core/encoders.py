@@ -399,7 +399,11 @@ def _mf_options(preset: str, kbps: int) -> dict[str, str]:
         "medium": 60,
         "high": 85,
     }
-    base: dict[str, str] = {}
+    # h264_mf defaults hw_encoding to false. Request hardware explicitly so
+    # this fallback cannot masquerade as a hardware path while using the CPU.
+    # If the machine has no compatible MFT, the production-open probe fails
+    # and selection continues to libx264 with the existing visible warning.
+    base: dict[str, str] = {"hw_encoding": "1"}
     if preset == "custom":
         base["rate_control"] = "cbr"
         base["b"] = f"{max(1000, int(kbps))}k"

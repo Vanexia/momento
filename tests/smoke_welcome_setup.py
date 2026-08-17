@@ -10,7 +10,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from PyQt6.QtWidgets import QApplication, QMessageBox  # noqa: E402
+from PyQt6.QtWidgets import QApplication, QLabel, QMessageBox  # noqa: E402
 
 from momento.config import Config  # noqa: E402
 from momento.core.audio_loopback import LoopbackDevice  # noqa: E402
@@ -51,6 +51,10 @@ def main() -> int:
         )
         dialog = welcome_mod.WelcomeDialog(cfg)
         check(
+            "welcome layout: minimum height fits a 768px laptop display",
+            dialog.minimumSizeHint().height() <= 680,
+        )
+        check(
             "missing devices: visible empty choices replace stale saved values",
             dialog._pending["mic_device"] == ""
             and dialog._pending["system_audio_device"] == "",
@@ -67,6 +71,32 @@ def main() -> int:
             dialog._wizard_mic_combo.findData("New Microphone") >= 0
             and dialog._wizard_sys_combo.findData("New Speakers") >= 0,
         )
+        dialog._wizard_mic_combo.setCurrentIndex(
+            dialog._wizard_mic_combo.findData("New Microphone")
+        )
+        dialog._wizard_sys_combo.setCurrentIndex(
+            dialog._wizard_sys_combo.findData("New Speakers")
+        )
+        check(
+            "device status: enumeration is labelled Detected, not Connected",
+            "Detected" in dialog._wizard_mic_status.text()
+            and "Connected" not in dialog._wizard_mic_status.text(),
+        )
+        visible_copy = " ".join(
+            label.text() for label in dialog.findChildren(QLabel)
+        )
+        check(
+            "welcome privacy copy: chosen cloud-synced folders are not overpromised",
+            "does not upload" in visible_copy
+            and "cloud sync depends" in visible_copy,
+        )
+        check(
+            "welcome storage copy: unlimited default and safety stop are explicit",
+            "quota cleanup is off" in visible_copy
+            and "low-space safety stop" in visible_copy,
+        )
+        dialog._wizard_mic_combo.setCurrentIndex(0)
+        dialog._wizard_sys_combo.setCurrentIndex(0)
 
         with tempfile.TemporaryDirectory(prefix="momento-welcome-") as tmp:
             previous_cwd = Path.cwd()

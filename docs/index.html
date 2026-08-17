@@ -12,14 +12,16 @@
 <meta property="og:description" content="Local Windows game recorder with a built-in clip editor and no telemetry.">
 <style>
   :root {
-    --accent: #8b5cf6;
-    --accent-hover: #a78bf9;
+    --accent: #a78bfa;
+    --accent-hover: #c4b5fd;
+    --accent-solid: #7c3aed;
+    --accent-solid-hover: #6d28d9;
     --bg: #0f1117;
     --bg-card: #1a1d26;
     --bg-card-2: #20242e;
     --text: #e8eaf2;
     --text-dim: #9aa0b0;
-    --text-dim-2: #6b7080;
+    --text-dim-2: #858b9b;
     --border: #2a2f3b;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -29,24 +31,32 @@
 
   header { padding: 48px 0 56px; text-align: center; }
   header .logo { display: block; margin: 0 auto 20px; width: 160px; height: 160px; }
-  header h1 { font-size: 56px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 16px; }
+  header h1 { font-size: 56px; font-weight: 700; letter-spacing: 0; margin-bottom: 16px; }
   header h1 .dot { color: var(--accent); }
   header .tagline { font-size: 20px; color: var(--text-dim); max-width: 580px; margin: 0 auto; }
 
   .badges { display: flex; gap: 10px; justify-content: center; margin-top: 24px; flex-wrap: wrap; }
   .badge { background: var(--bg-card); border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; font-size: 13px; color: var(--text-dim); }
+  .actions { display: flex; gap: 12px; justify-content: center; margin-top: 28px; flex-wrap: wrap; }
+  .button { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 18px; border-radius: 8px; border: 1px solid var(--border); color: var(--text); text-decoration: none; font-weight: 600; }
+  .button.primary { background: var(--accent-solid); border-color: var(--accent-solid); color: white; }
+  .button:hover { border-color: var(--accent-hover); }
+  .button.primary:hover { background: var(--accent-solid-hover); border-color: var(--accent-solid-hover); }
+  a:focus-visible { outline: 3px solid var(--accent-hover); outline-offset: 3px; }
 
   section { padding: 48px 0; border-top: 1px solid var(--border); }
-  section h2 { font-size: 28px; font-weight: 600; margin-bottom: 24px; letter-spacing: -0.01em; }
+  section h2 { font-size: 28px; font-weight: 600; margin-bottom: 24px; letter-spacing: 0; }
   section p { color: var(--text-dim); margin-bottom: 14px; font-size: 16px; }
   section p strong { color: var(--text); font-weight: 600; }
+  .product-shot { display: block; width: 100%; height: auto; border: 1px solid var(--border); border-radius: 8px; }
+  .caption { margin-top: 10px; text-align: center; color: var(--text-dim-2); font-size: 13px; }
 
   .features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
-  .feature { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
+  .feature { background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 22px; }
   .feature h3 { font-size: 17px; font-weight: 600; margin-bottom: 8px; color: var(--text); }
   .feature p { font-size: 14px; color: var(--text-dim); margin: 0; }
 
-  .privacy-strip { background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02)); border: 1px solid rgba(139,92,246,0.25); border-radius: 14px; padding: 28px; margin-top: 8px; }
+  .privacy-strip { background: var(--bg-card); border: 1px solid rgba(139,92,246,0.35); border-radius: 8px; padding: 28px; margin-top: 8px; }
   .privacy-strip h3 { font-size: 18px; margin-bottom: 12px; color: var(--text); }
   .privacy-strip ul { list-style: none; padding: 0; }
   .privacy-strip li { padding: 6px 0 6px 24px; position: relative; color: var(--text-dim); }
@@ -61,6 +71,24 @@
   .yt-note { background: var(--bg-card-2); border-left: 3px solid var(--accent); padding: 16px 20px; border-radius: 0 8px 8px 0; margin: 16px 0; }
   .yt-note p { color: var(--text); font-size: 15px; margin: 0; }
   .yt-note p + p { margin-top: 8px; color: var(--text-dim); font-size: 14px; }
+
+  @media (max-width: 560px) {
+    body { padding: 20px 16px 56px; }
+    header { padding: 32px 0 40px; }
+    header .logo { width: 112px; height: 112px; }
+    header h1 { font-size: 42px; }
+    header .tagline { font-size: 18px; }
+    .actions { flex-direction: column; }
+    .button { width: 100%; }
+    section { padding: 36px 0; }
+    .features { grid-template-columns: 1fr; }
+    footer .links { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 20px; }
+    footer .links a { margin: 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; }
+  }
 </style>
 </head>
 <body>
@@ -76,12 +104,21 @@
       <span class="badge">No account required</span>
       <span class="badge">No telemetry</span>
     </div>
+    <div class="actions">
+      <a class="button primary" href="https://github.com/Vanexia/momento/releases/latest">Download for Windows</a>
+      <a class="button" href="https://github.com/Vanexia/momento">View source</a>
+    </div>
   </header>
+
+  <section>
+    <img class="product-shot" src="screenshots/library.png" alt="Momento recording library and clip editor">
+    <p class="caption">The real Momento interface, shown with sample media.</p>
+  </section>
 
   <section>
     <h2>What it does</h2>
     <p>Momento sits quietly in your system tray. When it detects a game launching, it starts capturing the game's window via Windows Graphics Capture along with your microphone and the system's audio output. When the game closes, recording stops automatically and the resulting MKV file lands in your chosen folder.</p>
-    <p>The built-in editor lets you browse past recordings, trim clips, drop bookmarks during gameplay with a hotkey, and export final cuts as MP4. There's nothing to configure to get started — Momento picks sensible defaults for resolution, framerate, and quality.</p>
+    <p>The built-in editor lets you browse past recordings, trim clips, drop bookmarks during gameplay with a hotkey, and export final cuts as MP4. First-run setup helps you choose audio devices and a recording folder, then applies sensible defaults for frame rate and quality.</p>
   </section>
 
   <section>
@@ -89,7 +126,7 @@
     <div class="features">
       <div class="feature">
         <h3>Auto-record on game launch</h3>
-        <p>Detects ~650 popular PC games out of the box. Add your own; toggle individual games on or off.</p>
+        <p>Uses a configurable games list. Add executable names and toggle individual games on or off.</p>
       </div>
       <div class="feature">
         <h3>In-app clip editor</h3>
@@ -100,12 +137,12 @@
         <p>Press F8 mid-game to drop a marker. Find the highlight instantly when editing afterwards.</p>
       </div>
       <div class="feature">
-        <h3>Crash-safe MKV</h3>
-        <p>Cluster-based muxing means a hard crash loses at most one second. Manual repair tool for the rest.</p>
+        <h3>Crash-tolerant MKV</h3>
+        <p>MKV recording improves recovery after an interruption. A repair tool handles files with enough surviving container data.</p>
       </div>
       <div class="feature">
         <h3>Quality presets</h3>
-        <p>Low/Medium/High or custom bitrate. Hardware encoding (NVIDIA, AMD or Intel) so recording doesn't tax your CPU.</p>
+        <p>Low, Medium, High, or a custom bitrate. Compatible hardware encoding reduces CPU use, with a software fallback available.</p>
       </div>
       <div class="feature">
         <h3>Local by default</h3>
@@ -122,7 +159,7 @@
         <li>No telemetry. No analytics. No usage tracking.</li>
         <li>No account required to use Momento.</li>
         <li>Recordings are stored only on your machine, in a folder you choose.</li>
-        <li>No background network activity. Momento makes no outbound calls until you explicitly upload.</li>
+        <li>The standard public build makes no application network requests.</li>
       </ul>
     </div>
 
@@ -135,12 +172,14 @@
   <section>
     <h2>System requirements</h2>
     <p><strong>Windows 10</strong> (1903 or newer) or <strong>Windows 11</strong>.</p>
-    <p><strong>Any modern GPU</strong> — Momento auto-detects and uses NVIDIA NVENC (GTX 10-series and newer), AMD AMF (RX 400-series and newer), or Intel QuickSync (any iGPU since Sandy Bridge, plus Arc dGPUs). On machines without a usable hardware encoder, it falls back to a software encoder (works anywhere, uses more CPU).</p>
+    <p><strong>A hardware H.264 encoder is recommended.</strong> Momento checks NVIDIA NVENC, AMD AMF, Intel QuickSync, and Media Foundation against the requested recording profile. If none can open, it falls back to CPU encoding and displays a warning.</p>
     <p>Keep at least 10 GB free for the app and a recording buffer. The default 16 Mbit/s capture setting uses roughly 7.2 GB per hour plus audio and container overhead.</p>
   </section>
 
   <footer>
     <div class="links">
+      <a href="https://github.com/Vanexia/momento/releases/latest">Download</a>
+      <a href="https://github.com/Vanexia/momento">Source</a>
       <a href="privacy.html">Privacy Policy</a>
     </div>
     <p>© 2026 Momento. Local game recording for Windows.</p>

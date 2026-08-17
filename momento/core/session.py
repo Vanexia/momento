@@ -12,6 +12,7 @@ import re
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -19,10 +20,12 @@ import psutil
 
 from momento.config import Config
 from momento.core.bookmarks import BookmarkStore
+from momento.core.encoder import is_output_write_error
 from momento.core.game_watcher import ActiveGame, GameWatcher, _game_still_running
 from momento.core.recorder import Recorder, RecordingFinalizeError, RecordingStartCancelled
 from momento.core.video_capture import wait_for_window
 from momento.util.ffmpeg_path import ffmpeg_exe
+from momento.util.format import format_bytes, free_bytes_for
 from momento.util.screen import primary_refresh_rate
 
 logger = logging.getLogger(__name__)
@@ -51,6 +54,8 @@ FAILURE_SOFTWARE_ENCODER = "software_encoder"
 # WGC ended while the captured HWND remained valid. The current MKV can close
 # cleanly, but the recording was interrupted and the game needs a fresh session.
 FAILURE_VIDEO_CAPTURE = "video_capture"
+FAILURE_VIDEO_PERFORMANCE = "video_performance"
+FAILURE_LOW_DISK = "low_disk"
 
 SessionFailureCallback = Callable[[str, "ActiveGame", str], None]
 # (reason, game, detail-message-for-the-toast-subtitle)
@@ -68,6 +73,39 @@ SessionRecordingFinishedCallback = Callable[[Path], None]
 _WINDOW_WAIT_TOTAL_S = 180.0
 _WINDOW_WAIT_SLICE_S = 5.0
 _START_RETRY_COOLDOWN_S = 15.0
+_WINDOW_RECREATE_RETRY_COOLDOWN_S = 1.0
+_DISK_GUARD_INTERVAL_S = 10.0
+_HARD_MIN_FREE_BYTES = 1 * 1024 ** 3
+_STARTER_JOIN_TIMEOUT_S = 12.0
+
+
+@dataclass(slots=True)
+class UpdateQuiescence:
+    """Lease that blocks new recordings while an update handoff is prepared."""
+
+    _session: "SessionManager"
+    _resume_monitoring: bool
+    _committed: bool = False
+    _released: bool = False
+
+    def commit(self) -> None:
+        self._committed = True
+
+    def release(self) -> None:
+        if self._released:
+            return
+        self._released = True
+        if self._committed:
+            return
+        self._session._release_update_quiescence(
+            resume_monitoring=self._resume_monitoring
+        )
+
+    def __enter__(self) -> "UpdateQuiescence":
+        return self
+
+    def __exit__(self, *_exc) -> None:
+        self.release()
 
 
 class SessionManager:
@@ -105,6 +143,7 @@ class SessionManager:
         self._recorder.on_audio_dropped = self._on_audio_dropped_mid_recording
         self._recorder.on_encoder_failed = self._on_encoder_failed_mid_recording
         self._recorder.on_video_capture_failed = self._on_video_capture_failed_mid_recording
+        self._recorder.on_video_degraded = self._on_video_degraded_mid_recording
 
         self._on_status_change = on_status_change
         self._on_failure = on_failure
@@ -119,12 +158,16 @@ class SessionManager:
         self._detected_refresh_rate: int = primary_refresh_rate(default=60)
         logger.info("Detected primary monitor refresh rate: %d Hz", self._detected_refresh_rate)
         self._current_output: Path | None = None
+        self._pending_output: Path | None = None
         self._current_game: ActiveGame | None = None
         self._bookmarks: BookmarkStore | None = None
         self._start_pending = False
+        self._starter_thread: threading.Thread | None = None
         self._pending_game: ActiveGame | None = None
         self._deferred_game: ActiveGame | None = None
         self._finalizing = False
+        self._update_quiescing = False
+        self._disk_guard_stop: threading.Event | None = None
 
     # ------------------------------------------------------------------ API
     @property
@@ -139,7 +182,7 @@ class SessionManager:
     @property
     def current_output(self) -> Path | None:
         with self._lock:
-            return self._current_output
+            return self._current_output or self._pending_output
 
     def start(self) -> None:
         """Start the session loop. Kills orphan ffmpeg processes first."""
@@ -149,16 +192,36 @@ class SessionManager:
         self._watcher.start()
         self._emit_status(STATUS_IDLE, None)
 
-    def pause_monitoring(self) -> None:
+    def pause_monitoring(self) -> bool:
         """Stop the watcher without affecting an in-flight recording.
 
         Used by the tray's "Pause monitoring" menu item — keeps Momento
         running in the tray but prevents new auto-recordings from starting.
         """
+        watcher_stopped = False
         try:
-            self._watcher.stop()
+            stop_result = self._watcher.stop()
+            watcher_stopped = (
+                not self._watcher.is_running
+                if stop_result is None
+                else bool(stop_result)
+            )
         except Exception:
             logger.exception("Error pausing watcher")
+        cancel_start = getattr(self._recorder, "cancel_start", None)
+        if callable(cancel_start):
+            try:
+                cancel_start()
+            except Exception:
+                logger.exception("Error cancelling pending recorder start")
+        self._join_starter(context="pause")
+        with self._lock:
+            start_pending = self._start_pending
+        return (
+            watcher_stopped
+            and not self._watcher.is_running
+            and not start_pending
+        )
 
     def resume_monitoring(self) -> None:
         """Re-start the watcher after :meth:`pause_monitoring`."""
@@ -178,12 +241,70 @@ class SessionManager:
     def is_monitoring(self) -> bool:
         return self._watcher.is_running
 
+    def wait_initial_scan(self, timeout: float | None = None) -> bool:
+        wait = getattr(self._watcher, "wait_initial_scan", None)
+        return bool(wait(timeout)) if callable(wait) else True
+
+    def acquire_update_quiescence(self) -> UpdateQuiescence | None:
+        """Atomically stop new recording work only when already fully idle."""
+        with self._lock:
+            if (
+                self._update_quiescing
+                or self._start_pending
+                or self._finalizing
+                or self._recorder_busy()
+            ):
+                return None
+            self._update_quiescing = True
+            self._deferred_game = None
+            was_monitoring = bool(self._watcher.is_running)
+
+        try:
+            stop_result = self._watcher.stop()
+            watcher_stopped = (
+                not self._watcher.is_running
+                if stop_result is None
+                else bool(stop_result)
+            )
+        except Exception:
+            logger.exception("Could not stop game monitoring for update")
+            self._release_update_quiescence(resume_monitoring=was_monitoring)
+            return None
+
+        if not watcher_stopped:
+            logger.warning(
+                "Update handoff denied because game monitoring did not stop in time"
+            )
+            self._release_update_quiescence(resume_monitoring=was_monitoring)
+            return None
+
+        with self._lock:
+            idle = (
+                not self._watcher.is_running
+                and not self._start_pending
+                and not self._finalizing
+                and not self._recorder_busy()
+            )
+        if not idle:
+            logger.warning("Update handoff lost the recording-idle race")
+            self._release_update_quiescence(resume_monitoring=was_monitoring)
+            return None
+        return UpdateQuiescence(self, was_monitoring)
+
+    def _release_update_quiescence(self, *, resume_monitoring: bool) -> None:
+        with self._lock:
+            self._update_quiescing = False
+        if resume_monitoring:
+            self.resume_monitoring()
+
     def shutdown(self) -> None:
         """Stop the watcher, then any in-flight recording. Idempotent."""
         try:
             self._watcher.stop()
         except Exception:
             logger.exception("Error stopping watcher")
+
+        self._stop_disk_guard()
 
         finalised = False
         if self._recorder_busy():
@@ -194,10 +315,13 @@ class SessionManager:
             except Exception:
                 logger.exception("Error stopping recorder during shutdown")
 
+        self._join_starter(context="shutdown")
+
         if not finalised:
             with self._lock:
                 self._current_game = None
                 self._current_output = None
+                self._pending_output = None
                 self._bookmarks = None
             self._emit_status(STATUS_IDLE, None)
 
@@ -265,6 +389,9 @@ class SessionManager:
         # Windows renamed, unplugged, or glitched an audio endpoint.
 
         with self._lock:
+            if self._update_quiescing:
+                logger.info("Ignoring game start (%s): update handoff is active", game.exe_name)
+                return
             if self._start_pending:
                 if self._pending_game != game:
                     self._deferred_game = game
@@ -296,12 +423,15 @@ class SessionManager:
         # The old single 10s wait here was terminal — the watcher pins the
         # game as active until its process exits, so one slow launch meant a
         # "couldn't find a window" toast and a whole session never recorded.
-        threading.Thread(
+        starter = threading.Thread(
             target=self._wait_for_window_and_start,
             args=(game,),
             name="RecordingStarter",
             daemon=True,
-        ).start()
+        )
+        with self._lock:
+            self._starter_thread = starter
+        starter.start()
 
     def _wait_for_window_and_start(self, game: ActiveGame) -> None:
         """Keep looking for the game's main window while its process is alive,
@@ -377,6 +507,8 @@ class SessionManager:
             with self._lock:
                 self._start_pending = False
                 self._pending_game = None
+                if self._starter_thread is threading.current_thread():
+                    self._starter_thread = None
                 deferred = self._take_deferred_start_if_idle_locked()
             if deferred is not None:
                 self._on_game_start(deferred)
@@ -384,6 +516,9 @@ class SessionManager:
     def _start_recording(self, game: ActiveGame, hwnd: int) -> None:
         """Spin up the recorder for ``game``'s window + publish session state."""
         with self._lock:
+            if self._update_quiescing:
+                logger.info("Ignoring recorder start for %s: update handoff is active", game.exe_name)
+                return
             if self._finalizing:
                 self._deferred_game = game
                 logger.info(
@@ -395,6 +530,8 @@ class SessionManager:
         slug = _slugify_game(game.exe_name)
         output_path = _build_output_path(c.output_folder, slug)
         framerate = self._detected_refresh_rate if c.framerate_auto else c.framerate
+        with self._lock:
+            self._pending_output = output_path
         try:
             self._recorder.start(
                 output_path=output_path,
@@ -412,27 +549,28 @@ class SessionManager:
             )
         except RecordingStartCancelled:
             logger.info("Recording start for %s was cancelled before publish", game.exe_name)
+            self._clear_pending_output(output_path)
             with self._lock:
                 if self._finalizing:
                     self._deferred_game = game
             return
-        except RuntimeError as e:
-            # _is_writable / mkdir errors come up here.
-            msg = str(e)
-            reason = (
-                FAILURE_OUTPUT_FOLDER
-                if "writable" in msg or "Output folder" in msg
-                else FAILURE_GENERIC
-            )
-            logger.error("Recorder.start failed for %s: %s", game.exe_name, msg)
-            self._emit_failure(reason, game, msg)
-            if reason != FAILURE_OUTPUT_FOLDER:
-                self._release_game_for_retry(game)
-            return
         except Exception as e:
-            logger.exception("Failed to start recorder for %s", game.exe_name)
-            self._emit_failure(FAILURE_GENERIC, game, str(e) or "Unknown error.")
-            self._release_game_for_retry(game)
+            msg = str(e) or "Unknown error."
+            lowered = msg.casefold()
+            output_failure = (
+                is_output_write_error(e)
+                or "writable" in lowered
+                or "output folder" in lowered
+            )
+            reason = FAILURE_OUTPUT_FOLDER if output_failure else FAILURE_GENERIC
+            if output_failure:
+                logger.error("Recorder output start failed for %s: %s", game.exe_name, msg)
+            else:
+                logger.exception("Failed to start recorder for %s", game.exe_name)
+            self._clear_pending_output(output_path)
+            self._emit_failure(reason, game, msg)
+            if not output_failure:
+                self._release_game_for_retry(game)
             return
 
         if not _game_still_running(game):
@@ -443,6 +581,7 @@ class SessionManager:
             with self._lock:
                 self._current_game = game
                 self._current_output = output_path
+                self._pending_output = None
                 self._bookmarks = BookmarkStore(output_path)
             self._finalize(game, source="process exit during start")
             return
@@ -455,11 +594,13 @@ class SessionManager:
                     game.exe_name,
                 )
                 stop_unpublished = self._recorder.is_recording
+                self._pending_output = None
                 if self._finalizing:
                     self._deferred_game = game
             else:
                 self._current_game = game
                 self._current_output = output_path
+                self._pending_output = None
                 self._bookmarks = BookmarkStore(output_path)
                 self._emit_status(STATUS_RECORDING, game)
                 published = True
@@ -475,6 +616,7 @@ class SessionManager:
         # device couldn't be captured so the loss is never silent.
         self._warn_if_audio_dropped(game)
         self._warn_if_software_encoder(game)
+        self._start_disk_guard(game, output_path)
 
     def _warn_if_audio_dropped(self, game: ActiveGame) -> None:
         rec = self._recorder
@@ -529,13 +671,35 @@ class SessionManager:
             getattr(game, "exe_name", "?"),
             str(exc).strip() or repr(exc),
         )
+        output_failure = is_output_write_error(exc)
+        if output_failure:
+            self._emit_failure(
+                FAILURE_OUTPUT_FOLDER,
+                game,
+                "Recording stopped because Momento could no longer write to the "
+                "output drive. Check its free space and connection; this clip may "
+                "need Repair.",
+            )
         threading.Thread(
             target=self._finalize,
             args=(game,),
-            kwargs={"source": "encoder failure"},
+            kwargs={"source": "output failure" if output_failure else "encoder failure"},
             name="EncoderFailureFinalize",
             daemon=True,
         ).start()
+
+    def _on_video_degraded_mid_recording(self, drop_rate: float) -> None:
+        with self._lock:
+            game = self._current_game
+        if game is None:
+            return
+        self._emit_failure(
+            FAILURE_VIDEO_PERFORMANCE,
+            game,
+            f"Momento is dropping about {max(0.0, drop_rate) * 100:.1f}% of video "
+            "frames. Lower the recording resolution, frame rate, or quality if "
+            "this continues.",
+        )
 
     def _on_video_capture_failed_mid_recording(self, exc: Exception) -> None:
         """Save the current clip and retry when a live WGC session disappears."""
@@ -576,10 +740,9 @@ class SessionManager:
         waiting for the watcher. Runs on the WGC capture thread, so hand the
         actual stop() (which tears WGC down) off to a separate thread.
 
-        The watcher's active-game state is deliberately left untouched: the
-        still-alive process keeps the watcher 'busy' so it can't re-trigger a
-        recording on the lingering process, and the eventual process-exit
-        _on_game_stop becomes a harmless no-op.
+        Finalisation releases the still-live process after a short cooldown.
+        Normal exits simply disappear during the next window wait; games that
+        recreate their HWND are captured again instead of losing the session.
         """
         with self._lock:
             game = self._current_game
@@ -611,6 +774,8 @@ class SessionManager:
                 return
             self._finalizing = True
 
+        self._stop_disk_guard()
+
         name = game.exe_name if game is not None else "?"
         final: Path | None = None
         finalize_error: RecordingFinalizeError | None = None
@@ -628,6 +793,7 @@ class SessionManager:
             with self._lock:
                 self._current_game = None
                 self._current_output = None
+                self._pending_output = None
                 self._bookmarks = None
             # Emit the dirty-finalize warning BEFORE the idle status. The tray
             # derives the "Recording saved" toast from the recording->idle
@@ -641,7 +807,7 @@ class SessionManager:
             # finalises. Without this, that narrow window silently swallowed the
             # warning and a clean "saved" toast claimed an incomplete file. The
             # tray renders a None game as "Momento".
-            if finalize_error is not None:
+            if finalize_error is not None and source != "output failure":
                 self._emit_failure(
                     FAILURE_FINALIZE, game,
                     "The recording may be incomplete. Momento will try to repair it "
@@ -664,8 +830,13 @@ class SessionManager:
             with self._lock:
                 self._finalizing = False
                 deferred = self._take_deferred_start_if_idle_locked()
-            if source in {"encoder failure", "capture failure"} and game is not None:
-                self._release_game_for_retry(game)
+            if game is not None:
+                if source in {"encoder failure", "capture failure"}:
+                    self._release_game_for_retry(game)
+                elif source == "window closed":
+                    self._release_game_for_retry(
+                        game, retry_after_s=_WINDOW_RECREATE_RETRY_COOLDOWN_S
+                    )
             if deferred is not None:
                 self._on_game_start(deferred)
 
@@ -673,6 +844,7 @@ class SessionManager:
         """Claim a deferred watcher event once no start/finalise owns the recorder."""
         if (
             self._deferred_game is None
+            or self._update_quiescing
             or self._start_pending
             or self._finalizing
             or self._recorder_busy()
@@ -725,12 +897,85 @@ class SessionManager:
             return bool(busy)
         return bool(self._recorder.is_recording)
 
-    def _release_game_for_retry(self, game: ActiveGame) -> None:
+    def _clear_pending_output(self, output_path: Path) -> None:
+        with self._lock:
+            if self._pending_output == output_path:
+                self._pending_output = None
+
+    def _join_starter(self, *, context: str) -> None:
+        with self._lock:
+            starter = self._starter_thread
+        if starter is None or starter is threading.current_thread():
+            return
+        starter.join(timeout=_STARTER_JOIN_TIMEOUT_S)
+        if starter.is_alive():
+            logger.error(
+                "Recording startup did not unwind within %.0fs during %s",
+                _STARTER_JOIN_TIMEOUT_S,
+                context,
+            )
+
+    def _start_disk_guard(self, game: ActiveGame, output_path: Path) -> None:
+        """Stop a live recording before its destination volume is exhausted."""
+        self._stop_disk_guard()
+        stop_event = threading.Event()
+        with self._lock:
+            self._disk_guard_stop = stop_event
+        threading.Thread(
+            target=self._disk_guard_worker,
+            args=(game, Path(output_path), stop_event),
+            name="RecordingDiskGuard",
+            daemon=True,
+        ).start()
+
+    def _stop_disk_guard(self) -> None:
+        with self._lock:
+            stop_event = self._disk_guard_stop
+            self._disk_guard_stop = None
+        if stop_event is not None:
+            stop_event.set()
+
+    def _disk_guard_worker(
+        self,
+        game: ActiveGame,
+        output_path: Path,
+        stop_event: threading.Event,
+    ) -> None:
+        configured_gb = max(0, int(self.config.low_disk_warning_gb))
+        threshold = max(
+            _HARD_MIN_FREE_BYTES,
+            configured_gb * 1024 ** 3 if configured_gb else 0,
+        )
+        while not stop_event.is_set():
+            free = free_bytes_for(output_path.parent)
+            if free is not None and free <= threshold:
+                with self._lock:
+                    owns_guard = self._disk_guard_stop is stop_event
+                    owns_recording = self._current_game == game
+                if owns_guard and owns_recording and self._recorder_busy():
+                    self._emit_failure(
+                        FAILURE_LOW_DISK,
+                        game,
+                        f"Recording stopped with {format_bytes(free)} free so the "
+                        "drive does not fill completely. Free space or choose a "
+                        "different folder before recording again.",
+                    )
+                    self._finalize(game, source="low disk")
+                return
+            if stop_event.wait(_DISK_GUARD_INTERVAL_S):
+                return
+
+    def _release_game_for_retry(
+        self,
+        game: ActiveGame,
+        *,
+        retry_after_s: float = _START_RETRY_COOLDOWN_S,
+    ) -> None:
         release = getattr(self._watcher, "release_active_for_retry", None)
         if release is None:
             return
         try:
-            release(game, retry_after_s=_START_RETRY_COOLDOWN_S)
+            release(game, retry_after_s=retry_after_s)
         except TypeError:
             release(game)
         except Exception:

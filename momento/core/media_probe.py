@@ -30,6 +30,13 @@ from PyQt6.QtCore import QObject, QRunnable, QThreadPool, pyqtSignal
 from momento.core.recording_files import (
     REPAIR_TMP_SUFFIX,
     is_repair_temp,
+    recording_path_for_repair_temp,
+)
+from momento.core.media_validation import validate_repair_candidate
+from momento.core.recording_safety import (
+    has_valid_ownership_marker,
+    is_momento_owned,
+    mark_recording_owned,
 )
 from momento.util.ffmpeg_path import ffmpeg_exe, ffprobe_exe
 
@@ -307,6 +314,7 @@ class RepairJob(QRunnable):
             self.signals.done.emit(str(src), False, "Refusing to repair a temp file")
             return
         tmp = src.with_name(src.stem + REPAIR_TMP_SUFFIX)
+        was_owned = has_valid_ownership_marker(src)
         # +genpts regenerates PTS for packets that lack them — common in
         # truncated MKVs. +igndts ignores corrupt DTS rather than aborting.
         args = [
@@ -340,6 +348,14 @@ class RepairJob(QRunnable):
             self.signals.done.emit(str(src), False, f"Repair failed: {err}")
             return
 
+        validation_error = validate_repair_candidate(src, tmp)
+        if validation_error is not None:
+            self._cleanup(tmp)
+            self.signals.done.emit(
+                str(src), False, f"Repair validation failed: {validation_error}"
+            )
+            return
+
         # Atomic swap with retry. os.replace leaves ``src`` untouched on
         # failure, so the broken original is never lost.
         err = _replace_with_retry(tmp, src)
@@ -347,6 +363,9 @@ class RepairJob(QRunnable):
             self._cleanup(tmp)
             self.signals.done.emit(str(src), False, f"File swap failed: {err}")
             return
+
+        if was_owned and not mark_recording_owned(src):
+            logger.warning("Could not refresh ownership marker after repairing %s", src.name)
 
         self.signals.done.emit(str(src), True, "")
 
@@ -377,6 +396,12 @@ def is_repairing(path: Path | str) -> bool:
         key = str(path)
     with _repair_lock:
         return key in _in_flight_repairs
+
+
+def has_in_flight_repairs() -> bool:
+    """Return whether any queued or running repair still owns a path."""
+    with _repair_lock:
+        return bool(_in_flight_repairs)
 
 
 def repair_async(path: Path, on_done) -> RepairJob | None:
@@ -458,6 +483,8 @@ def find_broken_recordings(
                 continue
         except OSError:
             continue
+        if not is_momento_owned(p):
+            continue
         # Inline fast probe — same logic as DurationProbe._fast_probe but
         # synchronous, since the caller is willing to wait ~50ms × N.
         try:
@@ -507,6 +534,9 @@ def cleanup_stale_repair_temps(folder: Path, min_age_seconds: float = 120.0) -> 
         except OSError:
             continue
         if now - st.st_mtime < min_age_seconds:
+            continue
+        original = recording_path_for_repair_temp(p)
+        if original is None or not is_momento_owned(original):
             continue
         try:
             p.unlink()

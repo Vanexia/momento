@@ -11,11 +11,6 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
 from momento import __version__
-
-# Module-level logger so startup helpers that run before ``main()`` builds its
-# local state have somewhere to report failures. ``main()`` reuses this one.
-logger = logging.getLogger("momento")
-
 from momento.config import load_config, save_config
 from momento.core.media_probe import (
     cleanup_stale_repair_temps,
@@ -27,11 +22,21 @@ from momento.core.storage_cleanup import enforce_storage_limit
 from momento.ui.theme import apply_dark_theme
 from momento.ui.tray import MomentoTray
 from momento.ui.welcome import WelcomeDialog
+from momento.updater.attempts import UpdateAttemptStore
+from momento.updater.cache import UpdateCache
+from momento.updater.client import UpdateClient
+from momento.updater.runtime import UpdateRuntime, updated_attempt_token
+from momento.updater.service import UpdateService
 from momento.util.format import format_bytes, free_bytes_for
 from momento.util.hotkey import HotkeyError, HotkeyService
 from momento.util.logging_setup import install_exception_hook, setup_logging
-from momento.util.resources import app_icon_path
+from momento.util.paths import update_cache_dir
+from momento.util.resources import app_icon_path, update_public_key_path
 from momento.util.single_instance import AlreadyRunningError, SingleInstance
+
+# Module-level logger so startup helpers that run before ``main()`` builds its
+# local state have somewhere to report failures. ``main()`` reuses this one.
+logger = logging.getLogger("momento")
 
 
 def _log_auto_repair_done(path_str: str, ok: bool, err: str) -> None:
@@ -164,9 +169,10 @@ def main() -> int:
     setup_logging()
     install_exception_hook()
 
+    updated_token = updated_attempt_token(sys.argv[1:])
     try:
         instance = SingleInstance()
-        instance.acquire()
+        instance.acquire(updated_token=updated_token)
     except AlreadyRunningError:
         # Setting the app-level icon BEFORE constructing the dialog gives
         # the title bar Momento's icon instead of Qt's default.
@@ -193,6 +199,19 @@ def main() -> int:
         if not QSystemTrayIcon.isSystemTrayAvailable():
             QMessageBox.critical(None, "Momento", "System tray is not available on this platform.")
             return 2
+
+        update_runtime = None
+        try:
+            update_public_key = update_public_key_path().read_bytes()
+            update_cache = UpdateCache(update_cache_dir(), update_public_key)
+            update_runtime = UpdateRuntime(
+                current_version=__version__,
+                single_instance=instance,
+                cache=update_cache,
+                attempts=UpdateAttemptStore(update_cache_dir()),
+            )
+        except Exception as exc:
+            logger.warning("Updater initialization failed (%s)", type(exc).__name__)
 
         # An explicit marker lets setup safely resume when its window was
         # closed before Finish. Older configs migrate as already complete.
@@ -234,6 +253,19 @@ def main() -> int:
         except HotkeyError as e:
             logger.warning("Bookmark hotkey unavailable (%s); continuing without it", e)
         tray.set_hotkey_service(hotkey_service)
+
+        update_service = None
+        if update_runtime is not None:
+            update_service = UpdateService(
+                current_version=__version__,
+                session=session,
+                client=UpdateClient(cache=update_runtime.cache),
+                can_install=tray.is_update_install_ready,
+                launch_installer=update_runtime.launch,
+                quit_callback=app.quit,
+                parent=tray,
+            )
+            tray.set_update_service(update_service)
 
         setup_accepted = False
         if is_first_run:
@@ -294,6 +326,18 @@ def main() -> int:
             _warn_if_low_disk(tray, config)
         except Exception:
             logger.exception("Low-disk warning check raised")
+
+        if update_service is not None:
+            if update_runtime is not None and updated_token is not None:
+                update_runtime.schedule_startup_confirmation(
+                    updated_token,
+                    schedule=QTimer.singleShot,
+                    on_complete=lambda _confirmed: (
+                        update_service.start_automatic_check()
+                    ),
+                )
+            else:
+                QTimer.singleShot(0, update_service.start_automatic_check)
 
         # Dev/test affordance: `python -m momento --show` opens the editor on
         # launch instead of waiting for a tray click. No effect on normal runs.

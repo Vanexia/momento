@@ -133,7 +133,7 @@ def _extract(media_path: Path) -> Path | None:
 
 
 # Dedicated pool for thumbnail extraction, capped to 2 concurrent ffmpeg
-# subprocesses (I/O thrash + each ffmpeg.exe is ~217 MB resident).
+# subprocesses (I/O thrash and concurrent decode work add up on large libraries).
 # Deliberately NOT QThreadPool.globalInstance(): capping the global pool to 2
 # used to throttle every OTHER global-pool user — duration/metadata probes,
 # the startup auto-REPAIR of crash-broken recordings, the settings avatar

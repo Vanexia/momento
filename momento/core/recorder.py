@@ -38,7 +38,7 @@ from pathlib import Path
 
 from momento.core import audio_devices
 from momento.core.audio_loopback import LoopbackStreamer
-from momento.core.encoder import InProcessEncoder
+from momento.core.encoder import InProcessEncoder, is_output_write_error
 from momento.core import encoders
 from momento.core.mic_capture import MicStreamer
 from momento.core.video_capture import WindowVideoStreamer
@@ -113,6 +113,7 @@ class Recorder:
         self._mic_failed = False
         self._sys_failed = False
         self._encoder_failed: Exception | None = None
+        self._video_degraded_warned = False
         self._active_video_codec: str | None = None
         # Set by the owner (SessionManager). Invoked when the captured game
         # window is destroyed mid-recording, so the session can finalise
@@ -126,6 +127,7 @@ class Recorder:
         self.on_audio_dropped: Callable[[str], None] | None = None
         self.on_encoder_failed: Callable[[Exception], None] | None = None
         self.on_video_capture_failed: Callable[[Exception], None] | None = None
+        self.on_video_degraded: Callable[[float], None] | None = None
 
     # ------------------------------------------------------------------ API
     @property
@@ -230,7 +232,7 @@ class Recorder:
             if first_failure:
                 self._encoder_failed = exc
             notify_owner = first_failure and self._is_running
-        if first_failure and video_codec:
+        if first_failure and video_codec and not is_output_write_error(exc):
             encoders.disable_for_process(video_codec, exc)
         if not notify_owner:
             return
@@ -240,6 +242,23 @@ class Recorder:
                 callback(exc)
             except Exception:
                 logger.exception("on_encoder_failed callback raised")
+
+    def _handle_video_degraded(self, generation: int, drop_rate: float) -> None:
+        """Surface sustained frame loss once per recording without stopping it."""
+        with self._lock:
+            if generation != self._audio_generation:
+                return
+            notify_owner = self._is_running and not self._video_degraded_warned
+            if notify_owner:
+                self._video_degraded_warned = True
+        if not notify_owner:
+            return
+        callback = self.on_video_degraded
+        if callback is not None:
+            try:
+                callback(float(drop_rate))
+            except Exception:
+                logger.exception("on_video_degraded callback raised")
 
     def _handle_video_capture_failure(self, generation: int, exc: Exception) -> None:
         """Surface an unexpected WGC stop without labelling a clean MKV corrupt."""
@@ -305,6 +324,7 @@ class Recorder:
             self._mic_failed = False
             self._sys_failed = False
             self._encoder_failed = None
+            self._video_degraded_warned = False
             self._active_video_codec = None
 
         try:
@@ -346,7 +366,7 @@ class Recorder:
             #    the encoder. The sender thread is started below, after the
             #    encoder is ready to accept frames.
             video = WindowVideoStreamer(hwnd=params.hwnd, framerate=params.framerate)
-            video.on_window_closed = self._on_video_window_closed
+            video.on_window_closed = lambda: self._on_video_window_closed(generation)
             video.on_capture_failed = lambda exc: self._handle_video_capture_failure(
                 generation, exc
             )
@@ -441,9 +461,18 @@ class Recorder:
                             codec if owner.fatal_component == "video" else None,
                         )
                     )
+                    encoder.on_video_degraded = (
+                        lambda rate: self._handle_video_degraded(generation, rate)
+                    )
                     try:
                         encoder.start(startup_video_frame=startup_frame)
                     except Exception as encoder_error:
+                        if not _should_retry_encoder_candidate(encoder_error):
+                            logger.error(
+                                "Recording output failed while opening the production pipeline: %s",
+                                str(encoder_error).strip() or repr(encoder_error),
+                            )
+                            raise
                         excluded_codecs.add(video_codec)
                         last_encoder_error = encoder_error
                         logger.warning(
@@ -580,12 +609,21 @@ class Recorder:
             params.hwnd, w, h, params.framerate, mkv_path,
         )
 
-    def _on_video_window_closed(self) -> None:
+    def _on_video_window_closed(self, generation: int) -> None:
         """WGC told us the captured window was destroyed. Forward to the owner
-        only for a genuinely live recording (ignore spurious closes during
-        prepare() / teardown). Runs on the WGC thread — the owner is expected
-        to hand the actual stop() off to another thread."""
+        for a live recording. During startup it records a terminal failure so
+        the pipeline cannot be published after its capture source has died.
+        Runs on the WGC thread; the owner hands live finalisation to another
+        thread."""
         with self._lock:
+            if generation != self._audio_generation:
+                return
+            if self._starting and not self._is_running:
+                if self._encoder_failed is None:
+                    self._encoder_failed = RuntimeError(
+                        "Captured game window closed during recording startup"
+                    )
+                return
             if not self._is_running:
                 return
         cb = self.on_window_closed
@@ -666,6 +704,14 @@ class Recorder:
 
         logger.info("Recording finalised: %s", mkv_path)
         return mkv_path
+
+    def cancel_start(self) -> bool:
+        """Cancel only an unpublished pipeline build, never a live recording."""
+        with self._lock:
+            if not self._starting or self._is_running:
+                return False
+            self._stop_requested = True
+            return True
 
     def _start_cancel_requested(self) -> bool:
         with self._lock:
@@ -764,3 +810,8 @@ def _is_writable(folder: Path) -> bool:
         except OSError:
             pass
     return True
+
+
+def _should_retry_encoder_candidate(exc: BaseException) -> bool:
+    """Backend fallback cannot heal a full, removed, or read-only output drive."""
+    return not is_output_write_error(exc)

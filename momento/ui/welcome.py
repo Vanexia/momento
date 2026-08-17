@@ -285,7 +285,8 @@ class WelcomeDialog(QDialog):
             "system audio, and stops automatically when you close it."
         ))
         col.addWidget(_para(
-            "Recordings stay on your PC. No accounts, no cloud, no upload."
+            "Momento does not upload recordings or require an account. Files "
+            "are saved to the folder you choose; cloud sync depends on that folder."
         ))
         col.addWidget(_para(
             "This setup will take you through the basics. You can skip "
@@ -315,9 +316,9 @@ class WelcomeDialog(QDialog):
         row.addWidget(browse)
         col.addLayout(row)
         col.addWidget(_hint(
-            "When the recordings folder hits its storage limit (Settings → "
-            "Output), Momento deletes the oldest recordings first. Clips "
-            "are kept."
+            "Automatic quota cleanup is off by default. You can enable it in "
+            "Settings > Output; clips are always kept. A separate low-space "
+            "safety stop protects the drive during recording."
         ))
         col.addStretch(1)
         return page
@@ -466,14 +467,14 @@ class WelcomeDialog(QDialog):
         self._refresh_wizard_device_status()
 
     def _refresh_wizard_device_status(self) -> None:
-        """Mirror the Settings → Audio "Connected / Not detected" badges."""
+        """Mirror the Settings > Audio "Detected / Not detected" badges."""
         def fmt(active_ids: set[str], current: str, label: QLabel) -> None:
             if not current:
                 label.setText("✕ No device selected")
                 label.setStyleSheet("color: #d4a64a; font-size: 9pt;")
                 return
             if current in active_ids:
-                label.setText("✓ Connected")
+                label.setText("✓ Detected")
                 label.setStyleSheet("color: #5cb85c; font-size: 9pt;")
             else:
                 label.setText("✕ Not detected")

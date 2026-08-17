@@ -83,11 +83,14 @@ class RecordingItemDelegate(QStyledItemDelegate):
                     float(card.left()), float(card.top()),
                     float(card.right()), float(card.bottom()),
                 )
-                c0 = QColor(124, 58, 237); c0.setAlphaF(0.18)
-                c1 = QColor(217, 70, 239); c1.setAlphaF(0.08)
+                c0 = QColor(124, 58, 237)
+                c0.setAlphaF(0.18)
+                c1 = QColor(217, 70, 239)
+                c1.setAlphaF(0.08)
                 grad.setColorAt(0.0, c0)
                 grad.setColorAt(1.0, c1)
-                border = QColor(168, 85, 247); border.setAlphaF(0.45)
+                border = QColor(168, 85, 247)
+                border.setAlphaF(0.45)
                 painter.setPen(QPen(border, 1))
                 painter.setBrush(QBrush(grad))
             else:

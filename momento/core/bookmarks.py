@@ -100,6 +100,8 @@ class BookmarkStore:
                 save_bookmarks(self._path, list(self._items))
             except OSError:
                 logger.exception("Could not write bookmarks sidecar for %s", self._path)
+                self._items.remove(seconds)
+                return False
         return True
 
     def snapshot(self) -> list[float]:

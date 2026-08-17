@@ -64,6 +64,8 @@ class GameWatcher:
 
         self._thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._initial_scan_event = threading.Event()
+        self._restart_requested = False
         self._active: ActiveGame | None = None
         self._lock = threading.Lock()
         # pid -> (cooldown_until_monotonic, create_time). create_time is carried
@@ -145,45 +147,113 @@ class GameWatcher:
         )
 
     def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._run, name="GameWatcher", daemon=True
-        )
-        self._thread.start()
+        with self._lock:
+            thread = self._thread
+            if thread is not None and thread.is_alive():
+                if self._stop_event.is_set():
+                    self._restart_requested = True
+                    logger.info(
+                        "GameWatcher restart deferred until the stopping thread exits"
+                    )
+                return
+            self._restart_requested = False
+            self._start_locked()
         logger.info("GameWatcher started (poll %.1fs, %d known)", self._poll_interval, len(self._known))
 
     @property
     def is_running(self) -> bool:
-        t = self._thread
-        return t is not None and t.is_alive() and not self._stop_event.is_set()
+        with self._lock:
+            thread = self._thread
+            stop_event = self._stop_event
+        return (
+            thread is not None
+            and thread.is_alive()
+            and not stop_event.is_set()
+        )
 
-    def stop(self) -> None:
-        self._stop_event.set()
-        t = self._thread
-        if t is not None:
-            t.join(timeout=self._poll_interval + 1.0)
-            if t.is_alive():
-                logger.warning(
-                    "GameWatcher stop timed out; retaining the existing thread "
-                    "until its current callback returns"
-                )
-                return
-        self._thread = None
+    def stop(self) -> bool:
+        """Request shutdown and report whether the watcher thread has exited.
+
+        A false result is deliberately distinct from ``is_running``: the stop
+        flag makes monitoring inactive immediately, but a callback can still
+        own the thread until it returns.
+        """
+        with self._lock:
+            self._restart_requested = False
+            stop_event = self._stop_event
+            thread = self._thread
+            stop_event.set()
+
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(timeout=self._poll_interval + 1.0)
+
+        with self._lock:
+            if self._thread is thread and (
+                thread is None or not thread.is_alive()
+            ):
+                self._thread = None
+            stopped = self._thread is None
+
+        if not stopped:
+            logger.warning(
+                "GameWatcher stop timed out; retaining the existing thread "
+                "until its current callback returns"
+            )
+            return False
         logger.info("GameWatcher stopped")
+        return True
+
+    def wait_initial_scan(self, timeout: float | None = None) -> bool:
+        """Wait until the first process scan has completed for this run."""
+        return self._initial_scan_event.wait(timeout)
 
     # ----------------------------------------------------------------- impl
-    def _run(self) -> None:
+    def _start_locked(self) -> None:
+        stop_event = threading.Event()
+        initial_scan_event = threading.Event()
+        thread = threading.Thread(
+            target=self._run,
+            args=(stop_event, initial_scan_event),
+            name="GameWatcher",
+            daemon=True,
+        )
+        self._stop_event = stop_event
+        self._initial_scan_event = initial_scan_event
+        self._thread = thread
+        thread.start()
+
+    def _run(
+        self,
+        stop_event: threading.Event,
+        initial_scan_event: threading.Event,
+    ) -> None:
         # Run an initial poll immediately, then on the interval, so users don't
         # wait a full cycle for the first detection.
-        while True:
-            try:
-                self._tick()
-            except Exception:
-                logger.exception("GameWatcher tick raised")
-            if self._stop_event.wait(self._poll_interval):
-                return
+        first_scan = True
+        thread = threading.current_thread()
+        try:
+            while True:
+                try:
+                    self._tick()
+                except Exception:
+                    logger.exception("GameWatcher tick raised")
+                finally:
+                    if first_scan:
+                        first_scan = False
+                        initial_scan_event.set()
+                if stop_event.wait(self._poll_interval):
+                    return
+        finally:
+            restarted = False
+            with self._lock:
+                if self._thread is thread:
+                    self._thread = None
+                    if self._restart_requested:
+                        self._restart_requested = False
+                        self._start_locked()
+                        restarted = True
+            if restarted:
+                logger.info("GameWatcher restarted after deferred stop completion")
 
     def _tick(self) -> None:
         # Snapshot config under the lock so update_* methods are safe.

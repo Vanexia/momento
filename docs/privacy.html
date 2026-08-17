@@ -8,13 +8,13 @@
 <link rel="icon" type="image/png" href="momento-256.png">
 <style>
   :root {
-    --accent: #8b5cf6;
+    --accent: #a78bfa;
     --bg: #0f1117;
     --bg-card: #1a1d26;
     --bg-card-2: #20242e;
     --text: #e8eaf2;
     --text-dim: #9aa0b0;
-    --text-dim-2: #6b7080;
+    --text-dim-2: #858b9b;
     --border: #2a2f3b;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,11 +25,11 @@
   header { padding: 24px 0 32px; }
   header .home { display: inline-block; color: var(--text-dim); text-decoration: none; font-size: 14px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: 1px; }
   header .home:hover { color: var(--accent); border-color: var(--accent); }
-  header h1 { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+  header h1 { font-size: 40px; font-weight: 700; letter-spacing: 0; margin-bottom: 8px; }
   header .effective { color: var(--text-dim-2); font-size: 14px; }
 
   section { padding: 28px 0 14px; }
-  section h2 { font-size: 22px; font-weight: 600; margin-bottom: 14px; color: var(--text); letter-spacing: -0.005em; }
+  section h2 { font-size: 22px; font-weight: 600; margin-bottom: 14px; color: var(--text); letter-spacing: 0; }
   section h3 { font-size: 17px; font-weight: 600; margin: 18px 0 8px; color: var(--text); }
   section p, section li { color: var(--text-dim); font-size: 16px; margin-bottom: 12px; }
   section p strong, section li strong { color: var(--text); font-weight: 600; }
@@ -37,8 +37,9 @@
   section li { margin-bottom: 8px; }
   section a { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(139,92,246,0.4); }
   section a:hover { border-color: var(--accent); }
+  a:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
 
-  .callout { background: linear-gradient(135deg, rgba(139,92,246,0.08), rgba(139,92,246,0.02)); border: 1px solid rgba(139,92,246,0.25); border-radius: 12px; padding: 22px; margin: 18px 0; }
+  .callout { background: var(--bg-card); border: 1px solid rgba(139,92,246,0.35); border-radius: 8px; padding: 22px; margin: 18px 0; }
   .callout p { margin: 0; color: var(--text); }
   .callout p + p { margin-top: 10px; }
 
@@ -47,6 +48,16 @@
   footer { padding: 40px 0 0; border-top: 1px solid var(--border); color: var(--text-dim-2); font-size: 14px; margin-top: 48px; }
   footer a { color: var(--text-dim); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; }
   footer a:hover { color: var(--accent); border-color: var(--accent); }
+
+  @media (max-width: 560px) {
+    body { padding: 20px 16px 56px; }
+    header h1 { font-size: 34px; }
+    section { padding-top: 24px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; }
+  }
 </style>
 </head>
 <body>
@@ -55,16 +66,16 @@
   <header>
     <a class="home" href="index.html">← Momento</a>
     <h1>Privacy Policy</h1>
-    <p class="effective">Effective: 15 August 2026</p>
+    <p class="effective">Effective: 17 August 2026</p>
   </header>
 
   <section>
     <h2>Overview</h2>
-    <p>Momento is a desktop application that runs locally on your Windows machine. It records gameplay, stores recordings on your local drive, and includes an optional feature to upload selected clips to YouTube on your behalf.</p>
+    <p>Momento is a desktop application that runs locally on your Windows machine. It records gameplay and stores recordings on your local drive. Approved distributor builds can also include an optional feature for uploading selected clips to YouTube.</p>
     <p>This policy explains what data Momento accesses, where it's stored, and what we do (and don't) do with it.</p>
 
     <div class="callout">
-      <p><strong>Short version:</strong> Momento collects no personal data and sends nothing over the network unless you explicitly click "Upload to YouTube" on a clip. There is no telemetry, no analytics, no account system, no advertising, and no third-party data sharing. Your recordings stay on your machine.</p>
+      <p><strong>Short version:</strong> The standard public build has no telemetry, analytics, account system, advertising, or upload controls. It keeps recordings on your machine and makes no application network requests. An approved YouTube-enabled build accesses Google data only after you connect an account and explicitly request an upload, as described below.</p>
     </div>
   </section>
 
@@ -72,18 +83,19 @@
     <h2>What Momento stores locally</h2>
     <p>Momento writes the following to your machine under <code>%APPDATA%\Momento\</code> and the recordings folder you select in Settings:</p>
     <ul>
-      <li><strong>Recordings</strong> (<code>.mkv</code> files) and exported clips (<code>.mp4</code>) — saved to the folder you choose. Momento never moves or transmits these files unless you explicitly export or upload them.</li>
+      <li><strong>Recordings</strong> (<code>.mkv</code> files) and exported clips (<code>.mp4</code>) — saved to the folder you choose. Momento moves recordings only when you approve an output-folder migration. The standard public build does not transmit them.</li>
       <li><strong>Bookmarks</strong> (<code>.bookmarks.json</code> sidecar files) — timecodes you marked during gameplay.</li>
       <li><strong>Thumbnails</strong> (<code>.thumb.jpg</code>) — extracted frames used by the in-app editor.</li>
+      <li><strong>Ownership markers</strong> (<code>.momento.json</code>) — local file identity used to ensure storage quotas delete only media created or verified by Momento.</li>
       <li><strong>Settings</strong> (<code>config.json</code>) — your preferences (capture quality, hotkey, output folder, etc.).</li>
       <li><strong>Logs</strong> (<code>logs/momento.log</code>) — diagnostic messages, written only to disk, never transmitted.</li>
     </ul>
-    <p>Momento does <strong>not</strong> collect or transmit your machine specs, IP address, usage patterns, installed games, or any other system or behavioural data.</p>
+    <p>Momento does <strong>not</strong> transmit your machine specifications, IP address, usage patterns, installed games, or other system or behavioural data.</p>
   </section>
 
   <section>
     <h2>YouTube upload feature</h2>
-    <p>If you choose to connect your YouTube account and upload a clip, Momento interacts with Google's APIs as described below. <strong>This feature is entirely optional and never runs without explicit user action.</strong></p>
+    <p>The standard public build does not include YouTube controls or a distributor OAuth identity. If you use an approved build that includes this feature and choose to connect your YouTube account, Momento interacts with Google's APIs as described below. <strong>The feature is optional and never uploads without explicit user action.</strong></p>
 
     <h3>Sign-in</h3>
     <p>Connection happens through Google's standard OAuth 2.0 desktop flow. When you click "Connect YouTube account," Momento opens your system's default browser and directs it to <code>accounts.google.com</code>. You sign in to Google on Google's site, review the requested permissions, and consent.</p>
@@ -135,12 +147,12 @@
 
   <section>
     <h2>Changes to this policy</h2>
-    <p>If this policy changes meaningfully, the updated version will be posted here with a revised "Effective" date. Significant changes that affect how user data is handled will be accompanied by an in-app notice on the next launch after the change.</p>
+    <p>If this policy changes meaningfully, the updated version will be posted here with a revised "Effective" date.</p>
   </section>
 
   <section>
     <h2>Contact</h2>
-    <p>For questions about this policy or Momento's data handling, use the support channel provided with your copy of Momento.</p>
+    <p>For questions about this policy or Momento's data handling, open an issue in the <a href="https://github.com/Vanexia/momento/issues">Momento repository</a>.</p>
   </section>
 
   <footer>

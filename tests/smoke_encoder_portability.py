@@ -126,6 +126,17 @@ def test_amd_options_match_the_bundled_encoder_contract() -> None:
     check("AMD options: host-frame input uses a supported format", encoders.preferred_pix_fmt_for(encoders.AMF) == "yuv420p")
 
 
+def test_media_foundation_explicitly_requests_hardware() -> None:
+    for preset in ("high", "custom"):
+        options = encoders.quality_options_for(
+            encoders.MEDIA_FOUNDATION, preset, 16_000
+        )
+        check(
+            f"Media Foundation {preset}: hardware mode is explicit",
+            options.get("hw_encoding") == "1",
+        )
+
+
 def test_live_driver_failure_demotes_amd_until_restart() -> None:
     original_probe = encoders._probe_one
     original_disabled = dict(encoders._runtime_disabled)
@@ -195,6 +206,7 @@ def main() -> int:
     test_amd_is_selected_with_actual_recording_parameters()
     test_failed_amd_probe_reaches_software_floor()
     test_amd_options_match_the_bundled_encoder_contract()
+    test_media_foundation_explicitly_requests_hardware()
     test_live_driver_failure_demotes_amd_until_restart()
     test_qsv_downscale_uses_its_required_pixel_format()
     print(f"\n{checks - failures}/{checks} checks passed")

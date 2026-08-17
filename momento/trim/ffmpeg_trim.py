@@ -23,6 +23,7 @@ from pathlib import Path
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
+from momento.core.media_validation import validate_trim_candidate
 from momento.util.ffmpeg_path import ffmpeg_exe
 from momento.util.paths import logs_dir
 
@@ -203,6 +204,17 @@ class TrimWorker(QObject):
             self.failed.emit(
                 f"Output file is suspiciously small ({size} bytes) — disk may be "
                 f"full or the input has no data in the selected range. See {log_path}"
+            )
+            return
+
+        validation_error = validate_trim_candidate(
+            self._input,
+            self._temp_output,
+            expected_duration=total,
+        )
+        if validation_error is not None:
+            self.failed.emit(
+                f"Export validation failed: {validation_error}. See {log_path}"
             )
             return
 

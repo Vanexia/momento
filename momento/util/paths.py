@@ -29,6 +29,16 @@ def logs_dir() -> Path:
     return path
 
 
+def update_cache_dir() -> Path:
+    """Return the local, non-roaming cache used for verified update files."""
+    base = os.environ.get("LOCALAPPDATA")
+    if not base:
+        base = str(Path.home() / "AppData" / "Local")
+    path = Path(base) / APP_NAME / "updates"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def config_path() -> Path:
     return appdata_dir() / "config.json"
 

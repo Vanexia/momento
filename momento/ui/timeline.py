@@ -312,8 +312,10 @@ class Timeline(QWidget):
                         sel_right - sel_left, track.height(),
                     )
                     wash = QLinearGradient(sel.topLeft(), sel.bottomLeft())
-                    c0 = QColor(168, 85, 247); c0.setAlpha(64)
-                    c1 = QColor(217, 70, 239); c1.setAlpha(30)
+                    c0 = QColor(168, 85, 247)
+                    c0.setAlpha(64)
+                    c1 = QColor(217, 70, 239)
+                    c1.setAlpha(30)
                     wash.setColorAt(0.0, c0)
                     wash.setColorAt(1.0, c1)
                     painter.setBrush(wash)

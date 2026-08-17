@@ -29,20 +29,37 @@ Compared to the original TCP+ffmpeg path:
 from __future__ import annotations
 
 import logging
+import sys
 import threading
 import time
+import types
 from collections.abc import Callable, Iterable
 
 import numpy as np
-from windows_capture import Frame, InternalCaptureControl, WindowsCapture
 
 from momento.util.windows_api import is_window
+
+
+def _unsupported_image_save(*_args, **_kwargs):
+    raise RuntimeError("Momento does not use windows-capture image saving")
+
+
+# windows-capture imports OpenCV solely for optional save_as_image methods.
+# Momento never calls those methods, so provide the tiny API surface at import
+# time and keep the 100+ MB OpenCV/FFmpeg runtime out of the frozen app.
+if "cv2" not in sys.modules:
+    cv2_stub = types.ModuleType("cv2")
+    cv2_stub.imwrite = _unsupported_image_save
+    sys.modules["cv2"] = cv2_stub
+
+from windows_capture import Frame, InternalCaptureControl, WindowsCapture  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 # ``windows-capture`` defines this value in milliseconds. Without it, WGC only
 # delivers frames on screen change, so static UI scenes can produce no frames.
-_MIN_UPDATE_INTERVAL_60FPS_MS = 16
+def _minimum_update_interval_ms(framerate: int) -> int:
+    return max(1, int(1000 / max(1, int(framerate))))
 
 _FIRST_FRAME_TIMEOUT = 5.0
 # Many games (FFXIV, Path of Exile, etc.) launch in one window mode and switch
@@ -246,7 +263,7 @@ class WindowVideoStreamer:
                 cursor_capture=self._capture_cursor,
                 draw_border=False,
                 window_hwnd=self._hwnd,
-                minimum_update_interval=_MIN_UPDATE_INTERVAL_60FPS_MS,
+                minimum_update_interval=_minimum_update_interval_ms(self._framerate),
                 dirty_region=False,
             )
         except TypeError:
@@ -360,6 +377,8 @@ class WindowVideoStreamer:
             raise RuntimeError("WindowVideoStreamer already sending")
         if self._frame_size is None:
             raise RuntimeError("prepare() must succeed before start_sending()")
+        if self._stop_event.is_set():
+            raise RuntimeError("Windows Graphics Capture ended before frame delivery started")
         self._sink = sink
         self._pts_clock = pts_clock
         self._frames_submitted = 0
@@ -371,6 +390,10 @@ class WindowVideoStreamer:
         )
         self._sender_thread.start()
         self._started = True
+        if self._stop_event.is_set():
+            self._teardown()
+            self._started = False
+            raise RuntimeError("Windows Graphics Capture ended while frame delivery started")
 
     def startup_frame(self) -> np.ndarray:
         """Return an owned prepared frame for synchronous encoder priming."""

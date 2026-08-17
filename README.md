@@ -1,189 +1,190 @@
-# Momento
+<p align="center">
+  <img src="resources/icons/momento-256.png" width="112" height="112" alt="Momento logo">
+</p>
 
-Momento is a local-first Windows game recorder that lives in the system tray. It
-detects known game processes, captures the game's window with microphone and
-system audio, and finalizes the recording when the game closes. The built-in
-editor handles playback, bookmarks, fast clip export, and library maintenance.
-Distributors can optionally enable user-initiated YouTube uploads with an
-approved OAuth project; the standard public build leaves that integration out.
+<h1 align="center">Momento</h1>
 
-Recordings stay on the computer unless the user explicitly starts an upload.
-Momento has no product account, telemetry, analytics, cloud library, or
-auto-updater.
+<p align="center">
+  Automatic game recording for Windows, with local playback, bookmarks, and fast clip export.
+</p>
 
-## Features
+<p align="center">
+  <a href="https://github.com/Vanexia/momento/releases/latest"><strong>Download Momento</strong></a>
+  &nbsp;|&nbsp;
+  <a href="https://vanexia.github.io/momento/privacy.html">Privacy</a>
+  &nbsp;|&nbsp;
+  <a href="https://github.com/Vanexia/momento/issues">Report an issue</a>
+</p>
 
-- Automatic start and stop from a configurable known-games list.
-- Optional foreground-fullscreen fallback with non-game protections.
-- Per-window Windows Graphics Capture instead of desktop-wide recording.
-- Microphone and playback-loopback capture through PortAudio/WASAPI.
-- Crash-tolerant MKV recording through PyAV/libav.
-- Hardware H.264 probing for NVIDIA NVENC, AMD AMF, Intel QuickSync, and Media
-  Foundation, with libx264 as a CPU fallback.
-- Configurable quality, frame rate, audio gain/offset, notifications, storage
-  quota, and low-disk warnings.
-- Global in-game bookmark hotkey, `F8` by default.
-- Editor with search, game filters, sorting, thumbnails, playback, timeline,
-  bookmarks, rename/delete/reveal, repair, and storage management.
-- Stream-copy clip export to MP4 without quality loss.
-- Optional resumable YouTube upload with local DPAPI-encrypted OAuth tokens.
-- Close-to-tray playback parking that restores the same recording and position.
+<p align="center">
+  <a href="https://github.com/Vanexia/momento/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/Vanexia/momento?style=flat-square&color=8b5cf6"></a>
+  <a href="https://github.com/Vanexia/momento/actions/workflows/ci.yml"><img alt="CI status" src="https://img.shields.io/github/actions/workflow/status/Vanexia/momento/ci.yml?branch=main&style=flat-square&label=checks"></a>
+  <img alt="Windows 10 and 11" src="https://img.shields.io/badge/Windows-10%20%7C%2011-0078d4?style=flat-square">
+  <a href="LICENSE"><img alt="GPL-3.0-only" src="https://img.shields.io/badge/license-GPL--3.0--only-8b5cf6?style=flat-square"></a>
+</p>
+
+## Download
+
+Download **[MomentoSetup-0.2.2.exe](https://github.com/Vanexia/momento/releases/download/v0.2.2/MomentoSetup-0.2.2.exe)** from the latest release.
+
+The installer includes everything Momento needs. Python and administrator access are not required.
+
+> [!IMPORTANT]
+> Momento's installer is not code-signed yet. Windows may show **Unknown Publisher** or a SmartScreen warning. Confirm that the download came from this repository, select **More info**, then **Run anyway**. The release includes a SHA-256 checksum for integrity checking.
+
+![Momento recording library and clip editor](docs/screenshots/library.png)
+
+<p align="center"><sub>The real Momento interface, shown with sample media.</sub></p>
+
+## What Momento Does
+
+- **Records automatically.** Momento watches a configurable game list and starts when a matching game window appears.
+- **Captures the game, microphone, and system audio.** Windows Graphics Capture records the game window rather than the whole desktop.
+- **Marks moments while you play.** Press the configurable bookmark hotkey, `F8` by default, to add timeline markers.
+- **Turns recordings into clips.** Browse, search, preview, repair, trim, and export MP4 clips without re-encoding.
+- **Keeps your library local.** The standard public build has no Momento
+  account, telemetry, analytics, or cloud library. Recordings and clips stay on
+  your computer.
+
+Recordings use MKV for better crash tolerance. Finished clips use MP4 for straightforward sharing.
+
+## Getting Started
+
+1. Install Momento and complete the first-run setup.
+2. Confirm your microphone, playback device, output folder, and games list.
+3. Leave Momento in the system tray and launch a configured game.
+4. Use `F8` to bookmark moments while playing.
+5. Close the game, open Momento from the tray, and export the section you want.
+
+![Momento capture settings](docs/screenshots/settings-capture.png)
+
+## Updates
+
+The installed build checks the latest stable GitHub Release once when Momento
+starts. It does not poll for updates while it runs. You can also choose **Check
+for updates...** from the tray menu or **Help > Check for updates...** in the
+editor.
+
+Momento accepts an update only after it verifies Ed25519-signed release metadata
+and the installer's exact size and SHA-256. If recording, finalization, repair,
+trimming, uploading, or another editor task is active, Momento keeps the
+verified download and installs it on the next launch instead of interrupting
+your work.
+
+Source runs do not contact the update service or install updates. The manual
+command reports that self-update requires the installed build.
+
+## Capture And Storage
+
+Momento records at the game's native window size by default. Fresh installations use 60 fps and a fixed 16,000 kbit/s bitrate, which uses approximately **7.2 GB per hour**, plus audio and container overhead. Higher quality settings can exceed 10 GB per hour at 1440p60.
+
+The encoder checks the requested resolution, frame rate, and quality before recording. It tries compatible hardware encoders in this order:
+
+1. NVIDIA NVENC
+2. AMD AMF
+3. Intel QuickSync
+4. Media Foundation
+5. libx264 CPU encoding
+
+Momento warns when it falls back to CPU encoding because high resolutions and frame rates can use substantial processor time.
+
+Public releases use a reproducible PyAV 17.0.1 wheel with a purpose-built
+FFmpeg 8.0.1 runtime. It keeps H.264/AAC recording and the encoder paths above
+while reducing PyAV's native DLL payload by 80.6%. NVIDIA has passed physical
+recording tests; AMD and Intel remain automated contract tests pending wider
+physical hardware coverage.
 
 ## Requirements
 
-- 64-bit Windows 10 version 1903 or newer, or Windows 11.
-- Python 3.12 only when running from source.
-- A hardware H.264 encoder is recommended. CPU encoding is available but uses
-  considerably more resources at high resolutions and frame rates.
-- Momento includes and probes NVIDIA NVENC, AMD AMF, Intel QuickSync, and Media
-  Foundation. NVIDIA has passed physical hardware testing; AMD and Intel use the
-  same production-profile checks but still need wider testing on those GPUs.
-- Roughly 615 MB for the current one-folder package, mostly native Qt, media,
-  capture, and FFmpeg dependencies.
-
-## Run From Source
-
-```powershell
-git clone <repo> C:\dev\Momento
-cd C:\dev\Momento
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .[dev]
-.\scripts\fetch_ffmpeg.ps1
-.\.venv\Scripts\python.exe -m momento
-```
-
-Use `--show` to open the editor automatically during development:
-
-```powershell
-.\.venv\Scripts\python.exe -m momento --show
-```
-
-## Install Momento
-
-Run `MomentoSetup-0.2.1.exe`. It installs for the current Windows user without
-requiring Python or administrator access, creates a Start Menu shortcut, and can
-optionally create a desktop shortcut.
-
-Windows can show an Unknown Publisher or SmartScreen warning because the first
-public installer is not yet code-signed.
-
-## First Use
-
-1. Complete the setup window. Momento suggests the Windows default audio
-   devices, the redirected Videos folder, fixed 60 fps, and 16 Mbit/s capture.
-2. Confirm the known-games list or enable the optional fullscreen fallback.
-3. Launch a game. The tray state and notification report recording status.
-4. Press the bookmark hotkey during useful moments.
-5. Close the game to finalize the MKV, then open Momento from the tray.
-
-Momento excludes the active recording from the editor and prevents output-folder
-changes until recording has finalized.
-
-## Editor Shortcuts
-
-| Key | Action |
+| | Requirement |
 |---|---|
-| `Space` | Play or pause |
-| `Left` / `Right` | Seek -5 / +5 seconds |
-| `Shift+Left` / `Shift+Right` | Seek -1 / +1 second |
-| `Home` / `End` | Jump to start / end |
-| `M` | Toggle mute |
-| `F` or double-click | Toggle fullscreen preview |
-| `Escape` | Exit fullscreen preview |
+| Operating system | 64-bit Windows 10 version 1903 or newer, or Windows 11 |
+| Disk space | About 615 MB installed, plus space for recordings |
+| Graphics | Hardware H.264 encoding recommended; CPU fallback available |
+| Audio | A Windows microphone and/or playback endpoint if those tracks are wanted |
 
-## Media Behaviour
+NVIDIA NVENC has passed physical hardware testing. AMD AMF, Intel QuickSync, Media Foundation, and CPU fallback have automated coverage but still need wider field testing across real machines and drivers.
 
-- Recordings are MKV for better crash tolerance.
-- Exported clips are MP4 and live under `<output>\clips`.
-- Trim export stream-copies, so boundaries are keyframe-accurate rather than
-  frame-accurate.
-- System audio is the full mix sent to the selected playback endpoint.
-- Capture size is fixed after an initial settle period. Later window resizes are
-  cropped or padded to keep the stream valid.
-- Startup can repair an unfinalized MKV when enough container data survived.
+## Privacy
 
-## Runtime Files
+The standard public build stores settings, logs, thumbnails, recordings, and
+clips on your computer. It does not include the optional distributor YouTube
+identity or its upload controls. Installed builds contact GitHub Releases once
+at startup to check for a signed update; the updater sends no Momento account
+or recording data.
 
-- Config: `%APPDATA%\Momento\config.json`
-- Logs: `%APPDATA%\Momento\logs\momento.log`
-- Window state: `%APPDATA%\Momento\window_state.ini`
-- Lock: `%APPDATA%\Momento\momento.lock`
-- YouTube token: `%APPDATA%\Momento\youtube_token.dat`
-- Recordings: configured output folder, default Windows Videos known folder
-  plus `Momento`
-- Bookmarks: `<media>.bookmarks.json`
-- Thumbnails: `<media>.thumb.jpg`
+- No Momento account
+- No telemetry or analytics
+- No advertising
+- No automatic uploads
+- No background cloud library
 
-## Development
+Read the full [privacy policy](https://vanexia.github.io/momento/privacy.html).
 
-Fast checks:
+## Known Limitations
 
-```powershell
-.\.venv\Scripts\python.exe -m compileall -q momento
-.\.venv\Scripts\ruff.exe check momento tests --select F,E9
-.\.venv\Scripts\python.exe -m pip check
-.\.venv\Scripts\pip-audit.exe --local
-```
-
-The hardware-independent regression suite is listed in
-`.github\workflows\ci.yml`. Real WGC, audio-device, and encoder smokes require a
-Windows machine with a visible target window, working audio endpoints, and GPU.
-
-Build the public installer from a clean committed tree with Momento closed:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip install -c constraints-release.txt -e .[dev]
-.\scripts\fetch_ffmpeg.ps1
-.\scripts\build_installer.ps1
-```
-
-The FFmpeg fetch script downloads the pinned Windows build, verifies its
-published SHA-256 checksum, and installs `ffmpeg.exe` and `ffprobe.exe` under
-`resources\ffmpeg` for source runs and packaging.
-
-## Project Layout
-
-- `momento\__main__.py`: application and tray bootstrap.
-- `momento\config.py`: validated settings persistence.
-- `momento\core`: watcher, session, capture, audio, encoder, repair, storage, and
-  thumbnail services.
-- `momento\ui`: editor, settings, tray, preview, timeline, and notifications.
-- `momento\youtube`: OAuth and resumable uploads.
-- `momento\trim`: FFmpeg stream-copy clip export.
-- `momento\util`: Windows integration, paths, logging, resources, and hotkeys.
-- `resources`: bundled FFmpeg, game data, fonts, icons, and optional OAuth client.
-- `tests`: smoke, regression, diagnostic, and hardware scripts.
-- `build\pyinstaller.spec`: packaging recipe.
-- `build\installer.iss`: per-user Windows installer recipe.
-- `scripts\build_installer.ps1`: clean public release and source-archive build.
-
-## Out Of Scope
-
-- Replay ring buffer or "last N minutes" capture.
-- Live recording preview or streaming.
-- Webcam, HDR, and per-application audio isolation.
-- Frame-accurate re-encoded editing.
-- Momento cloud accounts, telemetry, and automatic updates.
+- The current installer is unsigned.
+- System audio records the full mix sent to the selected playback device, not game audio in isolation.
+- Clip boundaries are keyframe-accurate because exports avoid re-encoding.
+- Momento does not provide a replay buffer, streaming, webcam capture, or HDR recording.
+- Live recordings cannot be previewed or edited until finalization finishes.
 
 ## Troubleshooting
 
-- If a game is not recorded, check the known-games entry, monitoring state, and
-  `%APPDATA%\Momento\logs\momento.log`. The log records process detection, window
-  retries, encoder selection, stream counts, drops, and finalization.
-- If audio is missing, reselect and test both devices in Settings. Device names
-  can change after Windows or driver updates.
-- If video drops frames, check the recording log for the selected encoder and
-  drop count. GPU saturation, another encoder session, or CPU fallback are common
-  causes.
-- If a hardware encoder fails to open or stops during a recording, Momento tries
-  the next compatible backend. A tray warning tells you when it reaches the CPU
-  fallback.
-- If a hotkey does not fire in one game, choose another combination; some games
-  intercept global input.
-- If the tray icon appears missing, check Windows tray overflow.
+**A game was not recorded:** Check that monitoring is active and that the game's executable appears in Settings under Games. The log at `%APPDATA%\Momento\logs\momento.log` records detection, window retries, encoder selection, and finalization.
+
+**Microphone or system audio is missing:** Open Settings and reselect both devices. Windows and driver updates can change endpoint identifiers even when the visible device name stays the same.
+
+**The recording drops frames:** Check the recording log for the selected encoder and drop count. Common causes include a fully loaded GPU, another recording application using the encoder, or CPU fallback at an ambitious recording profile.
+
+**The tray icon is not visible:** Check the Windows tray overflow area.
+
+## Run From Source
+
+Momento requires Python 3.12 for source runs. Automatic update checks and installation stay disabled in this mode.
+
+```powershell
+git clone https://github.com/Vanexia/momento.git C:\dev\Momento
+cd C:\dev\Momento
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -c constraints-release.txt -e .[dev]
+.\scripts\fetch_ffmpeg.ps1
+.\.venv\Scripts\python.exe -m momento --show
+```
+
+Hardware-independent checks run in [GitHub Actions](https://github.com/Vanexia/momento/actions). WGC, real audio devices, and hardware encoders require a Windows machine with suitable hardware.
+
+## Build A Release
+
+Create releases only from a clean committed tree with Momento closed:
+
+```powershell
+.\scripts\build_installer.ps1
+```
+
+The release builder verifies dependencies and bundled tools, scans for private
+runtime data, builds the application and installer, exercises an isolated
+install and upgrade cycle, and produces the installer checksum and corresponding
+source archives. Packaged builds omit unused Qt translation catalogs and image
+plugins while retaining the formats and multimedia components Momento uses.
+They also use Momento's custom minimal PyAV/FFmpeg recording runtime. The
+runtime wheel and its complete build inputs, recipes, capability allowlist, and
+hash are pinned in `build/pyav_runtime.json` and
+`build/corresponding_sources.json`.
+
+Release builds also require Momento's Ed25519 update-signing key. Keep the
+private key outside the repository at
+`%LOCALAPPDATA%\MomentoRelease\update-signing-key.pem`, or set
+`MOMENTO_UPDATE_SIGNING_KEY` to another protected location. The matching public
+key stays tracked at `resources/update_public_key.pem`; do not rotate it without
+an updater migration plan.
+
+The builder creates `Momento-update.json` and `Momento-update.json.sig` and
+verifies them against the final installer. Publish both files with the exact
+versioned installer in the same stable GitHub Release. The release's metadata
+version must increase, and the private key must never appear in a commit,
+archive, installer, log, or release asset.
 
 ## License
 
-Momento is licensed under GPL-3.0-only. The installer includes the corresponding
-Momento source archive, build information, and third-party notices. Bundled
-components retain their own copyright and license terms.
+Momento is licensed under [GPL-3.0-only](LICENSE). The installer includes the corresponding Momento source, build information, and third-party notices. Bundled components retain their own copyright and licence terms.

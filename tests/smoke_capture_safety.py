@@ -7,12 +7,14 @@ Run:
 from __future__ import annotations
 
 import dataclasses
+import errno
 import logging
 import sys
 import tempfile
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -20,6 +22,7 @@ import numpy as np  # noqa: E402
 
 import momento.core.game_watcher as gw  # noqa: E402
 import momento.core.encoder as encoder_mod  # noqa: E402
+import momento.core.recorder as recorder_mod  # noqa: E402
 import momento.core.session as sess  # noqa: E402
 import momento.core.video_capture as capture  # noqa: E402
 from momento.config import Config  # noqa: E402
@@ -232,6 +235,42 @@ def test_wgc_close_during_settle_fails_startup() -> None:
     check("WGC startup: closed capture does not lock a frame size", streamer._frame_size is None)
 
 
+def test_wgc_close_after_prepare_cancels_recorder_publish() -> None:
+    """A close in the prepare->publish gap must poison the pending start."""
+    recorder = recorder_mod.Recorder()
+    recorder._starting = True
+    generation = recorder._audio_generation
+
+    recorder._on_video_window_closed(generation)
+
+    check(
+        "WGC startup: a window close before publish records a terminal failure",
+        recorder._encoder_failed is not None,
+    )
+    check(
+        "WGC startup: close-before-publish cannot look like an external stop",
+        not recorder._stop_requested,
+    )
+
+
+def test_stopped_wgc_refuses_to_start_sender() -> None:
+    real_is_window = capture.is_window
+    capture.is_window = lambda _hwnd: True
+    try:
+        streamer = capture.WindowVideoStreamer(hwnd=1, framerate=60)
+    finally:
+        capture.is_window = real_is_window
+    streamer._frame_size = (8, 6)
+    streamer._stop_event.set()
+    raised = False
+    try:
+        streamer.start_sending(lambda *_args: None)
+    except RuntimeError:
+        raised = True
+    check("WGC startup: a terminal capture cannot start frame delivery", raised)
+    check("WGC startup: no sender thread is published after terminal close", not streamer._started)
+
+
 def test_wgc_native_stop_is_reported_and_uses_milliseconds() -> None:
     real_capture = capture.WindowsCapture
     real_is_window = capture.is_window
@@ -262,6 +301,26 @@ def test_wgc_native_stop_is_reported_and_uses_milliseconds() -> None:
     check("WGC recovery: unexpected native stop reaches the owner", len(failures) == 1)
     check("WGC recovery: unexpected native stop halts frame delivery", streamer._stop_event.is_set())
     streamer.stop()
+
+
+def test_wgc_interval_tracks_requested_high_framerate() -> None:
+    real_capture = capture.WindowsCapture
+    real_is_window = capture.is_window
+    real_settle_ms = capture._SIZE_SETTLE_MS
+    capture.WindowsCapture = _UnexpectedStopCapture
+    capture.is_window = lambda _hwnd: True
+    capture._SIZE_SETTLE_MS = 0
+    try:
+        streamer = capture.WindowVideoStreamer(hwnd=1, framerate=240)
+        streamer.prepare()
+        interval = _UnexpectedStopCapture.last_kwargs.get("minimum_update_interval")
+        streamer.stop()
+    finally:
+        capture.WindowsCapture = real_capture
+        capture.is_window = real_is_window
+        capture._SIZE_SETTLE_MS = real_settle_ms
+
+    check("WGC high FPS: 240 fps requests a 4 ms update interval", interval == 4)
 
 
 def test_wgc_intentional_stop_is_silent() -> None:
@@ -521,6 +580,47 @@ def test_encoder_worker_failure_closes_submission_gate() -> None:
         check("encoder failure: failed worker exits", not encoder._video_thread.is_alive())
 
 
+def test_repeated_audio_processing_errors_become_fatal() -> None:
+    with tempfile.TemporaryDirectory(prefix="momento_audio_errors_") as folder:
+        encoder = _bare_encoder(Path(folder) / "audio-errors.mkv")
+        raised: Exception | None = None
+        for attempt in range(encoder_mod._AUDIO_ERROR_FATAL_COUNT):
+            try:
+                encoder._note_audio_processing_error(
+                    RuntimeError(f"simulated audio error {attempt + 1}"),
+                    stage="encode/mux",
+                )
+            except Exception as exc:
+                raised = exc
+                break
+
+        check(
+            "audio errors: isolated failures are tolerated before the threshold",
+            encoder._audio_consecutive_errors == encoder_mod._AUDIO_ERROR_FATAL_COUNT,
+        )
+        check(
+            "audio errors: persistent encode/mux failure becomes fatal",
+            raised is not None and "audio" in str(raised).lower(),
+        )
+
+
+def test_successful_audio_frame_resets_error_streak() -> None:
+    with tempfile.TemporaryDirectory(prefix="momento_audio_recovery_") as folder:
+        encoder = _bare_encoder(Path(folder) / "audio-recovery.mkv")
+        encoder._audio_consecutive_errors = encoder_mod._AUDIO_ERROR_FATAL_COUNT - 1
+
+        class Stream:
+            @staticmethod
+            def encode(_frame):
+                return ()
+
+        encoder._encode_and_mux_audio(SimpleNamespace(pts=1), Stream())
+        check(
+            "audio errors: a healthy encoded frame resets the consecutive streak",
+            encoder._audio_consecutive_errors == 0,
+        )
+
+
 def test_encoder_rejects_duplicate_video_pts_slots() -> None:
     with tempfile.TemporaryDirectory(prefix="momento_video_pts_") as folder:
         encoder = _bare_encoder(Path(folder) / "video-pts.mkv")
@@ -585,6 +685,144 @@ def test_encoder_failure_uses_session_finalize_path() -> None:
             "encoder failure path: still-running game is released for retry",
             manager._watcher.released == [game],
         )
+
+
+def test_output_write_failure_is_not_treated_as_a_gpu_failure() -> None:
+    with tempfile.TemporaryDirectory(prefix="momento_output_failure_") as folder:
+        manager, recorder = _session(Path(folder))
+        game = ActiveGame("game.exe", 305, None, 3.0)
+        failures: list[tuple[str, str]] = []
+        finalized = threading.Event()
+
+        def stop_after_disk_failure():
+            recorder._recording = False
+            finalized.set()
+            return None
+
+        recorder.stop = stop_after_disk_failure
+        recorder._recording = True
+        manager.set_failure_callback(
+            lambda reason, _game, detail: failures.append((reason, detail))
+        )
+        with manager._lock:
+            manager._current_game = game
+
+        hook = recorder.on_encoder_failed
+        if hook is not None:
+            hook(OSError(errno.ENOSPC, "simulated disk full"))
+        finished = finalized.wait(timeout=2.0)
+        time.sleep(0.05)
+
+        check("output failure: live recording finalizes promptly", finished)
+        check(
+            "output failure: user sees an output-space warning",
+            len(failures) == 1
+            and failures[0][0] == sess.FAILURE_OUTPUT_FOLDER
+            and "space" in failures[0][1].lower(),
+        )
+        check(
+            "output failure: healthy video backend is not retried",
+            manager._watcher.released == [],
+        )
+
+
+def test_output_write_failure_does_not_demote_codec() -> None:
+    import momento.core.recorder as recorder_mod
+
+    recorder = recorder_mod.Recorder()
+    recorder._is_running = True
+    disabled: list[str] = []
+    real_disable = recorder_mod.encoders.disable_for_process
+    recorder_mod.encoders.disable_for_process = lambda codec, _exc: disabled.append(codec)
+    try:
+        recorder._handle_encoder_failure(
+            recorder._audio_generation,
+            OSError(errno.ENOSPC, "simulated disk full"),
+            encoders.NVENC,
+        )
+    finally:
+        recorder_mod.encoders.disable_for_process = real_disable
+
+    check("output failure: NVENC remains eligible after disk-full", disabled == [])
+
+
+def test_startup_output_failure_is_not_an_encoder_fallback() -> None:
+    disk_full = OSError(errno.ENOSPC, "simulated startup disk full")
+    check(
+        "startup output failure: disk-full is never retried as another GPU backend",
+        not recorder_mod._should_retry_encoder_candidate(disk_full),
+    )
+    check(
+        "startup encoder failure: a driver/open error remains eligible for fallback",
+        recorder_mod._should_retry_encoder_candidate(RuntimeError("mock driver failure")),
+    )
+
+
+def test_session_classifies_startup_disk_full_as_output_failure() -> None:
+    with tempfile.TemporaryDirectory(prefix="momento_start_disk_full_") as folder:
+        manager, recorder = _session(Path(folder))
+        game = ActiveGame("game.exe", 307, None, 3.0)
+        failures: list[tuple[str, str]] = []
+
+        def fail_start(**_kwargs) -> None:
+            raise OSError(errno.ENOSPC, "simulated startup disk full")
+
+        recorder.start = fail_start
+        manager.set_failure_callback(
+            lambda reason, _game, detail: failures.append((reason, detail))
+        )
+        manager._start_recording(game, hwnd=4242)
+
+        check(
+            "startup output failure: Session shows the output-folder warning",
+            len(failures) == 1 and failures[0][0] == sess.FAILURE_OUTPUT_FOLDER,
+        )
+        check(
+            "startup output failure: the game is not put into a GPU retry loop",
+            manager._watcher.released == [],
+        )
+
+
+def test_low_disk_guard_stops_before_the_drive_fills() -> None:
+    with tempfile.TemporaryDirectory(prefix="momento_disk_guard_") as folder:
+        tmp = Path(folder)
+        manager, recorder = _session(tmp)
+        manager.config = dataclasses.replace(
+            manager.config, low_disk_warning_gb=5
+        )
+        game = ActiveGame("game.exe", 306, None, 3.0)
+        failures: list[tuple[str, str]] = []
+        recorder._recording = True
+        with manager._lock:
+            manager._current_game = game
+            manager._current_output = tmp / "recording.mkv"
+        manager.set_failure_callback(
+            lambda reason, _game, detail: failures.append((reason, detail))
+        )
+
+        start_guard = getattr(manager, "_start_disk_guard", None)
+        check("low disk guard: SessionManager exposes the active guard", callable(start_guard))
+        if callable(start_guard):
+            real_free = sess.free_bytes_for
+            real_interval = sess._DISK_GUARD_INTERVAL_S
+            sess.free_bytes_for = lambda _path: 4 * 1024**3
+            sess._DISK_GUARD_INTERVAL_S = 0.01
+            try:
+                start_guard(game, tmp / "recording.mkv")
+                deadline = time.monotonic() + 2.0
+                while time.monotonic() < deadline and recorder.is_recording:
+                    time.sleep(0.01)
+            finally:
+                sess.free_bytes_for = real_free
+                sess._DISK_GUARD_INTERVAL_S = real_interval
+
+            check("low disk guard: recording is stopped", not recorder.is_recording)
+            check(
+                "low disk guard: user sees why recording stopped",
+                len(failures) == 1
+                and failures[0][0] == sess.FAILURE_LOW_DISK,
+            )
+            check("low disk guard: no automatic retry loop", manager._watcher.released == [])
 
 
 def test_capture_failure_warns_saves_and_retries() -> None:
@@ -693,6 +931,31 @@ def test_sustained_video_drops_are_reported_as_degraded() -> None:
         check("video health: warning is not a fatal encoder error", encoder.fatal_error is None)
 
 
+def test_sustained_video_drops_reach_the_session_owner() -> None:
+    with tempfile.TemporaryDirectory(prefix="momento_drop_warning_") as folder:
+        manager, recorder = _session(Path(folder))
+        game = ActiveGame("game.exe", 304, None, 3.0)
+        failures: list[tuple[str, str]] = []
+        recorder._recording = True
+        with manager._lock:
+            manager._current_game = game
+        manager.set_failure_callback(
+            lambda reason, _game, detail: failures.append((reason, detail))
+        )
+
+        hook = getattr(recorder, "on_video_degraded", None)
+        if hook is not None:
+            hook(0.125)
+
+        check("video health warning: Recorder hook is installed", hook is not None)
+        check(
+            "video health warning: user sees a performance warning",
+            len(failures) == 1
+            and failures[0][0] == getattr(sess, "FAILURE_VIDEO_PERFORMANCE", None)
+            and "12.5%" in failures[0][1],
+        )
+
+
 def main() -> int:
     for fn in (
         test_explicit_empty_game_list_stays_empty,
@@ -700,7 +963,10 @@ def main() -> int:
         test_wgc_frame_snapshot_owns_its_pixels,
         test_wgc_static_startup_frame_is_retained,
         test_wgc_close_during_settle_fails_startup,
+        test_wgc_close_after_prepare_cancels_recorder_publish,
+        test_stopped_wgc_refuses_to_start_sender,
         test_wgc_native_stop_is_reported_and_uses_milliseconds,
+        test_wgc_interval_tracks_requested_high_framerate,
         test_wgc_intentional_stop_is_silent,
         test_sender_deadline_skips_late_slots,
         test_sender_pacing_health_reports_hitches,
@@ -708,11 +974,19 @@ def main() -> int:
         test_session_does_not_start_during_finalization,
         test_second_game_is_deferred_while_first_start_is_pending,
         test_encoder_worker_failure_closes_submission_gate,
+        test_repeated_audio_processing_errors_become_fatal,
+        test_successful_audio_frame_resets_error_streak,
         test_encoder_rejects_duplicate_video_pts_slots,
         test_encoder_failure_uses_session_finalize_path,
+        test_output_write_failure_is_not_treated_as_a_gpu_failure,
+        test_output_write_failure_does_not_demote_codec,
+        test_startup_output_failure_is_not_an_encoder_fallback,
+        test_session_classifies_startup_disk_full_as_output_failure,
+        test_low_disk_guard_stops_before_the_drive_fills,
         test_capture_failure_warns_saves_and_retries,
         test_software_encoder_fallback_is_visible,
         test_sustained_video_drops_are_reported_as_degraded,
+        test_sustained_video_drops_reach_the_session_owner,
     ):
         try:
             fn()

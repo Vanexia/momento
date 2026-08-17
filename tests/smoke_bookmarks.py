@@ -87,11 +87,30 @@ def test_concurrent_adds_cannot_overwrite_newer_snapshot(tmp: Path) -> None:
     check("in-memory bookmark order remains correct", store.snapshot() == [1.0, 2.0])
 
 
+def test_failed_add_is_not_reported_or_retained(tmp: Path) -> None:
+    """A hotkey press is only successful when its sidecar reaches disk."""
+    store = BookmarkStore(tmp / "unwritable.mkv")
+    real_save = bookmark_mod.save_bookmarks
+
+    def failed_save(_path, _values: list[float]) -> None:
+        raise OSError("simulated unwritable sidecar")
+
+    bookmark_mod.save_bookmarks = failed_save
+    try:
+        added = store.add(12.5)
+    finally:
+        bookmark_mod.save_bookmarks = real_save
+
+    check("failed bookmark persistence returns False", not added)
+    check("failed bookmark persistence rolls back memory", store.snapshot() == [])
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="momento_bookmarks_") as d:
         tmp = Path(d)
         test_interrupted_write_keeps_previous_sidecar(tmp)
         test_concurrent_adds_cannot_overwrite_newer_snapshot(tmp)
+        test_failed_add_is_not_reported_or_retained(tmp)
 
     passed = sum(1 for _, ok in _results if ok)
     print(f"\n{passed}/{len(_results)} checks passed")

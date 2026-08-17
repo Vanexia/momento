@@ -25,6 +25,7 @@ Backpressure policy:
 
 from __future__ import annotations
 
+import errno
 import logging
 import queue
 import threading
@@ -42,6 +43,51 @@ import numpy as np
 from momento.core.media_probe import MOMENTO_GAME_TAG
 
 logger = logging.getLogger(__name__)
+
+
+class OutputWriteError(RuntimeError):
+    """The recording destination stopped accepting encoded data."""
+
+
+_OUTPUT_ERRNOS = {
+    errno.EACCES,
+    errno.EIO,
+    errno.ENODEV,
+    errno.ENOSPC,
+    errno.EROFS,
+}
+if hasattr(errno, "EDQUOT"):
+    _OUTPUT_ERRNOS.add(errno.EDQUOT)
+_OUTPUT_WINERRORS = {19, 21, 39, 55, 112}
+
+
+def is_output_write_error(exc: BaseException) -> bool:
+    """Recognise full, removed, read-only, or inaccessible output volumes."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, OutputWriteError):
+            return True
+        if isinstance(current, OSError):
+            if current.errno in _OUTPUT_ERRNOS:
+                return True
+            if getattr(current, "winerror", None) in _OUTPUT_WINERRORS:
+                return True
+        text = str(current).lower()
+        if any(
+            marker in text
+            for marker in (
+                "no space left",
+                "disk full",
+                "not enough space",
+                "device is not ready",
+                "write protected",
+            )
+        ):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 # Bounded queue sizes — small enough to keep latency low, big enough to absorb
@@ -68,6 +114,9 @@ _AUDIO_STALL_TIMEOUT_S = 10.0
 _VIDEO_DROP_WINDOW_FRAMES = 300
 _VIDEO_DROP_WARN_RATE = 0.05
 _VIDEO_DROP_WARN_INTERVAL_S = 60.0
+# One malformed audio frame can be transient. A consecutive run means the
+# track has stopped encoding and must become a visible fatal recording error.
+_AUDIO_ERROR_FATAL_COUNT = 3
 
 
 @dataclass
@@ -257,12 +306,14 @@ class InProcessEncoder:
         self._fatal_component: str | None = None
         self._fatal_lock = threading.Lock()
         self.on_fatal_error: Callable[[Exception], None] | None = None
+        self.on_video_degraded: Callable[[float], None] | None = None
 
         # Stats
         self._stats = EncoderStats(output_path=self._path)
         self._t0_monotonic: float | None = None
         self._video_drop_window: deque[bool] = deque(maxlen=_VIDEO_DROP_WINDOW_FRAMES)
         self._last_video_drop_warning_at = 0.0
+        self._video_degradation_notified = False
         self._video_pts_lock = threading.Lock()
         self._last_video_pts: int | None = None
 
@@ -292,6 +343,7 @@ class InProcessEncoder:
         self._audio_pts_dropped = 0
         self._audio_mux_errors = 0
         self._audio_mux_error_logged = False
+        self._audio_consecutive_errors = 0
         # Wallclock of the last real chunk fed into each audio leg — drives the
         # stall watchdog (_check_audio_stall). Seeded to the start time in start().
         self._mic_last_data_wall = 0.0
@@ -693,6 +745,15 @@ class InProcessEncoder:
             self._video_codec_name,
             self._path,
         )
+        if self._video_degradation_notified:
+            return
+        self._video_degradation_notified = True
+        callback = self.on_video_degraded
+        if callback is not None:
+            try:
+                callback(rolling_rate)
+            except Exception:
+                logger.exception("Encoder video-degradation callback raised")
 
     def _inc_submitted(self, kind: str) -> None:
         if kind == "video":
@@ -778,7 +839,8 @@ class InProcessEncoder:
                     break
                 self._encode_one_video(item, stream)
         except Exception as e:
-            self._record_worker_failure(e, component="video")
+            component = "output" if is_output_write_error(e) else "video"
+            self._record_worker_failure(e, component=component)
             logger.exception("Video encoder worker crashed")
 
     def _encode_one_video(self, item: _VideoItem, stream) -> None:
@@ -802,7 +864,7 @@ class InProcessEncoder:
         for packet in stream.encode(frame):
             with self._lock:
                 if self._container is not None:
-                    self._container.mux(packet)
+                    self._mux_packet(packet)
         self._stats.video_frames_encoded += 1
 
     def _audio_worker(self) -> None:
@@ -848,7 +910,8 @@ class InProcessEncoder:
                     # are temporarily empty but not yet stopping.
                     time.sleep(0.005)
         except Exception as e:
-            self._record_worker_failure(e, component="audio")
+            component = "output" if is_output_write_error(e) else "audio"
+            self._record_worker_failure(e, component=component)
             logger.exception("Audio encoder worker crashed")
 
     def _drain_audio_sink(self, stream) -> None:
@@ -869,9 +932,7 @@ class InProcessEncoder:
                 # Defensive: an unexpected libav error from the sink must not
                 # take down the whole worker. Stop draining this round; the next
                 # iteration retries once more input has been pushed.
-                if not self._audio_mux_error_logged:
-                    logger.warning("Audio sink pull error (skipping): %s", e)
-                    self._audio_mux_error_logged = True
+                self._note_audio_processing_error(e, stage="filter pull")
                 break
             self._encode_and_mux_audio(out_frame, stream)
 
@@ -893,15 +954,39 @@ class InProcessEncoder:
             for packet in stream.encode(out_frame):
                 with self._lock:
                     if self._container is not None:
-                        self._container.mux(packet)
+                        self._mux_packet(packet)
+            self._audio_consecutive_errors = 0
         except av.error.FFmpegError as e:
-            self._audio_mux_errors += 1
-            if not self._audio_mux_error_logged:
-                logger.warning(
-                    "Audio encode/mux error (skipping packet; further "
-                    "occurrences silenced): %s", e,
-                )
-                self._audio_mux_error_logged = True
+            if is_output_write_error(e):
+                raise OutputWriteError(f"Could not write recording data: {e}") from e
+            self._note_audio_processing_error(e, stage="encode/mux")
+
+    def _note_audio_processing_error(self, error: Exception, *, stage: str) -> None:
+        self._audio_mux_errors += 1
+        self._audio_consecutive_errors += 1
+        if not self._audio_mux_error_logged:
+            logger.warning(
+                "Audio %s error (isolated frames are skipped): %s",
+                stage,
+                error,
+            )
+            self._audio_mux_error_logged = True
+        if self._audio_consecutive_errors >= _AUDIO_ERROR_FATAL_COUNT:
+            raise RuntimeError(
+                f"Audio {stage} failed {_AUDIO_ERROR_FATAL_COUNT} consecutive times"
+            ) from error
+
+    def _mux_packet(self, packet) -> None:
+        """Mux one packet and preserve output-device failures as their own class."""
+        assert self._container is not None
+        try:
+            self._container.mux(packet)
+        except Exception as exc:
+            if is_output_write_error(exc):
+                raise OutputWriteError(
+                    f"Could not write recording data to {self._path}: {exc}"
+                ) from exc
+            raise
 
     def _check_audio_stall(self) -> None:
         """EOF an audio leg that's stopped delivering while the other flows.

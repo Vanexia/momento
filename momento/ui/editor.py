@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import subprocess
 import threading
 from pathlib import Path
@@ -54,6 +55,13 @@ from momento.core.media_probe import (
     repair_async,
 )
 from momento.core.recording_files import is_repair_temp
+from momento.core.recording_safety import (
+    begin_file_activity,
+    has_valid_ownership_marker,
+    is_file_active,
+    mark_recording_owned,
+    ownership_sidecar_path,
+)
 from momento.util.time_format import fmt_time
 from momento.core.thumbnails import extract_async, thumb_is_fresh, thumb_path_for
 from momento.trim.ffmpeg_trim import TrimWorker, next_clip_path
@@ -129,6 +137,7 @@ class EditorWindow(QMainWindow):
     # Emitted when the embedded settings panel saves — tray listens to apply
     # to SessionManager + hotkey + autostart.
     settings_saved = pyqtSignal(object)  # Config
+    check_updates_requested = pyqtSignal()
 
     def __init__(
         self,
@@ -689,6 +698,14 @@ class EditorWindow(QMainWindow):
         open is instant rather than paying the ~0.7s build on click."""
         self._ensure_settings_panel()
 
+    def has_update_blocking_activity(self) -> bool:
+        """Return whether editor-owned background work must finish first."""
+        trim_thread = getattr(self, "_trim_thread", None)
+        return bool(
+            (trim_thread is not None and trim_thread.isRunning())
+            or self._youtube_auth_bridge is not None
+        )
+
     def _ensure_settings_panel(self) -> SettingsPanel:
         """Lazy-construct the (heavy) settings panel and wire it once."""
         if self._settings_panel is None:
@@ -752,6 +769,11 @@ class EditorWindow(QMainWindow):
         close_action.setShortcut("Ctrl+W")
         close_action.triggered.connect(self.close)
         file_menu.addAction(close_action)
+
+        help_menu: QMenu = menubar.addMenu("&Help")
+        update_action = QAction("Check for &updates...", self)
+        update_action.triggered.connect(self.check_updates_requested.emit)
+        help_menu.addAction(update_action)
 
     def _run_setup_tutorial(self) -> None:
         """Re-open the first-time setup wizard with the current config.
@@ -1137,6 +1159,7 @@ class EditorWindow(QMainWindow):
         self._trim_worker: TrimWorker | None = None
         self._trimming_paths: set[str] = set()
         self._trim_input_key: str | None = None
+        self._trim_activity = None
         self._app_quitting = False
 
         splitter.setStretchFactor(0, 1)
@@ -1547,12 +1570,22 @@ class EditorWindow(QMainWindow):
         self._trim_worker = worker
         self._trim_input_key = self._file_key(input_path)
         self._trimming_paths.add(self._trim_input_key)
+        self._trim_activity = begin_file_activity(input_path, output)
         self._export_btn.setEnabled(False)
         self._export_progress.setVisible(True)
         self._export_progress.setValue(0)
         self._export_progress.setFormat("Exporting… 0%")
         self._status.setText(f"Exporting {output.name}…")
-        thread.start()
+        try:
+            thread.start()
+        except Exception:
+            self._trim_activity.release()
+            self._trim_activity = None
+            self._trimming_paths.discard(self._trim_input_key)
+            self._trim_input_key = None
+            self._trim_thread = None
+            self._trim_worker = None
+            raise
 
     def _on_play_requested(self, path: Path) -> None:
         """Right-click → Play. Select the row, seek to 0, start playback."""
@@ -1703,6 +1736,8 @@ class EditorWindow(QMainWindow):
         self._export_progress.setValue(100)
         self._export_progress.setFormat("Done")
         name = Path(output_path).name
+        if not mark_recording_owned(output_path):
+            logger.warning("Could not mark exported clip as Momento-owned: %s", output_path)
         self._status.setText(f"Exported {name}")
         # Pull the new clip into the list immediately — preserving the
         # selection so the recording the user is trimming (and their handle
@@ -1718,6 +1753,10 @@ class EditorWindow(QMainWindow):
         QMessageBox.warning(self, "Momento", f"Export failed:\n{message}")
 
     def _on_trim_thread_finished(self) -> None:
+        activity = getattr(self, "_trim_activity", None)
+        if activity is not None:
+            activity.release()
+        self._trim_activity = None
         if self._trim_input_key is not None:
             self._trimming_paths.discard(self._trim_input_key)
         self._trim_input_key = None
@@ -1777,6 +1816,8 @@ class EditorWindow(QMainWindow):
             self._duration_cache[path_str] = duration
         prior = self._game_slug_cache.get(path_str)
         self._game_slug_cache[path_str] = slug
+        if slug and not mark_recording_owned(path_str):
+            logger.warning("Could not mark recording as Momento-owned: %s", path_str)
         # Push the resolved game name onto the card so the secondary line lights
         # up once the embedded MOMENTO_GAME tag is read (renamed files survive).
         if slug:
@@ -1894,7 +1935,12 @@ class EditorWindow(QMainWindow):
             self._game_slug_cache.pop(str(p), None)
             self._duration_cache.pop(str(p), None)
             self._duration_hint_cache.pop(str(p), None)
-            for target in (p, thumb_path_for(p), bookmark_sidecar(p)):
+            for target in (
+                p,
+                thumb_path_for(p),
+                bookmark_sidecar(p),
+                ownership_sidecar_path(p),
+            ):
                 try:
                     Path(target).unlink(missing_ok=True)
                 except OSError as e:
@@ -1995,6 +2041,9 @@ class EditorWindow(QMainWindow):
         old_bm = bookmark_sidecar(path)
         if old_bm.exists():
             moves.append((old_bm, bookmark_sidecar(new_path)))
+        old_owner = ownership_sidecar_path(path)
+        if old_owner.exists():
+            moves.append((old_owner, ownership_sidecar_path(new_path)))
 
         try:
             for src, dst in moves:
@@ -2016,11 +2065,10 @@ class EditorWindow(QMainWindow):
         cached_hint = self._duration_hint_cache.pop(str(path), None)
         if cached_hint is not None:
             self._duration_hint_cache[str(new_path)] = cached_hint
-        self.refresh()
         if was_loaded:
-            # Re-select the renamed file so the user doesn't lose context.
-            self._current_selection = new_path
-            self.preview.load(new_path)
+            self._refresh_and_reselect(new_path)
+        else:
+            self.refresh()
         self._status.setText(f"Renamed to {new_path.name}")
 
     def _on_repair_requested(self, path: Path) -> None:
@@ -2110,6 +2158,9 @@ class EditorWindow(QMainWindow):
         _on_tick()
 
         self._repair_target = path
+        self._repair_was_owned = has_valid_ownership_marker(path) or bool(
+            self._game_slug_cache.get(str(path))
+        )
         self._repair_progress = progress
         self._repair_tick = tick
         self._status.setText(f"Repairing {path.name}…")
@@ -2120,6 +2171,7 @@ class EditorWindow(QMainWindow):
             progress.close()
             progress.deleteLater()
             self._repair_target = None
+            self._repair_was_owned = False
             self._repair_progress = None
             self._repair_tick = None
             self._status.setText(f"{path.name} is already being repaired…")
@@ -2129,6 +2181,8 @@ class EditorWindow(QMainWindow):
     def _on_repair_done(self, path_str: str, ok: bool, err: str) -> None:
         target = getattr(self, "_repair_target", None)
         self._repair_target = None
+        was_owned = bool(getattr(self, "_repair_was_owned", False))
+        self._repair_was_owned = False
         # Tear down the progress dialog before anything else — leaves the
         # event loop in a clean state for the warning dialog below.
         tick = getattr(self, "_repair_tick", None)
@@ -2157,9 +2211,14 @@ class EditorWindow(QMainWindow):
             box.setDetailedText(err or "No details.")
             box.setStandardButtons(QMessageBox.StandardButton.Ok)
             box.exec()
+            if target is not None:
+                self._list.select_by_path(target, emit=False)
+                self.selected_changed.emit(target)
             self._restore_splitter_after_repair()
             return
         self._status.setText(f"Repaired {p.name}.")
+        if was_owned and not mark_recording_owned(p):
+            logger.warning("Could not refresh ownership marker after repair: %s", p)
         # Invalidate the repaired file's cached metadata BEFORE refresh(). It was
         # probed in its broken state (slug="", no duration written), and
         # _kick_metadata_probe short-circuits on any cached key — so without this
@@ -2173,12 +2232,20 @@ class EditorWindow(QMainWindow):
             self._duration_hint_cache.pop(cache_key, None)
             self._thumb_submitted.discard(cache_key)
         # Refresh so the new size + readable duration show up.
-        self.refresh()
-        # Re-select the repaired clip so the user picks up where they were.
         if target is not None:
-            self._current_selection = target
-            self.preview.load(target)
+            self._refresh_and_reselect(target)
+        else:
+            self.refresh()
         self._restore_splitter_after_repair()
+
+    def _refresh_and_reselect(self, path: Path) -> None:
+        """Rebuild after mutation while keeping row, preview, and timeline aligned."""
+        self._current_selection = path
+        self.refresh(preserve_selection=True)
+        # A filter may hide the target and make refresh select another row.
+        # Reload only when the target is still the visibly selected item.
+        if self._current_selection == path:
+            self.selected_changed.emit(path)
 
     def _restore_splitter_after_repair(self) -> None:
         sizes = getattr(self, "_repair_splitter_sizes", None)
@@ -2197,6 +2264,7 @@ class EditorWindow(QMainWindow):
         return (
             EditorWindow._file_key(path) in getattr(self, "_trimming_paths", set())
             or is_repairing(path)
+            or is_file_active(path)
         )
 
     def _cancel_active_trim_for_quit(self) -> None:
@@ -2353,19 +2421,21 @@ class EditorWindow(QMainWindow):
                 self._settings_panel._stop_mic_test()
             except Exception:
                 pass
+        # Every close path must silence playback, including the optional mode
+        # that closes this window object while the tray application stays up.
+        self._park_preview_for_tray()
+        QTimer.singleShot(10_000, self._release_preview_if_parked)
         # ``close_to_tray`` (default on) hides the editor instead of closing
         # it; the tray icon stays the user's entry point. Quit from the tray
         # menu when they really want to exit.
         if getattr(self._config, "close_to_tray", True):
             event.ignore()
-            self._park_preview_for_tray()
             self.hide()
             # Release the preview's video decoder a short while after parking in
             # the tray. Delayed (not immediate) so a quick close-then-reopen
             # stays instant — the editor stays built either way; this only frees
             # a multi-hour clip's WMF buffers once the window is genuinely left
             # parked. A reopen cancels it implicitly via the isVisible() check.
-            QTimer.singleShot(10_000, self._release_preview_if_parked)
             # Re-arm the anti-flash guard so the next show starts transparent
             # and only reveals once it has repainted.
             self.setWindowOpacity(0.0)
@@ -2387,9 +2457,7 @@ class EditorWindow(QMainWindow):
 
 
 # ------------------------------------------------------------- helpers
-import re as _re
-
-_INVALID_FS_CHARS = _re.compile(r'[<>:"/\\|?*\x00-\x1f]')
+_INVALID_FS_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
 
 def _resolve_output_path(folder: Path, user_name: str) -> Path:
