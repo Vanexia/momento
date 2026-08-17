@@ -15,6 +15,7 @@ build/*
 !build/pyinstaller.spec
 !build/installer.iss
 !build/corresponding_sources.json
+!build/pyav_runtime.json
 dist/
 
 # PyInstaller

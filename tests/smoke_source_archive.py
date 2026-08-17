@@ -18,6 +18,14 @@ RUNTIME_NAMES = {
 }
 RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json")
 PRIVATE_ROOTS = {".agents", ".claude"}
+REQUIRED_RELEASE_FILES = {
+    "Momento-0.2.2-source.zip": {
+        "build/pyav_runtime.json",
+        "scripts/build_pyav_runtime.ps1",
+        "scripts/build_pyav_runtime.sh",
+        "scripts/verify_pyav_runtime.py",
+    },
+}
 
 
 def main() -> int:
@@ -27,6 +35,10 @@ def main() -> int:
     archive = Path(sys.argv[1])
     failures: list[str] = []
     with zipfile.ZipFile(archive) as source:
+        members = {info.filename for info in source.infolist() if not info.is_dir()}
+        for required in REQUIRED_RELEASE_FILES.get(archive.name, set()):
+            if required not in members:
+                failures.append(f"missing release source: {required}")
         for info in source.infolist():
             if info.is_dir():
                 continue

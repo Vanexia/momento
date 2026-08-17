@@ -1,0 +1,226 @@
+{
+  "schema_version": 1,
+  "runtime": {
+    "pyav_version": "17.0.1",
+    "ffmpeg_version": "8.0.1",
+    "python_abi": "cp311-abi3",
+    "platform": "win_amd64",
+    "library_versions": {
+      "libavcodec": [62, 11, 100],
+      "libavdevice": [62, 1, 100],
+      "libavfilter": [11, 4, 100],
+      "libavformat": [62, 3, 100],
+      "libavutil": [60, 8, 100],
+      "libswresample": [6, 1, 100],
+      "libswscale": [9, 1, 100]
+    }
+  },
+  "sources": [
+    {
+      "name": "PyAV",
+      "version": "17.0.1",
+      "filename": "av-17.0.1.tar.gz",
+      "sha256": "fbcbd4aa43bca6a8691816283112d1659a27f407bbeb66d1397023691339f5d4",
+      "url": "https://files.pythonhosted.org/packages/4e/f0/8c8dca97ae0cf00e8e2a53bb5cb9aca5fd484f585ef3e9b412200aff3ebd/av-17.0.1.tar.gz"
+    },
+    {
+      "name": "FFmpeg",
+      "version": "8.0.1",
+      "filename": "ffmpeg-8.0.1.tar.xz",
+      "sha256": "05ee0b03119b45c0bdb4df654b96802e909e0a752f72e4fe3794f487229e5a41",
+      "url": "https://ffmpeg.org/releases/ffmpeg-8.0.1.tar.xz"
+    },
+    {
+      "name": "x264",
+      "version": "b35605ace3ddf7c1a5d67a2eb553f034aef41d55",
+      "filename": "x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2",
+      "sha256": "6eeb82934e69fd51e043bd8c5b0d152839638d1ce7aa4eea65a3fedcf83ff224",
+      "url": "https://code.videolan.org/videolan/x264/-/archive/b35605ace3ddf7c1a5d67a2eb553f034aef41d55/x264-b35605ace3ddf7c1a5d67a2eb553f034aef41d55.tar.bz2"
+    },
+    {
+      "name": "NVIDIA codec headers",
+      "version": "13.0.19.0",
+      "filename": "nv-codec-headers-13.0.19.0.tar.gz",
+      "sha256": "86d15d1a7c0ac73a0eafdfc57bebfeba7da8264595bf531cf4d8db1c22940116",
+      "url": "https://github.com/FFmpeg/nv-codec-headers/archive/refs/tags/n13.0.19.0.tar.gz"
+    },
+    {
+      "name": "AMD AMF headers",
+      "version": "1.5.0",
+      "filename": "AMF-headers-v1.5.0.tar.gz",
+      "sha256": "d569647fa26f289affe81a206259fa92f819d06db1e80cc334559953e82a3f01",
+      "url": "https://github.com/GPUOpen-LibrariesAndSDKs/AMF/releases/download/v1.5.0/AMF-headers-v1.5.0.tar.gz"
+    },
+    {
+      "name": "Intel oneVPL",
+      "version": "2.16.0",
+      "filename": "libvpl-2.16.0.tar.gz",
+      "sha256": "d60931937426130ddad9f1975c010543f0da99e67edb1c6070656b7947f633b6",
+      "url": "https://github.com/intel/libvpl/archive/refs/tags/v2.16.0.tar.gz"
+    }
+  ],
+  "toolchain": {
+    "msystem": "UCRT64",
+    "gcc": "16.2.0",
+    "make": "4.4.1",
+    "nasm": "3.02",
+    "pkgconf": "3.0.5",
+    "cmake": "4.4.2",
+    "ninja": "1.13.2",
+    "source_date_epoch": 1767139200
+  },
+  "python_build_packages": [
+    {
+      "name": "Cython",
+      "version": "3.2.9",
+      "filename": "cython-3.2.9-cp312-cp312-win_amd64.whl",
+      "sha256": "4b1fd5a9c03f72a18618668a8e90d569442ed742f910e3ad003dcc9348e9598b",
+      "url": "https://files.pythonhosted.org/packages/0b/b5/4ce33235a25b19fcd51dc639f0f403b783a3b7f9b1934eade0d993fbe029/cython-3.2.9-cp312-cp312-win_amd64.whl"
+    },
+    {
+      "name": "setuptools",
+      "version": "84.0.0",
+      "filename": "setuptools-84.0.0-py3-none-any.whl",
+      "sha256": "51a52592b3b99e102b609654876bd65f19f999935166d1352678931132b0c670",
+      "url": "https://files.pythonhosted.org/packages/95/9c/c510029fc6ef33a6275cd2c5d3cecd6613dfd6aa401d57c54f1c18852ccf/setuptools-84.0.0-py3-none-any.whl"
+    },
+    {
+      "name": "wheel",
+      "version": "0.48.0",
+      "filename": "wheel-0.48.0-py3-none-any.whl",
+      "sha256": "3217dcc807155e45db462d7ef2431f5ddda0d7273b700d05a67b271ceb1287ab",
+      "url": "https://files.pythonhosted.org/packages/2e/29/69cfbb602cd91690c55d38ba9fe53e6a7e76a6fa647bf38f19c138d25449/wheel-0.48.0-py3-none-any.whl"
+    },
+    {
+      "name": "delvewheel",
+      "version": "1.13.0",
+      "filename": "delvewheel-1.13.0-py3-none-any.whl",
+      "sha256": "eb8c34dee5d8816516befde73bf5cf9ea6142955f41d3baf25381c0136b28608",
+      "url": "https://files.pythonhosted.org/packages/13/f9/8163f9145012263743dee49333f3a39bf214b83dac0ede7b06bb9ff7287c/delvewheel-1.13.0-py3-none-any.whl"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "filename": "packaging-26.3-py3-none-any.whl",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+      "url": "https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl"
+    },
+    {
+      "name": "pefile",
+      "version": "2024.8.26",
+      "filename": "pefile-2024.8.26-py3-none-any.whl",
+      "sha256": "76f8b485dcd3b1bb8166f1128d395fa3d87af26360c2358fb75b80019b957c6f",
+      "url": "https://files.pythonhosted.org/packages/54/16/12b82f791c7f50ddec566873d5bdd245baa1491bac11d15ffb98aecc8f8b/pefile-2024.8.26-py3-none-any.whl"
+    }
+  ],
+  "ffmpeg_configure": [
+    "--disable-autodetect",
+    "--disable-debug",
+    "--disable-doc",
+    "--disable-everything",
+    "--disable-network",
+    "--disable-programs",
+    "--disable-static",
+    "--disable-bzlib",
+    "--disable-iconv",
+    "--disable-lzma",
+    "--disable-zlib",
+    "--enable-amf",
+    "--enable-avcodec",
+    "--enable-avdevice",
+    "--enable-avfilter",
+    "--enable-avformat",
+    "--enable-avutil",
+    "--enable-decoder=aac,h264",
+    "--enable-demuxer=matroska,mov",
+    "--enable-d3d11va",
+    "--enable-dxva2",
+    "--enable-encoder=aac,h264_amf,h264_mf,h264_nvenc,h264_qsv,libx264",
+    "--enable-ffnvcodec",
+    "--enable-filter=abuffer,abuffersink,aformat,amix,aresample,buffer,buffersink,format,scale,volume",
+    "--enable-gpl",
+    "--enable-libvpl",
+    "--enable-libx264",
+    "--enable-mediafoundation",
+    "--enable-muxer=matroska,mp4",
+    "--enable-nvenc",
+    "--enable-parser=aac,h264",
+    "--enable-protocol=file",
+    "--enable-shared",
+    "--enable-swresample",
+    "--enable-swscale",
+    "--enable-version3"
+  ],
+  "capabilities": {
+    "decoders": ["aac", "h264"],
+    "encoders": ["aac", "h264_amf", "h264_mf", "h264_nvenc", "h264_qsv", "libx264"],
+    "formats": ["matroska", "mov", "mp4"],
+    "filters": ["abuffer", "abuffersink", "aformat", "amix", "aresample", "buffer", "buffersink", "format", "scale", "volume"],
+    "encoder_options": {
+      "h264_amf": ["quality", "qp_b", "qp_i", "qp_p", "rc", "usage"],
+      "h264_mf": ["hw_encoding", "quality", "rate_control"],
+      "h264_nvenc": ["cq", "preset", "rc", "spatial-aq", "temporal-aq", "tune"],
+      "h264_qsv": ["look_ahead", "preset"],
+      "libx264": ["crf", "preset", "tune"]
+    }
+  },
+  "native_runtime": {
+    "required_dlls": [
+      "avcodec-62.dll",
+      "avdevice-62.dll",
+      "avfilter-11.dll",
+      "avformat-62.dll",
+      "avutil-60.dll",
+      "libvpl.dll",
+      "libx264-165.dll",
+      "swresample-6.dll",
+      "swscale-9.dll"
+    ],
+    "allowed_dlls": [
+      "avcodec-62.dll",
+      "avdevice-62.dll",
+      "avfilter-11.dll",
+      "avformat-62.dll",
+      "avutil-60.dll",
+      "libgcc_s_seh-1.dll",
+      "libstdc++-6.dll",
+      "libvpl.dll",
+      "libwinpthread-1.dll",
+      "libx264-165.dll",
+      "swresample-6.dll",
+      "swscale-9.dll"
+    ],
+    "required_license_files": [
+      "FFmpeg-COPYING.GPLv3.txt",
+      "GCC-COPYING.LIB.txt",
+      "GCC-COPYING.RUNTIME.txt",
+      "oneVPL-LICENSE.txt",
+      "winpthreads-COPYING.txt",
+      "x264-COPYING.txt"
+    ],
+    "forbidden_tokens": [
+      "dav1d",
+      "iconv",
+      "mp3lame",
+      "ogg",
+      "opencore-amrnb",
+      "opencore-amrwb",
+      "openh264",
+      "opus",
+      "sharpyuv",
+      "speex",
+      "svtav1enc",
+      "vorbisenc",
+      "vorbis",
+      "vpx",
+      "webpmux",
+      "webp",
+      "x265",
+      "zlib"
+    ]
+  },
+  "artifact": {
+    "filename": "av-17.0.1-cp311-abi3-win_amd64.whl",
+    "sha256": "fd605ec4ab782c3829bfb4f11c512d7db3bc230d0f889a28f29aab0fb793bf3b"
+  }
+}
