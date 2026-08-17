@@ -4,7 +4,7 @@ This document identifies the source and build records corresponding to the Momen
 
 ## Momento
 
-- Public source snapshot: `d92c0dd418199a9b3e06ebc546b7b21b6264081d`
+- Public source snapshot: `77d914802549ce7d3ba7f4317fef56c3cd05f6a8`
 - Licence: GPL-3.0-only
 - Corresponding archive: `Momento-0.2.1-source.zip`
 - Pinned Python environment: `constraints-release.txt` in the archive
