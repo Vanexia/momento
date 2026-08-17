@@ -25,7 +25,7 @@ Product boundaries:
 
 ## Current Release
 
-- Version: `0.2.2`.
+- Version: `0.2.3`.
 - License: GPL-3.0-only. The installer includes the GPL text, build information,
   third-party notices/licenses, and an exact source offer. Matching Momento and
   third-party source archives are separate assets on the same GitHub release.
@@ -33,8 +33,10 @@ Product boundaries:
   `MOMENTO_INCLUDE_YOUTUBE_OAUTH=1` is explicitly set for an approved OAuth
   identity. The unavailable YouTube UI is hidden.
 - Public installer: per-user Inno Setup package under
-  `dist/installer/MomentoSetup-0.2.2.exe`.
-- Version 0.2.2 hardens disk/output failures, capture recovery, stalled audio,
+  `dist/installer/MomentoSetup-0.2.3.exe`.
+- Version 0.2.3 precisely centres update-result dialogs and repairs the Windows
+  CI dependency-install step. Version 0.2.2 hardened disk/output failures,
+  capture recovery, stalled audio,
   sustained frame-loss reporting, storage ownership, trim/repair locking,
   settings accessibility, signed updates, privacy scans, and reproducible
   release packaging.

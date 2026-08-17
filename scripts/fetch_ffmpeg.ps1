@@ -9,7 +9,7 @@ $Version = '8.1.2'
 $HelperRevision = '1'
 $ArchiveName = "Momento-ffmpeg-helper-$Version-$HelperRevision.zip"
 $ExpectedSha256 = 'BB8E4FC7A4E8E3BB5EA4F509BFA49E01BAD1932F8CD1E4399D145D90C080F0B5'
-$DownloadUrl = "https://github.com/Vanexia/momento/releases/download/v0.2.2/$ArchiveName"
+$DownloadUrl = "https://github.com/Vanexia/momento/releases/download/v0.2.3/$ArchiveName"
 
 $ProjectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot 'momento\__main__.py'))) {

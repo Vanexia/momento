@@ -1,4 +1,4 @@
-# Momento 0.2.2 Windows x64 / CPython 3.12 release wheels.
+# Momento 0.2.3 Windows x64 / CPython 3.12 release wheels.
 # The release builder uses --require-hashes and --only-binary=:all:.
 altgraph==0.17.5 --hash=sha256:f3a22400bce1b0c701683820ac4f3b159cd301acab067c51c653e06961600597
 av==17.0.1 --hash=sha256:9af524e8632a54032e361d6b88895bd3e7c6212ca560de60f5ccc525323c764c

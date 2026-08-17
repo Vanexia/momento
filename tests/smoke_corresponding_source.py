@@ -35,7 +35,7 @@ def main(archive_path: Path | None = None) -> int:
     sources = data["sources"]
     failures: list[str] = []
 
-    if data.get("schema_version") != 1 or data.get("release") != "0.2.2":
+    if data.get("schema_version") != 1 or data.get("release") != "0.2.3":
         failures.append("manifest schema or release is not current")
     filenames = [entry["filename"] for entry in sources]
     if len(filenames) != len(set(filenames)):

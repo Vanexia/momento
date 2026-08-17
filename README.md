@@ -25,7 +25,7 @@
 
 ## Download
 
-Download **[MomentoSetup-0.2.2.exe](https://github.com/Vanexia/momento/releases/download/v0.2.2/MomentoSetup-0.2.2.exe)** from the latest release.
+Download **[MomentoSetup-0.2.3.exe](https://github.com/Vanexia/momento/releases/download/v0.2.3/MomentoSetup-0.2.3.exe)** from the latest release.
 
 The installer includes everything Momento needs. Python and administrator access are not required.
 
