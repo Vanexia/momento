@@ -1,4 +1,4 @@
-Momento 0.2.3 public release build
+Momento 0.2.4 public release build
 =================================
 
 Target: Windows 10/11 x64
@@ -88,8 +88,8 @@ Corresponding source
 
 The GitHub release publishes both:
 
-  Momento-0.2.3-source.zip
-  Momento-0.2.3-third-party-source.zip
+  Momento-0.2.4-source.zip
+  Momento-0.2.4-third-party-source.zip
 
 The installed SOURCE_OFFER.txt points to the exact release page and source
 assets. Keeping the third-party archive as a separate release asset avoids

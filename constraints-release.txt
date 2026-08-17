@@ -1,4 +1,4 @@
-# Momento 0.2.3 release environment: Windows x64, CPython 3.12.
+# Momento 0.2.4 release environment: Windows x64, CPython 3.12.
 # Regenerate deliberately after dependency review; do not hand-edit around
 # resolver conflicts. Development-only lint/audit tools are not pinned here.
 altgraph==0.17.5

@@ -19,7 +19,7 @@ RUNTIME_NAMES = {
 RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json")
 PRIVATE_ROOTS = {".agents", ".claude"}
 REQUIRED_RELEASE_FILES = {
-    "Momento-0.2.3-source.zip": {
+    "Momento-0.2.4-source.zip": {
         "build/pyav_runtime.json",
         "scripts/build_pyav_runtime.ps1",
         "scripts/build_pyav_runtime.sh",

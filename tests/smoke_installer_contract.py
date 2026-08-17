@@ -13,7 +13,7 @@ from momento import __version__  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.3"
+EXPECTED_VERSION = "0.2.4"
 
 checks = 0
 failures = 0
@@ -249,7 +249,7 @@ def main() -> int:
     check(
         "compliance: notices identify the complete native source bundle",
         "PyAV 17.0.1" in notices
-        and "Momento-0.2.3-third-party-source.zip" in notices,
+        and "Momento-0.2.4-third-party-source.zip" in notices,
     )
     check(
         "builder: creates and verifies third-party corresponding source",
@@ -278,7 +278,7 @@ def main() -> int:
     )
     check(
         "builder: emits one checksum list for all release assets",
-        "SHA256SUMS-0.2.3.txt" in builder
+        "SHA256SUMS-0.2.4.txt" in builder
         and all(
             term in builder
             for term in (
