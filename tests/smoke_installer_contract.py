@@ -13,7 +13,7 @@ from momento import __version__  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.5"
+EXPECTED_VERSION = "0.2.6"
 
 checks = 0
 failures = 0
@@ -203,6 +203,10 @@ def main() -> int:
     )
     check("builder: invokes PyInstaller source recipe", "pyinstaller.spec" in builder.casefold())
     check(
+        "builder: gates release on fullscreen false-positive regressions",
+        "smoke_fullscreen_blocklist.py" in builder,
+    )
+    check(
         "bundle: carries Google upload runtime without an OAuth identity",
         "MOMENTO_INCLUDE_YOUTUBE_OAUTH" not in spec
         and "client_secrets.json" not in spec
@@ -282,7 +286,7 @@ def main() -> int:
     check(
         "compliance: notices identify the complete native source bundle",
         "PyAV 17.0.1" in notices
-        and "Momento-0.2.5-third-party-source.zip" in notices,
+        and f"Momento-{EXPECTED_VERSION}-third-party-source.zip" in notices,
     )
     check(
         "builder: creates and verifies third-party corresponding source",
@@ -311,7 +315,7 @@ def main() -> int:
     )
     check(
         "builder: emits one checksum list for all release assets",
-        "SHA256SUMS-0.2.5.txt" in builder
+        f"SHA256SUMS-{EXPECTED_VERSION}.txt" in builder
         and all(
             term in builder
             for term in (

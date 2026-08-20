@@ -26,6 +26,12 @@ REQUIRED_RELEASE_FILES = {
         "scripts/build_pyav_runtime.sh",
         "scripts/verify_pyav_runtime.py",
     },
+    "Momento-0.2.6-source.zip": {
+        "build/pyav_runtime.json",
+        "scripts/build_pyav_runtime.ps1",
+        "scripts/build_pyav_runtime.sh",
+        "scripts/verify_pyav_runtime.py",
+    },
 }
 
 

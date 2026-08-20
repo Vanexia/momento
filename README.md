@@ -25,19 +25,19 @@
 
 ## Download
 
-Download **[MomentoSetup-0.2.5.exe](https://github.com/Vanexia/momento/releases/download/v0.2.5/MomentoSetup-0.2.5.exe)** from the latest release.
+Download **[MomentoSetup-0.2.6.exe](https://github.com/Vanexia/momento/releases/download/v0.2.6/MomentoSetup-0.2.6.exe)** from the latest release.
 
 The installer includes everything Momento needs. Python and administrator access are not required.
 
 > [!IMPORTANT]
 > Momento's installer is not code-signed yet. Windows may show **Unknown Publisher** or a SmartScreen warning. Confirm that the download came from this repository, select **More info**, then **Run anyway**. The release includes a SHA-256 checksum for integrity checking.
 
-Download `SHA256SUMS-0.2.5.txt` from the same release and compare the listed
+Download `SHA256SUMS-0.2.6.txt` from the same release and compare the listed
 installer hash before running it:
 
 ```powershell
-Get-FileHash .\MomentoSetup-0.2.5.exe -Algorithm SHA256
-Get-Content .\SHA256SUMS-0.2.5.txt
+Get-FileHash .\MomentoSetup-0.2.6.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS-0.2.6.txt
 ```
 
 The two SHA-256 values must match. A checksum detects a damaged or replaced

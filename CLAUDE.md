@@ -1,6 +1,6 @@
 # Momento Current Handoff
 
-Last updated: 2026-08-17
+Last updated: 2026-08-20
 
 Codex is the main project driver. This is the canonical repository handoff.
 Trust source and executable checks over prose if they ever disagree.
@@ -25,7 +25,7 @@ Product boundaries:
 
 ## Current Release
 
-- Version: `0.2.5` release candidate.
+- Version: `0.2.6` release candidate.
 - License: GPL-3.0-only. The installer includes the GPL text, build information,
   third-party notices/licenses, and an exact source offer. Matching Momento and
   third-party source archives are separate assets on the same GitHub release.
@@ -34,8 +34,10 @@ Product boundaries:
   project. The build rejects the old `MOMENTO_INCLUDE_YOUTUBE_OAUTH` profile
   and never bundles `resources/youtube/client_secrets.json`.
 - Public installer: per-user Inno Setup package under
-  `dist/installer/MomentoSetup-0.2.5.exe`.
-- Version 0.2.5 adds user-owned Google OAuth setup, share-safe diagnostics,
+  `dist/installer/MomentoSetup-0.2.6.exe`.
+- Version 0.2.6 blocks Steam storefront trailers, embedded launcher browsers,
+  gaming overlays, and launcher-only executables from automatic detection.
+  Version 0.2.5 added user-owned Google OAuth setup, share-safe diagnostics,
   upload input bounds, and public-release hardening. Version 0.2.4 centres
   update-result dialogs, including native
   Windows frame offsets, and repairs the Windows
@@ -198,6 +200,31 @@ Product boundaries:
 - GitHub private vulnerability reporting is the security-reporting channel.
   Public issues must not contain OAuth files, tokens, unredacted logs, or other
   sensitive evidence.
+
+### Public GitHub privacy rules
+
+- Prevent exposure before the first public push. Use the approved GitHub
+  no-reply identity for commit and tag metadata, and keep personal paths,
+  account details, logs, credentials, OAuth clients, and local agent files out
+  of tracked content.
+- Audit the complete publication surface. Scan reachable Git objects,
+  commit/tag identities, source and release archives, screenshots and their
+  metadata, release notes, Actions records, deployment records, and Pages
+  content before sharing the repository.
+- Run `tests/smoke_git_history_privacy.py` from a fresh anonymous clone. A
+  passing working-tree grep does not prove that history, tags, pull-request
+  refs, or hosted metadata are clean.
+- Treat an ignored local file as private runtime state. Exclude it from build
+  inputs. Packaging must fail closed if it encounters an OAuth identity, token,
+  private signing key, user-profile path, or developer-only workspace material.
+- GitHub can retain managed pull-request refs, cached object views, workflow
+  metadata, and deployment history after a branch/tag rewrite. Remove all
+  owner-controlled references, then ask GitHub Support to dereference affected
+  pull requests, clear caches, and run server-side garbage collection.
+- After a history rewrite, discard or quarantine old clones. Re-clone the clean
+  graph. A merge or push from a stale clone can restore removed objects.
+- Rotate an exposed credential before historical cleanup. Deleting Git objects
+  leaves the secret usable by anyone who copied it during the exposure.
 
 ## Runtime Data
 

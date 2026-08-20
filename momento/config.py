@@ -27,10 +27,11 @@ def _dedupe_casefolded(values) -> list[str]:
 
 
 # Curated default list. ~350 popular PC games circa 2010-2026 across all the
-# major genres. Coverage is intentionally generous — false positives are
-# harmless (recording a launcher splash you didn't want = manual delete),
-# whereas a missed game means lost gameplay. Users still add their own in
-# Settings and can flip "record any fullscreen" for a catch-all.
+# major genres. Coverage is intentionally generous, but launcher, login,
+# patcher, lobby, and anti-cheat bootstrap processes do not belong here: a
+# false positive can silently consume disk space and record private activity.
+# Users still add their own games in Settings and can enable the guarded
+# fullscreen fallback as a catch-all.
 #
 # Matched case-insensitively by executable basename.
 DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
@@ -43,16 +44,16 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "Mortal Shell.exe", "ashenexe.exe", "salt-and-sacrifice.exe",
     "blasphemous.exe", "blasphemous2.exe", "stray-blade.exe",
     # ------ MMO ------
-    "ffxiv_dx11.exe", "ffxiv.exe", "ffxiv_boot.exe", "ffxivlauncher.exe",
+    "ffxiv_dx11.exe", "ffxiv.exe",
     "Wow.exe", "WowClassic.exe",
     "GW2-64.exe", "Gw2.exe", "Gw2-64.exe", "Guild Wars 2.exe",
-    "ESO.exe", "eso64.exe", "EsoLauncher.exe",
-    "BlackDesert64.exe", "BlackDesertLauncher.exe", "Lost Ark.exe", "lostark.exe",
-    "RuneLite.exe", "JagexLauncher.exe", "OldSchool.exe", "osrs.exe",
+    "ESO.exe", "eso64.exe",
+    "BlackDesert64.exe", "Lost Ark.exe", "lostark.exe",
+    "RuneLite.exe", "OldSchool.exe", "osrs.exe",
     "newworld.exe", "TERA.exe", "EverQuest.exe", "RIFT.exe",
-    "Aion.exe", "AionLauncher.exe", "Star Citizen.exe", "StarCitizen.exe",
+    "Aion.exe", "Star Citizen.exe", "StarCitizen.exe",
     "Throne and Liberty.exe", "throne-and-liberty.exe",
-    "swkotor.exe", "swtor.exe", "DCUOLauncher.exe",
+    "swkotor.exe", "swtor.exe", "DCGAME.exe",
     "Final Fantasy XI.exe", "Project Gorgon.exe", "PathofExile.exe",
     "PathofExileSteam.exe", "PathofExile_x64Steam.exe", "PathofExile2.exe",
     "Lineage II.exe", "Mabinogi.exe", "Vindictus.exe",
@@ -68,10 +69,10 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     # ------ Shooters / battle royale / extraction / hero shooter ------
     "valorant.exe", "VALORANT-Win64-Shipping.exe", "VALORANT-Win64-Test.exe",
     "cs2.exe", "csgo.exe",
-    "FortniteClient-Win64-Shipping.exe", "FortniteLauncher.exe",
-    "r5apex.exe", "r5apex_dx12.exe", "EasyAntiCheat_launcher.exe",
+    "FortniteClient-Win64-Shipping.exe",
+    "r5apex.exe", "r5apex_dx12.exe",
     "PUBG.exe", "TslGame.exe", "PUBGLite.exe",
-    "DestinyLauncher.exe", "destiny2.exe",
+    "destiny2.exe",
     "Overwatch.exe",
     "RainbowSix.exe", "RainbowSix_Vulkan.exe", "RainbowSixSiege.exe",
     "ModernWarfare.exe", "ModernWarfare2.exe", "ModernWarfare3.exe",
@@ -81,7 +82,7 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "Battlefield 2042.exe", "BF2042.exe", "bf1.exe", "BF1.exe",
     "BattlefieldV.exe", "bfv.exe", "Battlefield4.exe", "bf4.exe",
     "Battlefield2.exe",
-    "MarvelRivals_Launcher.exe", "MarvelRivals.exe", "MarvelRivals-Win64-Shipping.exe",
+    "MarvelRivals.exe", "MarvelRivals-Win64-Shipping.exe",
     "thefinals.exe", "Discovery-Win64-Shipping.exe",
     "deltaforce.exe", "DeltaForce-Win64-Shipping.exe",
     "EscapeFromTarkov.exe", "EFT.exe", "EscapeFromTarkov_BE.exe",
@@ -103,10 +104,10 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "WarThunder.exe", "WoT.exe", "WoWs.exe", "WorldOfWarships.exe",
     "WorldOfTanks.exe",
     # ------ Survival / sandbox / crafting ------
-    "Minecraft.Windows.exe", "javaw.exe", "MinecraftLauncher.exe",
+    "Minecraft.Windows.exe", "javaw.exe",
     "VRChat.exe", "VRChat-Win64-Shipping.exe",
     "rust_client.exe", "RustClient.exe",
-    "DayZ_x64.exe", "DayZLauncher.exe",
+    "DayZ_x64.exe",
     "ARK.exe", "ShooterGame.exe", "ArkAscended.exe",
     "Palworld-Win64-Shipping.exe", "Palworld.exe",
     "valheim.exe", "Terraria.exe", "Stardew Valley.exe", "StardewValley.exe",
@@ -126,7 +127,7 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "Vintage Story.exe", "Vintagestory.exe",
     "no man's sky.exe", "NMS.exe", "NMSSE.exe",
     # ------ AAA action / open world ------
-    "GTA5.exe", "GTAV.exe", "GTAVLauncher.exe", "GTA6.exe",
+    "GTA5.exe", "GTAV.exe", "GTA6.exe",
     "RDR2.exe", "RDR.exe", "MaxPayne3.exe",
     "Cyberpunk2077.exe", "Witcher3.exe", "witcher.exe", "witcher2.exe",
     "BG3.exe", "bg3_dx11.exe", "DivinityOriginalSin2.exe", "DOS2.exe",
@@ -145,7 +146,7 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "MonsterHunterWilds.exe", "MHWilds.exe", "MHRise.exe", "MHWorld.exe",
     "DragonAge.exe", "DragonAgeInquisition.exe", "DragonAgeVeilguard.exe",
     "MassEffect.exe", "MassEffect2.exe", "MassEffect3.exe", "MELE.exe",
-    "MassEffectAndromeda.exe", "MEALauncher.exe",
+    "MassEffectAndromeda.exe",
     "DyingLight.exe", "DyingLightGame.exe", "DyingLightGame_x64_rwdi.exe",
     "DyingLight2.exe",
     "DeadSpace.exe", "Callisto.exe", "Callisto-Win64-Shipping.exe",
@@ -163,7 +164,7 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "Stalker2.exe", "Stalker2-Win64-Shipping.exe",
     # ------ Racing / sim / sports ------
     "F1_24.exe", "F1_23.exe", "F124.exe", "F123.exe", "F1_22.exe", "F1_25.exe",
-    "iRacingSim64DX12.exe", "iRacing.exe", "iRacingUI.exe",
+    "iRacingSim64DX12.exe", "iRacing.exe",
     "AC2-Win64-Shipping.exe", "AssettoCorsa.exe", "acs.exe",
     "rfactor2.exe", "rFactor2.exe",
     "FlightSimulator.exe", "MicrosoftFlightSimulator.exe",
@@ -310,7 +311,7 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     "L4D2.exe", "left4dead2.exe", "left4dead.exe",
     "tf_win64.exe", "tf2.exe",
     "GarrysMod.exe", "gmod.exe", "hl2_win64.exe",
-    "Diablo IV.exe", "Diablo IV Launcher.exe", "Diablo III.exe", "Diablo II.exe",
+    "Diablo IV.exe", "Diablo III.exe", "Diablo II.exe",
     "Diablo II Resurrected.exe", "D2R.exe",
     "PathofExile_x64.exe",
     "TheBindingOfIsaac.exe", "isaac-ng.exe",
@@ -440,6 +441,16 @@ class Config:
         "steam.exe", "epicgameslauncher.exe", "ealauncher.exe", "eadesktop.exe",
         "gog galaxy.exe", "ubisoftconnect.exe",
         "battle.net.exe", "battle.net launcher.exe",
+        # Login, patcher, lobby, and anti-cheat bootstrap windows that older
+        # curated defaults mistook for gameplay. Each has a separate real-game
+        # executable in DEFAULT_KNOWN_GAMES.
+        "ffxiv_boot.exe", "ffxivlauncher.exe", "esolauncher.exe",
+        "blackdesertlauncher.exe", "jagexlauncher.exe", "aionlauncher.exe",
+        "dcuolauncher.exe", "fortnitelauncher.exe",
+        "easyanticheat_launcher.exe", "destinylauncher.exe",
+        "marvelrivals_launcher.exe", "minecraftlauncher.exe",
+        "dayzlauncher.exe", "gtavlauncher.exe", "mealauncher.exe",
+        "iracingui.exe", "diablo iv launcher.exe",
         # Riot's launcher service + the League lobby client (2026-07-02: a
         # RiotClientServices.exe launcher window got recorded as a "game").
         "riotclientservices.exe", "riotclientux.exe", "riotclientuxrender.exe",

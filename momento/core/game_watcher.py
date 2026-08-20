@@ -569,11 +569,23 @@ _FULLSCREEN_SKIP_NAMES = frozenset({
     # System utilities
     "mmc.exe", "taskmgr.exe", "regedit.exe", "perfmon.exe",
     "cmd.exe", "powershell.exe", "wt.exe", "pwsh.exe", "conhost.exe",
-    # Misc launchers that can go foreground-fullscreen
-    "epicgameslauncher.exe", "steam.exe", "eadesktop.exe", "ealauncher.exe",
-    "gog galaxy.exe", "ubisoftconnect.exe",
-    "battle.net.exe", "battle.net launcher.exe",
+    # Storefronts, launchers, and their embedded browser / overlay processes.
+    # The visible Steam store and its fullscreen trailers are owned by
+    # steamwebhelper.exe, not steam.exe (real false-positive, 2026-08-20).
+    "steam.exe", "steamwebhelper.exe", "gameoverlayui.exe",
+    "epicgameslauncher.exe", "epicwebhelper.exe",
+    "eadesktop.exe", "ealauncher.exe", "eabackgroundservice.exe",
+    "ubisoftconnect.exe", "ubisoftconnectwebcore.exe", "uplaywebcore.exe",
+    "gog galaxy.exe", "galaxyclient.exe", "galaxyclient helper.exe",
+    "battle.net.exe", "battle.net launcher.exe", "battle.net helper.exe",
+    "blizzardbrowser.exe",
+    "riotclientservices.exe", "riotclientux.exe", "riotclientuxrender.exe",
+    "leagueclient.exe", "leagueclientux.exe", "leagueclientuxrender.exe",
     "rockstargameslauncher.exe", "playgameslauncher.exe",
+    # Windows gaming/store shells and shared WebView renderer. These can show
+    # fullscreen trailers or overlays but are not the game process itself.
+    "xboxpcapp.exe", "gamebar.exe", "gamebarftserver.exe",
+    "msedgewebview2.exe",
 })
 
 

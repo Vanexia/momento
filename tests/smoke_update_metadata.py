@@ -30,6 +30,7 @@ from momento.util.paths import update_cache_dir  # noqa: E402
 
 
 _results: list[tuple[str, bool]] = []
+_TEST_NOW = datetime(2026, 8, 17, 12, tzinfo=UTC)
 
 
 def check(label: str, condition: bool) -> None:
@@ -90,6 +91,7 @@ def _expect_failure(
             signature,
             public_key,
             current_version=current_version,
+            now=_TEST_NOW,
         )
     except error_type:
         check(label, True)
@@ -120,6 +122,7 @@ def test_valid_contract(private_key: Ed25519PrivateKey) -> None:
         signature,
         public_key,
         current_version="0.2.2",
+        now=_TEST_NOW,
     )
     check("valid signed metadata is accepted", str(manifest.version) == "0.2.3")
     check("installer name is retained", manifest.installer.name == "MomentoSetup-0.2.3.exe")
