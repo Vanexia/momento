@@ -3,10 +3,9 @@ name: CI
 # Runs the hardware-independent checks on every code push / PR. The recording
 # pipeline's smokes (WGC capture, NVENC/encoder, real audio devices, a visible
 # window) CANNOT run on a hosted runner — there's no GPU, no audio endpoint and
-# no display — so those stay manual on the dev machine (see CLAUDE.md "How to
-# verify the build is healthy"). This gate catches the regressions a runner CAN
-# see: syntax, undefined names, import failures, vulnerable dependencies, and
-# hardware-independent behavior.
+# no display — so those stay manual on a Windows development machine. This gate
+# catches the regressions a runner CAN see: syntax, undefined names, import
+# failures, vulnerable dependencies, and hardware-independent behavior.
 
 on:
   push:

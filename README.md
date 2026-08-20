@@ -30,18 +30,25 @@ Download **[MomentoSetup-0.2.7.exe](https://github.com/Vanexia/momento/releases/
 The installer includes everything Momento needs. Python and administrator access are not required.
 
 > [!IMPORTANT]
-> Momento's installer is not code-signed yet. Windows may show **Unknown Publisher** or a SmartScreen warning. Confirm that the download came from this repository, select **More info**, then **Run anyway**. The release includes a SHA-256 checksum for integrity checking.
+> Momento's installer is not code-signed yet. Windows may show **Unknown Publisher** or a SmartScreen warning. Confirm that the download came from this repository, select **More info**, then **Run anyway**.
+
+<details>
+<summary>Optional: verify a manual download</summary>
 
 Download `SHA256SUMS-0.2.7.txt` from the same release and compare the listed
-installer hash before running it:
+installer hash:
 
 ```powershell
 Get-FileHash .\MomentoSetup-0.2.7.exe -Algorithm SHA256
 Get-Content .\SHA256SUMS-0.2.7.txt
 ```
 
-The two SHA-256 values must match. A checksum detects a damaged or replaced
-download; it does not give the unsigned installer a publisher identity.
+The two SHA-256 values should match. This check can detect a damaged or replaced
+download, but it does not give the unsigned installer a publisher identity.
+Momento's automatic updater performs its signed-metadata and checksum checks
+without asking you to run these commands.
+
+</details>
 
 ![Momento recording library and clip editor](docs/screenshots/library.png)
 
@@ -97,6 +104,10 @@ Momento is idle. A manual check downloads and verifies the update first, then
 offers **Install now** and **Later**. **Later** keeps the verified installer for
 the next time Momento starts.
 
+If you enable **Start Momento with Windows**, this check runs after you sign in
+to Windows. Source-code pushes do not update installed copies; only a published
+stable GitHub Release does.
+
 GitHub receives the connection's IP address and the fixed User-Agent
 `Momento-Updater/1`, as it does for an ordinary HTTPS request. Momento sends no
 recording, account, game-list, or device data with the check.
@@ -124,22 +135,19 @@ The encoder checks the requested resolution, frame rate, and quality before reco
 
 Momento warns when it falls back to CPU encoding because high resolutions and frame rates can use substantial processor time.
 
-Public releases use a reproducible PyAV 17.0.1 wheel with a purpose-built
-FFmpeg 8.0.1 runtime. It keeps H.264/AAC recording and the encoder paths above
-while reducing PyAV's native DLL payload by 80.6%. NVIDIA has passed physical
-recording tests; AMD and Intel remain automated contract tests pending wider
-physical hardware coverage.
+Public releases use PyAV 17.0.1 with a purpose-built FFmpeg 8.0.1 runtime.
+NVIDIA has passed physical recording tests. AMD, Intel, Media Foundation, and
+CPU encoding have automated coverage and need wider testing on physical
+hardware.
 
 ## Requirements
 
 | | Requirement |
 |---|---|
 | Operating system | 64-bit Windows 10 version 1903 or newer, or Windows 11 |
-| Disk space | About 615 MB installed, plus space for recordings |
+| Disk space | About 300 MB installed, plus space for recordings |
 | Graphics | Hardware H.264 encoding recommended; CPU fallback available |
 | Audio | A Windows microphone and/or playback endpoint if those tracks are wanted |
-
-NVIDIA NVENC has passed physical hardware testing. AMD AMF, Intel QuickSync, Media Foundation, and CPU fallback have automated coverage but still need wider field testing across real machines and drivers.
 
 ## Privacy
 
@@ -190,8 +198,8 @@ including the imported Google OAuth client and connected-account token.
 Momento requires Python 3.12 for source runs. Automatic update checks and installation stay disabled in this mode.
 
 ```powershell
-git clone https://github.com/Vanexia/momento.git C:\dev\Momento
-cd C:\dev\Momento
+git clone https://github.com/Vanexia/momento.git
+cd .\momento
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -c constraints-release.txt -e .[dev]
 .\scripts\fetch_ffmpeg.ps1

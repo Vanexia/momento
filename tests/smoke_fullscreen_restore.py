@@ -1,17 +1,17 @@
 """Regression test for the maximized -> fullscreen -> exit round-trip.
 
-The bug (CLAUDE.md "ACTIVE UNRESOLVED ISSUE"): exiting in-window fullscreen
-did not return a *maximized* editor window to maximized — Qt drops the
+The original bug: exiting in-window fullscreen did not return a *maximized*
+editor window to maximized. Qt drops the
 WindowMaximized bit once fullscreen is applied on Windows, so every Qt-only
 exit landed the window at the default size. The fix captures the pre-fullscreen
 WINDOWPLACEMENT (Win32) on enter and restores it on exit.
 
 IMPORTANT: this MUST run on the real Windows platform (a genuinely visible
 window). Offscreen/headless Qt *keeps* the Maximized bit and gives false
-passes — see CLAUDE.md. The window is shown for real and goes fullscreen
+passes. The window is shown for real and goes fullscreen
 briefly, then the test reports and quits.
 
-    C:\\dev\\Momento\\.venv\\Scripts\\python.exe tests\\smoke_fullscreen_restore.py
+    .\\.venv\\Scripts\\python.exe tests\\smoke_fullscreen_restore.py
 
 State is read in deferred callbacks (QTimer) because window state settles
 asynchronously on Windows — a synchronous read after setWindowState reports

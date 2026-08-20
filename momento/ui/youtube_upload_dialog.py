@@ -115,7 +115,7 @@ class YouTubeUploadDialog(QDialog):
 
         # AnchoredComboBox keeps the popup pinned directly below the field
         # instead of Windows-default jumping so the selected row lands under
-        # the cursor — matches every other combo in the app per CLAUDE.md.
+        # the cursor, matching every other combo in the app.
         self._category_combo = AnchoredComboBox(self)
         for cat_id, label in _CATEGORIES:
             self._category_combo.addItem(label, userData=cat_id)

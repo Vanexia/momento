@@ -29,6 +29,10 @@ dist/
 # design skills, not Momento source or release inputs.
 .agents/
 .claude/
+AGENTS.md
+CLAUDE.md
+skills-lock.json
+docs/superpowers/
 
 # OS
 Thumbs.db

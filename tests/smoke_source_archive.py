@@ -19,6 +19,8 @@ RUNTIME_NAMES = {
 }
 RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json")
 PRIVATE_ROOTS = {".agents", ".claude"}
+PRIVATE_NAMES = {"agents.md", "claude.md", "skills-lock.json"}
+PRIVATE_PREFIXES = {("docs", "superpowers")}
 REQUIRED_RELEASE_FILES = {
     "Momento-0.2.5-source.zip": {
         "build/pyav_runtime.json",
@@ -59,6 +61,11 @@ def main() -> int:
             if parts and parts[0].casefold() in PRIVATE_ROOTS:
                 failures.append(f"local agent file: {info.filename}")
             name = PurePosixPath(info.filename).name.casefold()
+            folded_parts = tuple(part.casefold() for part in parts)
+            if name in PRIVATE_NAMES or any(
+                folded_parts[: len(prefix)] == prefix for prefix in PRIVATE_PREFIXES
+            ):
+                failures.append(f"internal agent file: {info.filename}")
             if name in RUNTIME_NAMES or name.endswith(RUNTIME_SUFFIXES):
                 failures.append(f"private runtime file: {info.filename}")
             data = source.read(info)

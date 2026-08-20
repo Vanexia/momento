@@ -25,7 +25,6 @@ TEXT_ROOTS = (
 )
 TEXT_FILES = (
     ROOT / "README.md",
-    ROOT / "CLAUDE.md",
     ROOT / "LICENSE",
     ROOT / "pyproject.toml",
     ROOT / "constraints-release.txt",
@@ -95,6 +94,17 @@ def _bundle_has_private_identity(dist: Path) -> bool:
 
 def main() -> int:
     text = _project_text()
+    internal_agent_files = (
+        ROOT / "AGENTS.md",
+        ROOT / "CLAUDE.md",
+        ROOT / "skills-lock.json",
+    )
+    internal_docs_root = ROOT / "docs" / "superpowers"
+    check(
+        "privacy: public tree omits internal agent instructions and plans",
+        not any(path.is_file() for path in internal_agent_files)
+        and not any(path.is_file() for path in internal_docs_root.rglob("*")),
+    )
     check("privacy: public source omits blocked identity values", not contains_blocked_identity(text))
     check("privacy: public source omits Windows user-profile paths", not contains_private_windows_user_path(text))
     check(

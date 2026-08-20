@@ -367,7 +367,7 @@ class EditorWindow(QMainWindow):
             self._fs_placement = None
             # Re-enable window animations + log the TRUE end state once the WM
             # has settled (a synchronous read here reports the pre-WM state and
-            # misleads — see CLAUDE.md). The deferred log keeps fullscreen
+            # misleads). The deferred log keeps fullscreen
             # round-trips diagnosable from momento.log.
             def _settle() -> None:
                 windows_api.set_window_transitions_enabled(hwnd, True)
