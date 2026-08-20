@@ -25,7 +25,7 @@ Product boundaries:
 
 ## Current Release
 
-- Version: `0.2.6`.
+- Version: `0.2.7`.
 - License: GPL-3.0-only. The installer includes the GPL text, build information,
   third-party notices/licenses, and an exact source offer. Matching Momento and
   third-party source archives are separate assets on the same GitHub release.
@@ -34,8 +34,10 @@ Product boundaries:
   project. The build rejects the old `MOMENTO_INCLUDE_YOUTUBE_OAUTH` profile
   and never bundles `resources/youtube/client_secrets.json`.
 - Public installer: per-user Inno Setup package under
-  `dist/installer/MomentoSetup-0.2.6.exe`.
-- Version 0.2.6 blocks Steam storefront trailers, embedded launcher browsers,
+  `dist/installer/MomentoSetup-0.2.7.exe`.
+- Version 0.2.7 keeps launch-time updates unattended and adds an explicit
+  **Install now** / **Later** choice after a manual update download. Version
+  0.2.6 blocks Steam storefront trailers, embedded launcher browsers,
   gaming overlays, and launcher-only executables from automatic detection.
   Version 0.2.5 added user-owned Google OAuth setup, share-safe diagnostics,
   upload input bounds, and public-release hardening. Version 0.2.4 centres
@@ -77,6 +79,9 @@ Product boundaries:
   for updates** in the editor. Momento coalesces concurrent automatic and
   manual requests into one check. Interactive results are owned by the visible
   editor so Windows centres them over Momento.
+- A launch-time check installs a verified update without prompting once the app
+  is idle. A manual check downloads and verifies the update, then offers
+  **Install now** and **Later**. **Later** keeps it staged for the next launch.
 - Every accepted release must include `Momento-update.json`,
   `Momento-update.json.sig`, and the versioned installer. Momento verifies the
   canonical metadata with the Ed25519 public key embedded in the application,

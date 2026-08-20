@@ -1,5 +1,5 @@
 #define MyAppName "Momento"
-#define MyAppVersion "0.2.6"
+#define MyAppVersion "0.2.7"
 #define MyAppPublisher "Momento"
 #define MyAppExeName "Momento.exe"
 

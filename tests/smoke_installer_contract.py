@@ -13,7 +13,7 @@ from momento import __version__  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.6"
+EXPECTED_VERSION = "0.2.7"
 
 checks = 0
 failures = 0
@@ -41,12 +41,21 @@ def main() -> int:
     notices = (ROOT / "THIRD_PARTY_NOTICES.txt").read_text(encoding="utf-8")
     attributes = (ROOT / ".gitattributes").read_text(encoding="ascii")
     helper_fetcher = (ROOT / "scripts" / "fetch_ffmpeg.ps1").read_text(encoding="utf-8")
-    release_notes = (ROOT / "docs" / "releases" / f"{EXPECTED_VERSION}.md").read_text(
-        encoding="utf-8"
+    release_notes_path = ROOT / "docs" / "releases" / f"{EXPECTED_VERSION}.md"
+    release_notes = (
+        release_notes_path.read_text(encoding="utf-8")
+        if release_notes_path.is_file()
+        else ""
     )
     check("version: Python package matches public release", __version__ == EXPECTED_VERSION)
     check("version: pyproject matches public release", pyproject["project"]["version"] == EXPECTED_VERSION)
-    check("version: Windows file metadata matches public release", f"'ProductVersion', '{EXPECTED_VERSION}'" in version_info)
+    numeric_version = tuple(int(part) for part in EXPECTED_VERSION.split(".")) + (0,)
+    check(
+        "version: Windows file metadata matches public release",
+        f"'ProductVersion', '{EXPECTED_VERSION}'" in version_info
+        and f"filevers={numeric_version}" in version_info
+        and f"prodvers={numeric_version}" in version_info,
+    )
     check("installer: Inno source exists", installer_path.is_file())
     check("installer: deterministic build wrapper exists", builder_path.is_file())
     check("installer: version matches application", f'#define MyAppVersion "{EXPECTED_VERSION}"' in installer)

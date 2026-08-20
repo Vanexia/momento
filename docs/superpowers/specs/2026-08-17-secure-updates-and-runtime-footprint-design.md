@@ -10,7 +10,8 @@ Approved for implementation on 2026-08-17.
 - Download, authenticate, install, and relaunch an update without asking the
   user to visit GitHub or operate the installer.
 - Never interrupt an active or pending recording.
-- Provide a manual **Check for updates** action with clear status feedback.
+- Provide a manual **Check for updates** action that downloads and verifies the
+  update, then offers **Install now** and **Later**.
 - Reduce installed size without changing recording quality, encoder order,
   supported capture formats, playback behavior, or graphics compatibility.
 
@@ -102,7 +103,9 @@ logged and retried on a later launch without creating an update-restart loop.
 Settings gains an **About & Updates** page with the current version, a
 **Check for updates** button, and one concise status line. A manual check uses
 the same worker and trust policy. It reports checking, downloading, current,
-installing, or a useful failure; it never runs a second concurrent check.
+installing, or a useful failure; it never runs a second concurrent check. Once
+the verified installer is staged, **Install now** restarts Momento and
+**Later** keeps the update for unattended installation on the next launch.
 
 ## Runtime Footprint
 

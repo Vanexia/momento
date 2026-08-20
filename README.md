@@ -25,19 +25,19 @@
 
 ## Download
 
-Download **[MomentoSetup-0.2.6.exe](https://github.com/Vanexia/momento/releases/download/v0.2.6/MomentoSetup-0.2.6.exe)** from the latest release.
+Download **[MomentoSetup-0.2.7.exe](https://github.com/Vanexia/momento/releases/download/v0.2.7/MomentoSetup-0.2.7.exe)** from the latest release.
 
 The installer includes everything Momento needs. Python and administrator access are not required.
 
 > [!IMPORTANT]
 > Momento's installer is not code-signed yet. Windows may show **Unknown Publisher** or a SmartScreen warning. Confirm that the download came from this repository, select **More info**, then **Run anyway**. The release includes a SHA-256 checksum for integrity checking.
 
-Download `SHA256SUMS-0.2.6.txt` from the same release and compare the listed
+Download `SHA256SUMS-0.2.7.txt` from the same release and compare the listed
 installer hash before running it:
 
 ```powershell
-Get-FileHash .\MomentoSetup-0.2.6.exe -Algorithm SHA256
-Get-Content .\SHA256SUMS-0.2.6.txt
+Get-FileHash .\MomentoSetup-0.2.7.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS-0.2.7.txt
 ```
 
 The two SHA-256 values must match. A checksum detects a damaged or replaced
@@ -91,6 +91,11 @@ The installed build checks the latest stable GitHub Release once when Momento
 starts. It does not poll for updates while it runs. You can also choose **Check
 for updates...** from the tray menu or **Help > Check for updates...** in the
 editor.
+
+A startup check downloads, verifies, and installs a newer stable release when
+Momento is idle. A manual check downloads and verifies the update first, then
+offers **Install now** and **Later**. **Later** keeps the verified installer for
+the next time Momento starts.
 
 GitHub receives the connection's IP address and the fixed User-Agent
 `Momento-Updater/1`, as it does for an ordinary HTTPS request. Momento sends no

@@ -94,7 +94,7 @@
 
   <section>
     <h2>Update checks</h2>
-    <p>An installed Windows build requests the latest stable release from <code>api.github.com</code> once when the process starts. A manual update check uses the same service. Source runs do not perform the startup check.</p>
+    <p>An installed Windows build requests the latest stable release from <code>api.github.com</code> once when the process starts. It installs a verified update when Momento is idle. A manual check downloads and verifies the update, then offers Install now or Later. Source runs do not perform the startup check.</p>
     <p>GitHub receives the source IP address and the fixed <code>Momento-Updater/1</code> User-Agent, plus the standard metadata needed to serve an HTTPS request. If an update is available, Momento downloads signed metadata, its signature, and the installer from GitHub release hosts.</p>
     <p>Momento verifies signed release metadata, the installer size, and the installer SHA-256 before staging an update. It does not send a Momento account identifier because Momento has no account system.</p>
   </section>
