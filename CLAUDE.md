@@ -25,7 +25,7 @@ Product boundaries:
 
 ## Current Release
 
-- Version: `0.2.6` release candidate.
+- Version: `0.2.6`.
 - License: GPL-3.0-only. The installer includes the GPL text, build information,
   third-party notices/licenses, and an exact source offer. Matching Momento and
   third-party source archives are separate assets on the same GitHub release.
@@ -316,6 +316,10 @@ identical wheel hashes, and runs the isolated runtime contract before
 publishing the wheel under `dist\pyav-runtime`.
 
 Build only from a clean committed tree, with Momento not running:
+
+If a maintenance or release task needs Momento closed, first verify that it is
+not recording, then stop the process from PowerShell. Do not use desktop UI
+automation to navigate Momento solely to close it.
 
 ```powershell
 .\scripts\build_installer.ps1
