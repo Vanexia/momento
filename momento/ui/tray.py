@@ -471,6 +471,31 @@ class MomentoTray(QObject):
             return
         self._update_service.check_now()
 
+    def _confirm_update_install(self, staged) -> bool:
+        version = str(getattr(getattr(staged, "manifest", None), "version", "")).strip()
+        update_name = f"Momento {version}" if version else "The Momento update"
+        dialog = QMessageBox(self._update_dialog_parent())
+        dialog.setIcon(QMessageBox.Icon.Question)
+        dialog.setWindowTitle("Momento update")
+        dialog.setText(f"{update_name} is ready to install.")
+        dialog.setInformativeText(
+            "Install now to restart Momento and finish the update. Choose Later "
+            "to keep using Momento; the update will install the next time Momento "
+            "starts. Your recordings and settings stay in place."
+        )
+        install_button = dialog.addButton(
+            "Install now", QMessageBox.ButtonRole.AcceptRole
+        )
+        later_button = dialog.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        dialog.setDefaultButton(install_button)
+        dialog.setEscapeButton(later_button)
+        dialog.exec()
+        approved = dialog.clickedButton() is install_button
+        editor = self._editor
+        if approved and editor is not None and editor.isVisible():
+            editor.hide()
+        return approved
+
     def _update_dialog_parent(self):
         if self._editor is not None and self._editor.isVisible():
             return self._editor

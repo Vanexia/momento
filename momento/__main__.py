@@ -261,6 +261,7 @@ def main() -> int:
                 session=session,
                 client=UpdateClient(cache=update_runtime.cache),
                 can_install=tray.is_update_install_ready,
+                confirm_install=tray._confirm_update_install,
                 launch_installer=update_runtime.launch,
                 quit_callback=app.quit,
                 parent=tray,

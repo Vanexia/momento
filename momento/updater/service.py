@@ -42,6 +42,7 @@ class UpdateService(QObject):
         can_install: Callable[[], bool],
         launch_installer: Callable[[object], bool],
         quit_callback: Callable[[], None],
+        confirm_install: Callable[[object], bool] | None = None,
         client: UpdateClient | None = None,
         submit: Callable[[Callable[[], None]], None] | None = None,
         enabled: bool | None = None,
@@ -53,6 +54,7 @@ class UpdateService(QObject):
         self._can_install = can_install
         self._launch_installer = launch_installer
         self._quit_callback = quit_callback
+        self._confirm_install = confirm_install
         self._client = client or UpdateClient()
         self._submit = submit or _submit_to_pool
         self._enabled = (
@@ -139,6 +141,19 @@ class UpdateService(QObject):
                 "failed", "The downloaded update could not be verified.", interactive
             )
             return
+
+        if interactive:
+            approved = False
+            try:
+                approved = bool(
+                    self._confirm_install is not None
+                    and self._confirm_install(result.staged)
+                )
+            except Exception as exc:
+                logger.warning("Update confirmation failed (%s)", type(exc).__name__)
+            if not approved:
+                self._defer(False)
+                return
 
         self._install_if_quiescent(result.staged, interactive=interactive)
 

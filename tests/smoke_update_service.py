@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from momento.updater.client import UpdateResult, UpdateStatus  # noqa: E402
 from momento.updater.service import UpdateService  # noqa: E402
+from momento.ui import tray as tray_module  # noqa: E402
 from momento.ui.tray import MomentoTray  # noqa: E402
 
 
@@ -83,6 +84,7 @@ def _service(
     *,
     session: FakeSession | None = None,
     can_install=lambda: True,
+    confirmer=None,
     launcher=lambda _staged: True,
 ):
     client = FakeClient(result)
@@ -93,6 +95,7 @@ def _service(
         session=session,
         client=client,
         can_install=can_install,
+        confirm_install=confirmer,
         launch_installer=launcher,
         quit_callback=lambda: quit_calls.append(True),
         submit=lambda work: work(),
@@ -194,6 +197,188 @@ def test_automatic_check_runs_once_and_stays_noninteractive() -> None:
     )
 
 
+def test_manual_update_requires_an_install_choice() -> None:
+    result = UpdateResult(UpdateStatus.AVAILABLE, staged=_staged())
+    launch_calls: list[object] = []
+    decision_calls: list[object] = []
+    service, _client, session, statuses, quit_calls = _service(
+        result,
+        confirmer=lambda staged: decision_calls.append(staged) or False,
+        launcher=lambda staged: launch_calls.append(staged) or True,
+    )
+    service.check_now()
+    check("manual update asks once after download", decision_calls == [result.staged])
+    check("Later keeps the staged installer", not launch_calls)
+    check("Later does not quiesce the app", session.acquire_calls == 0)
+    check("Later keeps Momento running", not quit_calls)
+    check(
+        "Later schedules installation for next start",
+        statuses[-1]
+        == (
+            "deferred",
+            "The update is ready and will install the next time Momento starts.",
+            False,
+        ),
+    )
+
+
+def test_manual_install_now_uses_the_staged_update() -> None:
+    result = UpdateResult(UpdateStatus.AVAILABLE, staged=_staged())
+    launch_calls: list[object] = []
+    decision_calls: list[object] = []
+    service, _client, _session, statuses, quit_calls = _service(
+        result,
+        confirmer=lambda staged: decision_calls.append(staged) or True,
+        launcher=lambda staged: launch_calls.append(staged) or True,
+    )
+    service.check_now()
+    check("Install now asks once", decision_calls == [result.staged])
+    check("Install now launches the verified staged update", launch_calls == [result.staged])
+    check("Install now reports installation", statuses[-1][0] == "installing")
+    check("Install now closes the old app", len(quit_calls) == 1)
+
+
+def test_automatic_update_never_prompts() -> None:
+    result = UpdateResult(UpdateStatus.AVAILABLE, staged=_staged())
+    launch_calls: list[object] = []
+    decision_calls: list[object] = []
+    service, _client, _session, statuses, quit_calls = _service(
+        result,
+        confirmer=lambda staged: decision_calls.append(staged) or False,
+        launcher=lambda staged: launch_calls.append(staged) or True,
+    )
+    service.start_automatic_check()
+    check("startup update does not ask permission", not decision_calls)
+    check("startup update installs automatically", launch_calls == [result.staged])
+    check("startup update reports installation", statuses[-1][0] == "installing")
+    check("startup update closes the old app", len(quit_calls) == 1)
+
+
+def test_manual_update_prompt_copy_and_choices() -> None:
+    confirm = getattr(MomentoTray, "_confirm_update_install", None)
+    if confirm is None:
+        check("manual update prompt exists", False)
+        return
+
+    dialogs: list[object] = []
+
+    class FakeButton:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+    class FakeMessageBox:
+        choose_later = False
+
+        class Icon:
+            Question = "question"
+
+        class ButtonRole:
+            AcceptRole = "accept"
+            RejectRole = "reject"
+
+        def __init__(self, parent=None) -> None:
+            self.parent = parent
+            self.icon = None
+            self.title = ""
+            self.text = ""
+            self.informative_text = ""
+            self.buttons: list[tuple[FakeButton, object]] = []
+            self.default_button = None
+            self.escape_button = None
+            self.clicked = None
+            dialogs.append(self)
+
+        def setIcon(self, icon) -> None:
+            self.icon = icon
+
+        def setWindowTitle(self, title: str) -> None:
+            self.title = title
+
+        def setText(self, text: str) -> None:
+            self.text = text
+
+        def setInformativeText(self, text: str) -> None:
+            self.informative_text = text
+
+        def addButton(self, label: str, role) -> FakeButton:
+            button = FakeButton(label)
+            self.buttons.append((button, role))
+            return button
+
+        def setDefaultButton(self, button) -> None:
+            self.default_button = button
+
+        def setEscapeButton(self, button) -> None:
+            self.escape_button = button
+
+        def exec(self) -> None:
+            self.clicked = self.escape_button if self.choose_later else self.default_button
+
+        def clickedButton(self):
+            return self.clicked
+
+    real_box = tray_module.QMessageBox
+    tray_module.QMessageBox = FakeMessageBox
+    try:
+        editor = SimpleNamespace(
+            visible=True,
+            hide_calls=0,
+            isVisible=lambda: editor.visible,
+            hide=lambda: (
+                setattr(editor, "visible", False),
+                setattr(editor, "hide_calls", editor.hide_calls + 1),
+            ),
+        )
+        tray = SimpleNamespace(
+            _editor=editor,
+            _update_dialog_parent=lambda: editor,
+        )
+        approved = confirm(tray, _staged("0.2.7"))
+        later_editor = SimpleNamespace(
+            visible=True,
+            hide_calls=0,
+            isVisible=lambda: later_editor.visible,
+            hide=lambda: (
+                setattr(later_editor, "visible", False),
+                setattr(later_editor, "hide_calls", later_editor.hide_calls + 1),
+            ),
+        )
+        later_tray = SimpleNamespace(
+            _editor=later_editor,
+            _update_dialog_parent=lambda: later_editor,
+        )
+        FakeMessageBox.choose_later = True
+        approved_later = confirm(later_tray, _staged("0.2.7"))
+    finally:
+        tray_module.QMessageBox = real_box
+
+    dialog = dialogs[0]
+    labels = [button.label for button, _role in dialog.buttons]
+    check("manual update prompt defaults to Install now", approved)
+    check("Install now closes the editor before the safety gate", editor.hide_calls == 1)
+    check("Later keeps the editor open", not approved_later and later_editor.hide_calls == 0)
+    check("manual update prompt names the downloaded version", "0.2.7" in dialog.text)
+    check("manual update prompt offers Install now and Later", labels == ["Install now", "Later"])
+    check("Later is the escape choice", dialog.escape_button.label == "Later")
+    check(
+        "manual update prompt explains next-start installation",
+        "next time Momento starts" in dialog.informative_text,
+    )
+    check(
+        "manual update prompt promises user-data preservation",
+        "recordings and settings" in dialog.informative_text,
+    )
+
+
+def test_entrypoint_wires_manual_confirmation() -> None:
+    entrypoint = Path(__file__).resolve().parents[1] / "momento" / "__main__.py"
+    source = entrypoint.read_text(encoding="utf-8")
+    check(
+        "installed app wires the manual update confirmation",
+        "confirm_install=tray._confirm_update_install" in source,
+    )
+
+
 def test_busy_work_defers_without_quiescing() -> None:
     result = UpdateResult(UpdateStatus.AVAILABLE, staged=_staged())
     service, _client, session, statuses, quit_calls = _service(
@@ -270,6 +455,11 @@ def main() -> int:
     test_update_result_is_owned_by_visible_editor()
     test_centering_compensates_for_native_window_frame()
     test_automatic_check_runs_once_and_stays_noninteractive()
+    test_manual_update_requires_an_install_choice()
+    test_manual_install_now_uses_the_staged_update()
+    test_automatic_update_never_prompts()
+    test_manual_update_prompt_copy_and_choices()
+    test_entrypoint_wires_manual_confirmation()
     test_busy_work_defers_without_quiescing()
     test_visible_editor_defers_update_installation()
     test_initial_game_scan_is_a_hard_gate()
