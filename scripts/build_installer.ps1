@@ -152,8 +152,19 @@ try {
         }
     }
 
-    & $python -m PyInstaller "build\pyinstaller.spec" --noconfirm --clean --workpath $work
-    if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
+    # Native dependency discovery also searches PATH. Unrelated developer
+    # tools can supply incompatible DLLs with Windows system-library names.
+    # Package hooks supply the locked wheels' own DLL directories; everything
+    # else must resolve from Windows, not the caller's tool installations.
+    $analysisPath = $env:PATH
+    try {
+        $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+        & $python -m PyInstaller "build\pyinstaller.spec" --noconfirm --clean --workpath $work
+        if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed." }
+    }
+    finally {
+        $env:PATH = $analysisPath
+    }
 
     $forbiddenBundleFiles = Get-ChildItem -LiteralPath $bundle -Recurse -File |
         Where-Object {
@@ -162,6 +173,14 @@ try {
     if ($forbiddenBundleFiles) {
         $names = ($forbiddenBundleFiles.FullName -join ', ')
         throw "The bundle contains an unused OpenCV or Qt PDF runtime: $names"
+    }
+    $shadowedWindowsLibraries = Get-ChildItem -LiteralPath $bundle -Recurse -File |
+        Where-Object {
+            $_.Name -match '(?i)^(?:icu.*|ucrtbase|api-ms-win-.*|ext-ms-win-.*)\.dll$'
+        }
+    if ($shadowedWindowsLibraries) {
+        $names = ($shadowedWindowsLibraries.Name -join ', ')
+        throw "The bundle shadows Windows system libraries: $names"
     }
 
     $manifest = Join-Path $bundle "RELEASE_MANIFEST.txt"

@@ -211,6 +211,24 @@ def main() -> int:
         "third-party-source.zip\"; DestDir" not in installer,
     )
     check("builder: invokes PyInstaller source recipe", "pyinstaller.spec" in builder.casefold())
+    analysis = re.search(
+        r"\$analysisPath = \$env:PATH.*?finally\s*\{[^}]*\}",
+        builder,
+        re.DOTALL,
+    )
+    analysis_body = analysis.group(0) if analysis else ""
+    check(
+        "builder: isolates native dependency discovery from developer tools",
+        '$env:PATH = "$env:SystemRoot\\System32;$env:SystemRoot"' in analysis_body
+        and '-m PyInstaller "build\\pyinstaller.spec"' in analysis_body
+        and "$env:PATH = $analysisPath" in analysis_body,
+    )
+    check(
+        "builder: rejects accidental copies of Windows system libraries",
+        "$shadowedWindowsLibraries" in builder
+        and "icu.*|ucrtbase|api-ms-win-.*|ext-ms-win-.*" in builder
+        and "throw \"The bundle shadows Windows system libraries:" in builder,
+    )
     check(
         "builder: gates release on fullscreen false-positive regressions",
         "smoke_fullscreen_blocklist.py" in builder,
