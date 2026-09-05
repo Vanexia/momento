@@ -25,7 +25,7 @@
 
 ## Download
 
-Download **[MomentoSetup-0.2.7.exe](https://github.com/Vanexia/momento/releases/download/v0.2.7/MomentoSetup-0.2.7.exe)** from the latest release.
+Download **[MomentoSetup-0.2.8.exe](https://github.com/Vanexia/momento/releases/download/v0.2.8/MomentoSetup-0.2.8.exe)** from the latest release.
 
 The installer includes everything Momento needs. Python and administrator access are not required.
 
@@ -35,12 +35,12 @@ The installer includes everything Momento needs. Python and administrator access
 <details>
 <summary>Optional: verify a manual download</summary>
 
-Download `SHA256SUMS-0.2.7.txt` from the same release and compare the listed
+Download `SHA256SUMS-0.2.8.txt` from the same release and compare the listed
 installer hash:
 
 ```powershell
-Get-FileHash .\MomentoSetup-0.2.7.exe -Algorithm SHA256
-Get-Content .\SHA256SUMS-0.2.7.txt
+Get-FileHash .\MomentoSetup-0.2.8.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS-0.2.8.txt
 ```
 
 The two SHA-256 values should match. This check can detect a damaged or replaced

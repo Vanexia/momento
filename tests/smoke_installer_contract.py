@@ -13,7 +13,7 @@ from momento import __version__  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.7"
+EXPECTED_VERSION = "0.2.8"
 
 checks = 0
 failures = 0

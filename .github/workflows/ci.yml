@@ -33,7 +33,7 @@ jobs:
 
       - name: Install
         run: |
-          python -m pip install --upgrade pip==26.1.2
+          python -m pip install --upgrade pip==26.2.1
           python -m pip install -c constraints-release.txt -e .[dev]
 
       - name: Lint (ruff — pyflakes + syntax)
@@ -72,6 +72,7 @@ jobs:
           python tests/smoke_youtube_avatar.py
           python tests/smoke_timeline_trim.py
           python tests/smoke_trim_lifecycle.py
+          python tests/smoke_library_file_failures.py
           python tests/smoke_fullscreen_blocklist.py
           python tests/smoke_preview_prime.py
           python tests/smoke_storage_migration.py

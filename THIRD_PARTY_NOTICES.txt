@@ -1,12 +1,12 @@
 Momento third-party notices
 ===========================
 
-Momento 0.2.7 is licensed under GNU GPL version 3. The complete licence is
+Momento 0.2.8 is licensed under GNU GPL version 3. The complete licence is
 installed as LICENSE. SOURCE_OFFER.txt identifies the matching source archives
-published beside the installer on the Momento 0.2.7 GitHub release:
+published beside the installer on the Momento 0.2.8 GitHub release:
 
-  Momento-0.2.7-source.zip
-  Momento-0.2.7-third-party-source.zip
+  Momento-0.2.8-source.zip
+  Momento-0.2.8-third-party-source.zip
 
 The third-party source bundle contains the exact hash-verified source inputs
 and native build records for Momento's FFmpeg helper, Momento's minimal

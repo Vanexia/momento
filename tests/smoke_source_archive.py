@@ -22,6 +22,12 @@ PRIVATE_ROOTS = {".agents", ".claude"}
 PRIVATE_NAMES = {"agents.md", "claude.md", "skills-lock.json"}
 PRIVATE_PREFIXES = {("docs", "superpowers")}
 REQUIRED_RELEASE_FILES = {
+    "Momento-0.2.8-source.zip": {
+        "build/pyav_runtime.json",
+        "scripts/build_pyav_runtime.ps1",
+        "scripts/build_pyav_runtime.sh",
+        "scripts/verify_pyav_runtime.py",
+    },
     "Momento-0.2.5-source.zip": {
         "build/pyav_runtime.json",
         "scripts/build_pyav_runtime.ps1",

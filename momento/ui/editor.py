@@ -1543,7 +1543,11 @@ class EditorWindow(QMainWindow):
                 "Selected clip is too short. Drag the handles to define a range first.",
             )
             return
-        suggested = next_clip_path(Path(path)).stem
+        try:
+            suggested = next_clip_path(Path(path)).stem
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(self, "Export clip", f"Could not prepare a clip filename:\n{exc}")
+            return
         chosen, ok = QInputDialog.getText(
             self, "Export clip", "Save clip as (without .mp4):",
             QLineEdit.EchoMode.Normal, suggested,
@@ -1554,7 +1558,15 @@ class EditorWindow(QMainWindow):
         if not chosen:
             QMessageBox.warning(self, "Momento", "Clip name cannot be empty.")
             return
-        output = _resolve_output_path(Path(path).parent, chosen)
+        try:
+            output = _resolve_output_path(Path(path).parent, chosen)
+        except (OSError, RuntimeError, ValueError) as exc:
+            QMessageBox.warning(
+                self, "Export clip",
+                "Could not prepare the clip's output file. Check that the output "
+                f"folder is available and writable.\n\n{exc}",
+            )
+            return
         self._launch_trim(Path(path), start, end, output)
 
     def _launch_trim(
@@ -1992,15 +2004,26 @@ class EditorWindow(QMainWindow):
             self.preview.load(None)
             self._current_selection = None
 
-        deleted = 0
+        deleted: list[Path] = []
         errors: list[str] = []
         for p in existing:
-            ok = True
+            # The confirmation dialog runs a nested event loop. An export or
+            # repair may have started since the pre-dialog activity check.
+            if self._is_file_busy(p):
+                errors.append(f"{p.name}: the file is now in use")
+                continue
+            try:
+                p.unlink(missing_ok=True)
+            except OSError as e:
+                # Keep bookmarks and ownership bound to any video Windows
+                # refused to delete (for example, an external player's lock).
+                errors.append(f"{p.name}: {e}")
+                continue
+            deleted.append(p)
             self._game_slug_cache.pop(str(p), None)
             self._duration_cache.pop(str(p), None)
             self._duration_hint_cache.pop(str(p), None)
             for target in (
-                p,
                 thumb_path_for(p),
                 bookmark_sidecar(p),
                 ownership_sidecar_path(p),
@@ -2009,9 +2032,6 @@ class EditorWindow(QMainWindow):
                     Path(target).unlink(missing_ok=True)
                 except OSError as e:
                     errors.append(f"{target.name}: {e}")
-                    ok = False
-            if ok:
-                deleted += 1
 
         if errors:
             QMessageBox.warning(
@@ -2022,10 +2042,10 @@ class EditorWindow(QMainWindow):
 
         # Re-scan; this updates the filter combo counts naturally.
         self.refresh()
-        if deleted == 1:
-            self._status.setText(f"Deleted {existing[0].name}")
+        if len(deleted) == 1:
+            self._status.setText(f"Deleted {deleted[0].name}")
         else:
-            self._status.setText(f"Deleted {deleted} recording(s)")
+            self._status.setText(f"Deleted {len(deleted)} recording(s)")
 
     def _on_reveal_in_explorer(self, path: Path) -> None:
         """Open Windows Explorer with the recording highlighted.
@@ -2082,10 +2102,20 @@ class EditorWindow(QMainWindow):
             QMessageBox.warning(self, "Momento", "Name is empty after removing invalid characters.")
             return
         new_path = path.with_name(cleaned + path.suffix)
-        if new_path.exists():
+        if self._is_file_busy(path) or self._is_file_busy(new_path):
+            self._status.setText("Can't rename this recording while its files are in use.")
+            return
+        # Reject orphan destination sidecars too: otherwise the renamed video
+        # could silently inherit another recording's bookmarks or thumbnail.
+        targets = (
+            new_path, thumb_path_for(new_path), bookmark_sidecar(new_path),
+            ownership_sidecar_path(new_path),
+        )
+        collision = next((target for target in targets if target.exists()), None)
+        if collision is not None:
             QMessageBox.warning(
                 self, "Momento",
-                f"A file named {new_path.name!r} already exists in this folder.",
+                f"A file named {collision.name!r} already exists in this folder.",
             )
             return
 
@@ -2109,13 +2139,28 @@ class EditorWindow(QMainWindow):
         if old_owner.exists():
             moves.append((old_owner, ownership_sidecar_path(new_path)))
 
+        completed_moves: list[tuple[Path, Path]] = []
         try:
             for src, dst in moves:
                 src.rename(dst)
+                completed_moves.append((src, dst))
         except OSError as e:
+            rollback_errors: list[str] = []
+            for src, dst in reversed(completed_moves):
+                try:
+                    dst.rename(src)
+                except OSError as rollback_error:
+                    rollback_errors.append(f"{dst.name}: {rollback_error}")
+            detail = "The original filenames were restored."
+            if rollback_errors:
+                detail = (
+                    "Some files could not be restored to their original names. "
+                    "Keep both sets of files together in this folder:\n"
+                    + "\n".join(rollback_errors)
+                )
             QMessageBox.critical(
                 self, "Momento",
-                f"Rename failed:\n{e}\n\nSome files may have moved partially.",
+                f"Rename failed:\n{e}\n\n{detail}",
             )
             self.refresh()
             return
