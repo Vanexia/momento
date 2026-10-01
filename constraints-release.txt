@@ -16,7 +16,7 @@ googleapis-common-protos==1.75.0
 httplib2==0.32.0
 idna==3.16
 numpy==2.4.6
-oauthlib==3.3.1
+oauthlib==4.0.0
 opencv-python==4.13.0.92
 packaging==26.2
 pefile==2024.8.26
