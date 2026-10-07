@@ -301,6 +301,12 @@ begin
   if CurStep = ssDone then
   begin
     UpdateInstallSucceeded := True;
+    DeleteFile(ExpandConstant('{app}\_internal\resources\icons\momento-120.png'));
+    DeleteFile(ExpandConstant('{app}\_internal\resources\icons\momento-256.png'));
+    DeleteFile(ExpandConstant('{app}\_internal\resources\icons\momento-lockup.svg'));
+    DeleteFile(ExpandConstant('{app}\_internal\resources\icons\momento-mark.svg'));
+    DeleteFile(ExpandConstant('{app}\_internal\resources\icons\momento.ico'));
+    DeleteFile(ExpandConstant('{app}\_internal\resources\icons\momento.png'));
     DeleteFile(ExpandConstant('{userprograms}\Momento\Momento.lnk'));
     RemoveDir(ExpandConstant('{userprograms}\Momento'));
     DeleteFile(ExpandConstant('{autodesktop}\Momento.lnk'));

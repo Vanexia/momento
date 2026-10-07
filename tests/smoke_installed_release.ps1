@@ -22,9 +22,24 @@ $oldLocalAppData = $env:LOCALAPPDATA
 $oldUserProfile = $env:USERPROFILE
 $oldPath = $env:PATH
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+
+function Get-OptionalRunValue([string]$Name) {
+    $values = Get-ItemProperty -LiteralPath $runKey -ErrorAction SilentlyContinue
+    if ($null -eq $values) { return $null }
+    $property = $values.PSObject.Properties[$Name]
+    if ($null -eq $property) { return $null }
+    return $property.Value
+}
+
+function Remove-OptionalRunValue([string]$Name) {
+    if ($null -ne (Get-OptionalRunValue $Name)) {
+        Remove-ItemProperty -LiteralPath $runKey -Name $Name
+    }
+}
+
 $oldRunValues = @{}
 foreach ($brand in @("Momento", "Mementos")) {
-    $oldRunValues[$brand] = Get-ItemPropertyValue -Path $runKey -Name $brand -ErrorAction SilentlyContinue
+    $oldRunValues[$brand] = Get-OptionalRunValue $brand
 }
 $process = $null
 $target = $null
@@ -251,7 +266,7 @@ try {
     # Simulate the previous name in an otherwise complete test installation.
     $legacyExe = Join-Path $installDir "Momento.exe"
     Copy-Item -LiteralPath $exe -Destination $legacyExe
-    Remove-ItemProperty -Path $runKey -Name "Mementos" -ErrorAction SilentlyContinue
+    Remove-OptionalRunValue "Mementos"
     Set-ItemProperty -Path $runKey -Name "Momento" -Value ('"' + $legacyExe + '"')
     Invoke-Installer -MigrateAutostart
     if (-not (Test-Path -LiteralPath $exe)) {
@@ -263,7 +278,7 @@ try {
         throw "Upgrade did not refresh the legacy shortcut target with the new executable."
     }
     if ((Get-ItemPropertyValue -Path $runKey -Name "Mementos") -ne ('"' + $exe + '"') -or
-        $null -ne (Get-ItemPropertyValue -Path $runKey -Name "Momento" -ErrorAction SilentlyContinue)) {
+        $null -ne (Get-OptionalRunValue "Momento")) {
         throw "Upgrade did not migrate the existing startup entry."
     }
 
@@ -348,7 +363,7 @@ finally {
             Set-ItemProperty -Path $runKey -Name $brand -Value $oldRunValues[$brand]
         }
         else {
-            Remove-ItemProperty -Path $runKey -Name $brand -ErrorAction SilentlyContinue
+            Remove-OptionalRunValue $brand
         }
     }
     $env:APPDATA = $oldAppData
