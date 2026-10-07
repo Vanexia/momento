@@ -366,7 +366,7 @@ def test_update_cache_location() -> None:
             os.environ["LOCALAPPDATA"] = str(root / "local")
             os.environ["APPDATA"] = str(root / "roaming")
             path = update_cache_dir()
-            check("update cache uses local app data", path == root / "local" / "Momento" / "updates")
+            check("update cache uses local app data", path == root / "local" / "Mementos" / "updates")
             check("update cache directory is created", path.is_dir())
             check("update cache does not use roaming config storage", (root / "roaming") not in path.parents)
     finally:

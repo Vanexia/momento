@@ -2,7 +2,7 @@
 
 ## Supported releases
 
-Security fixes target the latest stable Momento release. Install the latest
+Security fixes target the latest stable Mementos release. Install the latest
 release before reporting a problem that may already have been fixed.
 
 ## Report a vulnerability
@@ -19,7 +19,7 @@ it first and wait for a safe transfer method.
 
 Include:
 
-- the Momento version and Windows version;
+- the Mementos version and Windows version;
 - the affected feature and steps to reproduce;
 - the security impact you observed;
 - whether the issue works against the current stable installer or a source
@@ -31,11 +31,11 @@ check, or cross a security boundary.
 
 ## Release integrity
 
-Momento's Windows installer does not yet carry a code-signing certificate, so
+Mementos' Windows installer does not yet carry a code-signing certificate, so
 Windows can show **Unknown Publisher**. Each GitHub Release includes a
 `SHA256SUMS-<version>.txt` file. Compare the installer's SHA-256 with that file
 before running it. Download both files from the same official
-[Momento release](https://github.com/Vanexia/momento/releases/latest).
+[Mementos release](https://github.com/Vanexia/momento/releases/latest).
 
 Installed builds accept automatic updates only after verifying signed release
 metadata, the installer size, and the installer SHA-256.

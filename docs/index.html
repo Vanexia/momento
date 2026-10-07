@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Momento | Local game recorder for Windows</title>
-<meta name="description" content="Momento is a local Windows desktop app that records games to MKV and includes a clip editor with optional user-configured YouTube upload. No telemetry or Momento account required.">
-<link rel="icon" type="image/png" href="momento-256.png">
-<link rel="apple-touch-icon" href="momento-256.png">
-<meta property="og:image" content="momento-256.png">
-<meta property="og:title" content="Momento | Local game recorder for Windows">
+<title>Mementos | Local game recorder for Windows</title>
+<meta name="description" content="Mementos is a local Windows desktop app that records games to MKV and includes a clip editor with optional user-configured YouTube upload. No telemetry or Mementos account required.">
+<link rel="icon" type="image/png" href="mementos-256.png">
+<link rel="apple-touch-icon" href="mementos-256.png">
+<meta property="og:image" content="mementos-256.png">
+<meta property="og:title" content="Mementos | Local game recorder for Windows">
 <meta property="og:description" content="Local Windows game recorder with a clip editor, optional YouTube upload, and no telemetry.">
 <style>
   :root {
@@ -95,8 +95,8 @@
 <div class="wrap">
 
   <header>
-    <img src="momento-256.png" alt="Momento logo" class="logo" width="160" height="160">
-    <h1>Momento<span class="dot">.</span></h1>
+    <img src="mementos-256.png" alt="Mementos logo" class="logo" width="160" height="160">
+    <h1>Mementos<span class="dot">.</span></h1>
     <p class="tagline">A local Windows game recorder with a built-in clip editor. Upload only the clips you choose.</p>
     <div class="badges">
       <span class="badge">Windows 10/11</span>
@@ -111,13 +111,13 @@
   </header>
 
   <section>
-    <img class="product-shot" src="screenshots/library.png" alt="Momento recording library and clip editor">
-    <p class="caption">The real Momento interface, shown with sample media.</p>
+    <img class="product-shot" src="screenshots/library.png" alt="Mementos recording library and clip editor">
+    <p class="caption">The real Mementos interface, shown with sample media.</p>
   </section>
 
   <section>
     <h2>What it does</h2>
-    <p>Momento sits quietly in your system tray. When it detects a game launching, it starts capturing the game's window via Windows Graphics Capture along with your microphone and the system's audio output. When the game closes, recording stops automatically and the resulting MKV file lands in your chosen folder.</p>
+    <p>Mementos sits quietly in your system tray. When it detects a game launching, it starts capturing the game's window via Windows Graphics Capture along with your microphone and the system's audio output. When the game closes, recording stops automatically and the resulting MKV file lands in your chosen folder.</p>
     <p>The built-in editor lets you browse past recordings, trim clips, drop bookmarks during gameplay with a hotkey, and export final cuts as MP4. First-run setup helps you choose audio devices and a recording folder, then applies sensible defaults for frame rate and quality.</p>
   </section>
 
@@ -146,33 +146,33 @@
       </div>
       <div class="feature">
         <h3>Local by default</h3>
-        <p>Recordings and clips stay on your PC unless you select one for YouTube upload. Momento has no cloud library or background upload.</p>
+        <p>Recordings and clips stay on your PC unless you select one for YouTube upload. Mementos has no cloud library or background upload.</p>
       </div>
     </div>
   </section>
 
   <section>
-    <h2>How Momento handles your data</h2>
+    <h2>How Mementos handles your data</h2>
     <div class="privacy-strip">
       <h3>Local-first by design</h3>
       <ul>
         <li>No telemetry. No analytics. No usage tracking.</li>
-        <li>No account required to use Momento.</li>
+        <li>No account required to use Mementos.</li>
         <li>Recordings are stored only on your machine, in a folder you choose.</li>
-        <li>The installed build checks GitHub Releases once at startup and installs a verified stable update when Momento is idle. Manual checks offer Install now or Later. GitHub receives the source IP and <code>Momento-Updater/1</code> User-Agent.</li>
+        <li>The installed build checks GitHub Releases once at startup and installs a verified stable update when Mementos is idle. Manual checks offer Install now or Later. GitHub receives the source IP and <code>Mementos-Updater/1</code> User-Agent.</li>
       </ul>
     </div>
 
     <div class="yt-note">
       <p><strong>Optional YouTube upload with your Google project.</strong></p>
-      <p>The public build includes upload controls but no Google OAuth identity. Import a Desktop OAuth JSON from a project you control, then connect through Google's browser flow. Momento encrypts the imported client and account token with Windows DPAPI. Read the <a href="https://github.com/Vanexia/momento/blob/main/docs/youtube-setup.md" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">setup guide</a> or the <a href="privacy.html" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">privacy policy</a>.</p>
+      <p>The public build includes upload controls but no Google OAuth identity. Import a Desktop OAuth JSON from a project you control, then connect through Google's browser flow. Mementos encrypts the imported client and account token with Windows DPAPI. Read the <a href="https://github.com/Vanexia/momento/blob/main/docs/youtube-setup.md" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">setup guide</a> or the <a href="privacy.html" style="color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent);">privacy policy</a>.</p>
     </div>
   </section>
 
   <section>
     <h2>System requirements</h2>
     <p><strong>Windows 10</strong> (1903 or newer) or <strong>Windows 11</strong>.</p>
-    <p><strong>A hardware H.264 encoder is recommended.</strong> Momento checks NVIDIA NVENC, AMD AMF, Intel QuickSync, and Media Foundation against the requested recording profile. If none can open, it falls back to CPU encoding and displays a warning.</p>
+    <p><strong>A hardware H.264 encoder is recommended.</strong> Mementos checks NVIDIA NVENC, AMD AMF, Intel QuickSync, and Media Foundation against the requested recording profile. If none can open, it falls back to CPU encoding and displays a warning.</p>
     <p>Keep at least 10 GB free for the app and a recording buffer. The default 16 Mbit/s capture setting uses roughly 7.2 GB per hour plus audio and container overhead.</p>
   </section>
 
@@ -183,7 +183,7 @@
       <a href="https://github.com/Vanexia/momento/blob/main/docs/youtube-setup.md">YouTube Setup</a>
       <a href="privacy.html">Privacy Policy</a>
     </div>
-    <p>© 2026 Momento. Local game recording for Windows.</p>
+    <p>© 2026 Mementos. Local game recording for Windows.</p>
   </footer>
 
 </div>

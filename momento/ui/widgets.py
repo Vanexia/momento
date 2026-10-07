@@ -1,4 +1,4 @@
-"""Shared custom widgets for Momento's UI."""
+"""Shared custom widgets for Mementos' UI."""
 
 from __future__ import annotations
 

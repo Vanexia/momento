@@ -1,4 +1,4 @@
-"""Create the deterministic downloadable archive for Momento's FFmpeg helper."""
+"""Create the deterministic downloadable archive for Mementos's FFmpeg helper."""
 
 from __future__ import annotations
 

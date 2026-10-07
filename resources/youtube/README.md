@@ -1,6 +1,6 @@
 # YouTube OAuth resources
 
-Installed Momento builds do not read an OAuth identity from this directory.
+Installed Mementos builds do not read an OAuth identity from this directory.
 Use **Settings > YouTube > Import OAuth JSON...** and follow
 [the user setup guide](../../docs/youtube-setup.md).
 
@@ -17,7 +17,7 @@ The Settings import path is preferable for source testing because it exercises
 the same validation, DPAPI storage, replacement, and removal flow as the
 installer.
 
-Momento requests:
+Mementos requests:
 
 - `https://www.googleapis.com/auth/youtube.upload`
 - `https://www.googleapis.com/auth/youtube.readonly`

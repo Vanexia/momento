@@ -85,7 +85,7 @@ class UpdateService(QObject):
             if interactive:
                 self.status_changed.emit(
                     "unavailable",
-                    "Update checks are available in the installed version of Momento.",
+                    "Update checks are available in the installed version of Mementos.",
                     True,
                 )
             return
@@ -126,7 +126,7 @@ class UpdateService(QObject):
 
         if result.status is UpdateStatus.CURRENT:
             self.status_changed.emit(
-                "current", "You're using the latest version of Momento.", interactive
+                "current", "You're using the latest version of Mementos.", interactive
             )
             return
         if result.status is UpdateStatus.FAILED:
@@ -184,7 +184,7 @@ class UpdateService(QObject):
             lease.release()
             self.status_changed.emit(
                 "failed",
-                "The update is downloaded, but Momento could not start the installer. "
+                "The update is downloaded, but Mementos could not start the installer. "
                 "It will try again next launch.",
                 interactive,
             )
@@ -198,6 +198,6 @@ class UpdateService(QObject):
     def _defer(self, interactive: bool) -> None:
         self.status_changed.emit(
             "deferred",
-            "The update is ready and will install the next time Momento starts.",
+            "The update is ready and will install the next time Mementos starts.",
             interactive,
         )

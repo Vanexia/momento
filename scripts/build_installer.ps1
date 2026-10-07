@@ -21,7 +21,7 @@ if (-not (Test-Path -LiteralPath $bootstrapPython)) {
 if (-not $iscc) {
     throw "ISCC.exe was not found. Install Inno Setup 6 before building."
 }
-if ($env:MOMENTO_INCLUDE_YOUTUBE_OAUTH -eq "1") {
+if ($env:MOMENTO_INCLUDE_YOUTUBE_OAUTH -eq "1" -or $env:MEMENTOS_INCLUDE_YOUTUBE_OAUTH -eq "1") {
     throw "This script creates the standard public build and will not include an OAuth identity."
 }
 $inno = Get-ChildItem "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall" |
@@ -32,9 +32,9 @@ if (-not $inno -or $inno.DisplayVersion -ne "6.7.3") {
     throw "The public release requires Inno Setup 6.7.3."
 }
 
-$running = Get-Process -Name "Momento" -ErrorAction SilentlyContinue
+$running = Get-Process -Name "Mementos", "Momento" -ErrorAction SilentlyContinue
 if ($running) {
-    throw "Quit Momento from its tray menu before building. A recording must never be force-stopped."
+    throw "Quit Mementos from its tray menu before building. A recording must never be force-stopped."
 }
 
 Push-Location $root
@@ -70,10 +70,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Could not install the hash-locked release wheels." }
     & $python -m pip install --disable-pip-version-check --no-input `
         --no-deps --no-build-isolation $root
-    if ($LASTEXITCODE -ne 0) { throw "Could not install Momento into the release environment." }
+    if ($LASTEXITCODE -ne 0) { throw "Could not install Mementos into the release environment." }
 
     $dist = Join-Path $root "dist"
-    $bundle = Join-Path $dist "Momento"
+    $bundle = Join-Path $dist "Mementos"
     $sourceDir = Join-Path $dist "source"
     $installerDir = Join-Path $dist "installer"
     $work = Join-Path $root "build\pyinstaller_work\public"
@@ -98,6 +98,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "First-run wizard checks failed." }
     & $python "tests\smoke_installer_contract.py"
     if ($LASTEXITCODE -ne 0) { throw "Installer contract checks failed." }
+    & $python "tests\smoke_rebrand.py"
+    if ($LASTEXITCODE -ne 0) { throw "Rename compatibility checks failed." }
+    & $python "tests\smoke_encoder_backpressure.py"
+    if ($LASTEXITCODE -ne 0) { throw "Encoder backpressure checks failed." }
     & $python "tests\smoke_update_metadata.py"
     if ($LASTEXITCODE -ne 0) { throw "Signed update metadata checks failed." }
     & $python "tests\smoke_update_client.py"
@@ -185,7 +189,7 @@ try {
 
     $manifest = Join-Path $bundle "RELEASE_MANIFEST.txt"
     $manifestLines = @(
-        "Momento 0.2.8 release manifest",
+        "Mementos 0.2.9 release manifest",
         "Git commit: $(git rev-parse HEAD)",
         "Format: SHA256  bytes  relative path",
         ""
@@ -203,22 +207,24 @@ try {
     # Personal-data and private-runtime scan of public source and bundle.
     & $python "tests\smoke_public_release.py"
     if ($LASTEXITCODE -ne 0) { throw "The public-release privacy scan failed." }
+    & $python "tests\smoke_release_privacy.py"
+    if ($LASTEXITCODE -ne 0) { throw "The release privacy regressions failed." }
     & $python "tests\smoke_git_history_privacy.py"
     if ($LASTEXITCODE -ne 0) { throw "The Git-history privacy scan failed." }
 
-    $sourceArchive = Join-Path $sourceDir "Momento-0.2.8-source.zip"
+    $sourceArchive = Join-Path $sourceDir "Mementos-0.2.9-source.zip"
     & git archive --format=zip --output=$sourceArchive HEAD
     if ($LASTEXITCODE -ne 0) { throw "Could not create the corresponding source archive." }
     & $python "tests\smoke_source_archive.py" $sourceArchive
     if ($LASTEXITCODE -ne 0) { throw "The corresponding source privacy scan failed." }
 
-    $thirdPartySource = Join-Path $sourceDir "Momento-0.2.8-third-party-source.zip"
+    $thirdPartySource = Join-Path $sourceDir "Mementos-0.2.9-third-party-source.zip"
     & $python "scripts\build_corresponding_source.py" --output $thirdPartySource
     if ($LASTEXITCODE -ne 0) { throw "Could not build the third-party source bundle." }
     & $python "tests\smoke_corresponding_source.py" $thirdPartySource
     if ($LASTEXITCODE -ne 0) { throw "The third-party source bundle failed verification." }
 
-    $helperArchive = Join-Path $sourceDir "Momento-ffmpeg-helper-8.1.2-1.zip"
+    $helperArchive = Join-Path $sourceDir "Mementos-ffmpeg-helper-8.1.2-1.zip"
     & $python "scripts\package_ffmpeg_helper.py" "resources\ffmpeg" $helperArchive
     if ($LASTEXITCODE -ne 0) { throw "Could not package the FFmpeg helper." }
     $helperHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $helperArchive).Hash
@@ -229,7 +235,7 @@ try {
     & $iscc "build\installer.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
 
-    $installer = Join-Path $installerDir "MomentoSetup-0.2.8.exe"
+    $installer = Join-Path $installerDir "MementosSetup-0.2.9.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "The installer was not produced."
     }
@@ -244,34 +250,56 @@ try {
         "yyyy-MM-dd'T'HH:mm:ss'Z'",
         [Globalization.CultureInfo]::InvariantCulture
     )
-    # Stable SemVer components map to a monotonic integer while leaving ample
-    # room for future minor and patch releases.
-    $metadataVersion = [Int64](0 * 1000000000000 + 2 * 1000000 + 8)
+    # Reserve two increasing identities per release. An old client trusts the
+    # legacy manifest before upgrade; the renamed client must then accept its
+    # distinct manifest without triggering the same-version digest guard.
+    $legacyMetadataVersion = [Int64](2 * (0 * 1000000000000 + 2 * 1000000 + 9))
+    $metadataVersion = $legacyMetadataVersion + 1
     & $python "scripts\build_update_metadata.py" `
         --installer $installer `
-        --version "0.2.8" `
+        --version "0.2.9" `
         --minimum-updater-version "0.2.2" `
         --metadata-version $metadataVersion `
         --published-at $publishedAt `
         --expires-at $expiresAt `
         --output-dir $installerDir
     if ($LASTEXITCODE -ne 0) { throw "Could not sign the update release metadata." }
-    $updateMetadata = Join-Path $installerDir "Momento-update.json"
-    $updateSignature = Join-Path $installerDir "Momento-update.json.sig"
+    $updateMetadata = Join-Path $installerDir "Mementos-update.json"
+    $updateSignature = Join-Path $installerDir "Mementos-update.json.sig"
     if (-not (Test-Path -LiteralPath $updateMetadata) -or
         -not (Test-Path -LiteralPath $updateSignature)) {
         throw "The signed update release assets were not produced."
     }
+    # Clients through 0.2.8 require the historical asset names. Keep a separate
+    # signed manifest pointing at an identical copy of the renamed installer.
+    $legacyInstaller = Join-Path $installerDir "MomentoSetup-0.2.9.exe"
+    Copy-Item -LiteralPath $installer -Destination $legacyInstaller
+    & $python "scripts\build_update_metadata.py" `
+        --installer $legacyInstaller `
+        --version "0.2.9" `
+        --minimum-updater-version "0.2.2" `
+        --metadata-version $legacyMetadataVersion `
+        --published-at $publishedAt `
+        --expires-at $expiresAt `
+        --output-dir $installerDir
+    if ($LASTEXITCODE -ne 0) { throw "Could not sign the legacy update metadata." }
+    $legacyUpdateMetadata = Join-Path $installerDir "Momento-update.json"
+    $legacyUpdateSignature = Join-Path $installerDir "Momento-update.json.sig"
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash
-    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MomentoSetup-0.2.8.exe"
-    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.8.txt"
+    $legacyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $legacyInstaller).Hash
+    if ($hash -ne $legacyHash) { throw "The legacy installer alias differs from the release." }
+    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MementosSetup-0.2.9.exe"
+    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.9.txt"
     $checksumLines = @(
         $installer,
         $sourceArchive,
         $thirdPartySource,
         $helperArchive,
         $updateMetadata,
-        $updateSignature
+        $updateSignature,
+        $legacyInstaller,
+        $legacyUpdateMetadata,
+        $legacyUpdateSignature
     ) | ForEach-Object {
         $assetHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_).Hash.ToLowerInvariant()
         "$assetHash  $([System.IO.Path]::GetFileName($_))"

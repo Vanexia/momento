@@ -3,9 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Privacy Policy | Momento</title>
-<meta name="description" content="Privacy policy for Momento, a local Windows game recorder with an opt-in YouTube upload feature.">
-<link rel="icon" type="image/png" href="momento-256.png">
+<title>Privacy Policy | Mementos</title>
+<meta name="description" content="Privacy policy for Mementos, a local Windows game recorder with an opt-in YouTube upload feature.">
+<link rel="icon" type="image/png" href="mementos-256.png">
 <style>
   :root {
     --accent: #a78bfa;
@@ -64,39 +64,39 @@
 <div class="wrap">
 
   <header>
-    <a class="home" href="index.html">← Momento</a>
+    <a class="home" href="index.html">← Mementos</a>
     <h1>Privacy Policy</h1>
     <p class="effective">Effective: 17 August 2026</p>
   </header>
 
   <section>
     <h2>Overview</h2>
-    <p>Momento records gameplay and stores recordings on your Windows computer. The public build also supports YouTube upload after you import a Google Desktop OAuth client from a project you control.</p>
-    <p>Momento has no telemetry, analytics, advertising, Momento account, or cloud media library.</p>
+    <p>Mementos records gameplay and stores recordings on your Windows computer. The public build also supports YouTube upload after you import a Google Desktop OAuth client from a project you control.</p>
+    <p>Mementos has no telemetry, analytics, advertising, Mementos account, or cloud media library.</p>
 
     <div class="callout">
-      <p><strong>Network summary:</strong> An installed build checks GitHub Releases once when it starts. Momento contacts Google only after you start YouTube setup, connect an account, or upload a file. Momento does not upload recordings in the background.</p>
+      <p><strong>Network summary:</strong> An installed build checks GitHub Releases once when it starts. Mementos contacts Google only after you start YouTube setup, connect an account, or upload a file. Mementos does not upload recordings in the background.</p>
     </div>
   </section>
 
   <section>
-    <h2>What Momento stores locally</h2>
-    <p>Momento writes the following to your machine under <code>%APPDATA%\Momento\</code> and the recordings folder you select in Settings:</p>
+    <h2>What Mementos stores locally</h2>
+    <p>Fresh profiles store app data under <code>%APPDATA%\Mementos\</code>. Existing profiles keep <code>%APPDATA%\Momento\</code> so the rename preserves your settings and credentials. Mementos stores recordings in the folder you select in Settings:</p>
     <ul>
       <li><strong>Recordings and clips:</strong> <code>.mkv</code> recordings and <code>.mp4</code> exports in the folder you choose.</li>
       <li><strong>Editor data:</strong> bookmark sidecars, thumbnails, and ownership markers beside the media they describe.</li>
       <li><strong>Settings:</strong> capture, storage, game, and interface preferences in <code>config.json</code>.</li>
-      <li><strong>Logs:</strong> rotating diagnostic files under <code>logs</code>. Momento does not transmit them.</li>
+      <li><strong>Logs:</strong> rotating diagnostic files under <code>logs</code>. Mementos does not transmit them.</li>
       <li><strong>Window and process state:</strong> local window placement, lock, and update state files.</li>
     </ul>
-    <p>The startup update request exposes your public IP address to GitHub as part of the HTTPS connection. Momento does not send machine specifications, usage history, installed games, recordings, or device selections with that request.</p>
+    <p>The startup update request exposes your public IP address to GitHub as part of the HTTPS connection. Mementos does not send machine specifications, usage history, installed games, recordings, or device selections with that request.</p>
   </section>
 
   <section>
     <h2>Update checks</h2>
-    <p>An installed Windows build requests the latest stable release from <code>api.github.com</code> once when the process starts. It installs a verified update when Momento is idle. A manual check downloads and verifies the update, then offers Install now or Later. Source runs do not perform the startup check.</p>
-    <p>GitHub receives the source IP address and the fixed <code>Momento-Updater/1</code> User-Agent, plus the standard metadata needed to serve an HTTPS request. If an update is available, Momento downloads signed metadata, its signature, and the installer from GitHub release hosts.</p>
-    <p>Momento verifies signed release metadata, the installer size, and the installer SHA-256 before staging an update. It does not send a Momento account identifier because Momento has no account system.</p>
+    <p>An installed Windows build requests the latest stable release from <code>api.github.com</code> once when the process starts. It installs a verified update when Mementos is idle. A manual check downloads and verifies the update, then offers Install now or Later. Source runs do not perform the startup check.</p>
+    <p>GitHub receives the source IP address and the fixed <code>Mementos-Updater/1</code> User-Agent, plus the standard metadata needed to serve an HTTPS request. If an update is available, Mementos downloads signed metadata, its signature, and the installer from GitHub release hosts.</p>
+    <p>Mementos verifies signed release metadata, the installer size, and the installer SHA-256 before staging an update. It does not send a Mementos account identifier because Mementos has no account system.</p>
   </section>
 
   <section>
@@ -104,40 +104,40 @@
     <p>The public build includes YouTube controls and Google client libraries, but it contains no Google OAuth project, client identity, or developer account data. You provide a Desktop OAuth client from a Google Cloud project you control. Read the <a href="https://github.com/Vanexia/momento/blob/main/docs/youtube-setup.md">YouTube setup guide</a> for the required steps and Google restrictions.</p>
 
     <h3>Imported OAuth client</h3>
-    <p>Momento reads the JSON file you select, validates its Desktop application structure and Google endpoints, and stores a normalised copy at <code>%APPDATA%\Momento\youtube_oauth_client.dat</code>. Windows Data Protection API (DPAPI) encrypts the stored copy and binds it to your Windows account.</p>
-    <p>Momento does not copy the imported client into recordings, logs, installers, source archives, or release assets. The original downloaded JSON remains where you saved it until you move or delete it.</p>
+    <p>Mementos reads the JSON file you select, validates its Desktop application structure and Google endpoints, and stores a normalised copy as <code>youtube_oauth_client.dat</code> in your app-data folder. Windows Data Protection API (DPAPI) encrypts the stored copy and binds it to your Windows account.</p>
+    <p>Mementos does not copy the imported client into recordings, logs, installers, source archives, or release assets. The original downloaded JSON remains where you saved it until you move or delete it.</p>
 
     <h3>Sign-in</h3>
-    <p>Momento opens Google's OAuth 2.0 Desktop flow in your default browser. You enter your password on Google's site and review the requested permissions there. Momento never receives or stores your Google password.</p>
-    <p>Google expires refresh tokens for an External app in Testing after seven days when it requests Momento's YouTube scopes. You must connect again after expiry or complete Google's applicable <a href="https://support.google.com/cloud/answer/15549257?hl=en">Production and verification steps</a>.</p>
+    <p>Mementos opens Google's OAuth 2.0 Desktop flow in your default browser. You enter your password on Google's site and review the requested permissions there. Mementos never receives or stores your Google password.</p>
+    <p>Google expires refresh tokens for an External app in Testing after seven days when it requests Mementos' YouTube scopes. You must connect again after expiry or complete Google's applicable <a href="https://support.google.com/cloud/answer/15549257?hl=en">Production and verification steps</a>.</p>
 
-    <h3>What Google data Momento accesses</h3>
-    <p>Momento requests two YouTube API scopes:</p>
+    <h3>What Google data Mementos accesses</h3>
+    <p>Mementos requests two YouTube API scopes:</p>
     <ul>
       <li><code>https://www.googleapis.com/auth/youtube.upload</code> permits the upload you select and confirm.</li>
       <li><code>https://www.googleapis.com/auth/youtube.readonly</code> permits one <code>channels.list(mine=true)</code> request after sign-in so Settings can show the connected channel's name, ID, and public avatar.</li>
     </ul>
 
-    <p>Momento does not request comments, analytics, contacts, email, or Google Drive data.</p>
+    <p>Mementos does not request comments, analytics, contacts, email, or Google Drive data.</p>
 
-    <h3>What Momento stores from Google</h3>
+    <h3>What Mementos stores from Google</h3>
     <ul>
-      <li><strong>OAuth refresh token:</strong> DPAPI-encrypted at <code>%APPDATA%\Momento\youtube_token.dat</code>.</li>
+      <li><strong>OAuth refresh token:</strong> DPAPI-encrypted as <code>youtube_token.dat</code> in your app-data folder.</li>
       <li><strong>Channel name and ID:</strong> cached in <code>config.json</code> so Settings can identify the connected channel without another API request.</li>
-      <li><strong>Public channel avatar:</strong> cached at <code>%APPDATA%\Momento\youtube_avatar.png</code>.</li>
+      <li><strong>Public channel avatar:</strong> cached as <code>youtube_avatar.png</code> in your app-data folder.</li>
     </ul>
 
     <h3>Where uploaded videos go</h3>
-    <p>After you confirm an upload, Momento sends the selected video, title, description, tags, category, audience choice, thumbnail if selected, and requested privacy setting to the YouTube Data API v3. Momento has no intermediary upload server.</p>
+    <p>After you confirm an upload, Mementos sends the selected video, title, description, tags, category, audience choice, thumbnail if selected, and requested privacy setting to the YouTube Data API v3. Mementos has no intermediary upload server.</p>
     <p>Google restricts uploads from unverified API projects created after 28 July 2020 to private visibility until the project passes an audit. Google can apply that restriction even if you request Public or Unlisted. Google's <a href="https://developers.google.com/youtube/v3/docs/videos/insert"><code>videos.insert</code> documentation</a> describes the restriction.</p>
 
     <h3>Compliance with Google API Services User Data Policy</h3>
-    <p>Momento uses information received from Google APIs under the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements:</p>
+    <p>Mementos uses information received from Google APIs under the <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including its Limited Use requirements:</p>
     <ul>
       <li>Google user data is used only to provide the user-facing YouTube upload feature.</li>
-      <li>Momento sends upload content and metadata only to YouTube after your confirmation.</li>
-      <li>Momento does not use Google user data for advertising, profiling, or unrelated features.</li>
-      <li>Momento has no server that receives Google user data. A maintainer receives data only if you choose to include it in a support report.</li>
+      <li>Mementos sends upload content and metadata only to YouTube after your confirmation.</li>
+      <li>Mementos does not use Google user data for advertising, profiling, or unrelated features.</li>
+      <li>Mementos has no server that receives Google user data. A maintainer receives data only if you choose to include it in a support report.</li>
     </ul>
   </section>
 
@@ -147,14 +147,14 @@
       <li><strong>Disconnect:</strong> <strong>Settings &gt; YouTube &gt; Disconnect</strong> deletes the local token, avatar, and cached channel details.</li>
       <li><strong>Remove OAuth setup:</strong> the removal action in <strong>Settings &gt; YouTube</strong> deletes the imported client and clears the local YouTube connection.</li>
       <li><strong>Revoke access at Google:</strong> open <a href="https://myaccount.google.com/permissions">Google Account permissions</a>, select the app name you configured, and remove access.</li>
-      <li><strong>Uninstall:</strong> the default choice preserves settings and local account state. Accept the removal prompt, or use <code>/PURGEUSERDATA</code> for a silent uninstall, to delete Momento's AppData state.</li>
+      <li><strong>Uninstall:</strong> the default choice preserves settings and local account state. Accept the removal prompt, or use <code>/PURGEUSERDATA</code> for a silent uninstall, to delete Mementos' AppData state.</li>
     </ul>
     <p>The uninstaller does not delete recordings or exported clips, including when you request an AppData purge.</p>
   </section>
 
   <section>
     <h2>Children</h2>
-    <p>Momento is not directed at children under 13. It contains no advertising. Google and YouTube apply their account and age policies when you use the upload feature.</p>
+    <p>Mementos is not directed at children under 13. It contains no advertising. Google and YouTube apply their account and age policies when you use the upload feature.</p>
   </section>
 
   <section>
@@ -164,11 +164,11 @@
 
   <section>
     <h2>Contact</h2>
-    <p>Open an issue in the <a href="https://github.com/Vanexia/momento/issues">Momento repository</a> for privacy questions that do not expose sensitive data. Report vulnerabilities through the private process in <a href="https://github.com/Vanexia/momento/security/policy">the security policy</a>.</p>
+    <p>Open an issue in the <a href="https://github.com/Vanexia/momento/issues">Mementos repository</a> for privacy questions that do not expose sensitive data. Report vulnerabilities through the private process in <a href="https://github.com/Vanexia/momento/security/policy">the security policy</a>.</p>
   </section>
 
   <footer>
-    <p><a href="index.html">← Back to Momento</a></p>
+    <p><a href="index.html">← Back to Mementos</a></p>
   </footer>
 
 </div>

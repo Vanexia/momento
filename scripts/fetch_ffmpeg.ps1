@@ -13,7 +13,7 @@ $DownloadUrl = "https://github.com/Vanexia/momento/releases/download/v0.2.8/$Arc
 
 $ProjectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot 'momento\__main__.py'))) {
-    throw "Could not locate the Momento project root from $PSScriptRoot"
+    throw "Could not locate the Mementos project root from $PSScriptRoot"
 }
 
 if (-not $Destination) {
@@ -39,7 +39,7 @@ try {
     }
     else {
         $VerifiedArchive = Join-Path $WorkDir $ArchiveName
-        Write-Host "Downloading Momento FFmpeg helper $Version-$HelperRevision..."
+        Write-Host "Downloading Mementos FFmpeg helper $Version-$HelperRevision..."
         Invoke-WebRequest -UseBasicParsing -Uri $DownloadUrl -OutFile $VerifiedArchive
     }
 
@@ -72,7 +72,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $Extracted $Name) `
             -Destination (Join-Path $Destination $Name) -Force
     }
-    Write-Host "Installed verified Momento FFmpeg helper $Version-$HelperRevision in $Destination"
+    Write-Host "Installed verified Mementos FFmpeg helper $Version-$HelperRevision in $Destination"
 }
 finally {
     if (Test-Path -LiteralPath $WorkDir) {

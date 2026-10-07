@@ -13,7 +13,7 @@ from momento import __version__  # noqa: E402
 
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_VERSION = "0.2.8"
+EXPECTED_VERSION = "0.2.9"
 
 checks = 0
 failures = 0
@@ -60,7 +60,7 @@ def main() -> int:
     check("installer: deterministic build wrapper exists", builder_path.is_file())
     check("installer: version matches application", f'#define MyAppVersion "{EXPECTED_VERSION}"' in installer)
     check("installer: per-user privileges", "PrivilegesRequired=lowest" in installer)
-    check("installer: installs below LocalAppData", r"{localappdata}\Programs\Momento" in installer)
+    check("installer: installs below LocalAppData", r"{localappdata}\Programs\Mementos" in installer)
     check("installer: targets supported 64-bit Windows", "ArchitecturesAllowed=x64compatible" in installer)
     check(
         "installer: checks the running-app mutex for normal installs",
@@ -200,7 +200,7 @@ def main() -> int:
             f"installer: purge removes {filename}",
             rf"{{userappdata}}\Momento\{filename}" in installer,
         )
-    check("installer: carries the complete one-folder release", r"dist\Momento\*" in installer)
+    check("installer: carries the complete one-folder release", r"dist\Mementos\*" in installer)
     check("installer: exposes public licence at install root", r"..\LICENSE" in installer)
     check(
         "installer: carries the exact source offer",
@@ -251,8 +251,8 @@ def main() -> int:
         "MOMENTO_INCLUDE_YOUTUBE_OAUTH" in builder and "will not include" in builder,
     )
     check(
-        "source bootstrap downloads the reviewed helper from this release",
-        f"/v{EXPECTED_VERSION}/$ArchiveName" in helper_fetcher,
+        "source bootstrap retains the reviewed published helper location",
+        "/v0.2.8/$ArchiveName" in helper_fetcher,
     )
     check(
         "release notes name the updater assets emitted by the builder",
@@ -300,7 +300,7 @@ def main() -> int:
         "supplies no licence or notice file" in spec,
     )
     check(
-        "compliance: build record identifies Momento's custom PyAV runtime",
+        "compliance: build record identifies Mementos' custom PyAV runtime",
         all(
             term in build_info
             for term in (
@@ -313,7 +313,7 @@ def main() -> int:
     check(
         "compliance: notices identify the complete native source bundle",
         "PyAV 17.0.1" in notices
-        and f"Momento-{EXPECTED_VERSION}-third-party-source.zip" in notices,
+        and f"Mementos-{EXPECTED_VERSION}-third-party-source.zip" in notices,
     )
     check(
         "builder: creates and verifies third-party corresponding source",

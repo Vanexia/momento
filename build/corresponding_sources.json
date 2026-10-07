@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "release": "0.2.8",
-  "bundle_name": "Momento-0.2.8-third-party-source.zip",
+  "release": "0.2.9",
+  "bundle_name": "Mementos-0.2.9-third-party-source.zip",
   "binary_provenance": {
     "pyav_wheel": {
       "filename": "av-17.0.1-cp311-abi3-win_amd64.whl",
@@ -35,7 +35,7 @@
   },
   "sources": [
     {
-      "name": "Momento FFmpeg helper",
+      "name": "Mementos FFmpeg helper",
       "version": "8.1.2",
       "role": "helper",
       "filename": "ffmpeg-8.1.2.tar.xz",

@@ -1,6 +1,6 @@
 """Disk-budget enforcement for the recordings folder.
 
-When ``Config.max_storage_gb > 0`` Momento deletes the oldest top-level
+When ``Config.max_storage_gb > 0`` Mementos deletes the oldest top-level
 ``.mkv`` recordings (and their sidecars) until the folder's total size sits
 under the limit. Clips and their sidecars in ``<output>/clips/`` are never
 considered — they're user-curated and persistent on purpose.

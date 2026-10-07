@@ -130,6 +130,38 @@ def main() -> int:
         payload = json.loads(metadata)
         check("metadata uses the exact stable GitHub asset URL", payload["installer"]["url"].endswith("/v0.2.3/MomentoSetup-0.2.3.exe"))
 
+        renamed_installer = tmp / "MementosSetup-0.2.3.exe"
+        renamed_installer.write_bytes(installer.read_bytes())
+        renamed = _run(
+            "scripts/build_update_metadata.py",
+            "--installer", str(renamed_installer),
+            "--version", "0.2.3",
+            "--metadata-version", "1",
+            "--published-at", "2026-08-17T12:00:00Z",
+            "--expires-at", "2027-02-13T12:00:00Z",
+            "--key", str(private_key),
+            "--public-key", str(public_key),
+            "--output-dir", str(output),
+        )
+        check("renamed installer can be signed for new clients", renamed.returncode == 0)
+        if renamed.returncode == 0:
+            new_manifest = authenticate_manifest(
+                (output / "Mementos-update.json").read_bytes(),
+                (output / "Mementos-update.json.sig").read_bytes(),
+                original_public,
+            )
+            check(
+                "renamed manifest authenticates the same bytes under the new asset name",
+                new_manifest.installer.name == "MementosSetup-0.2.3.exe"
+                and new_manifest.installer.url.endswith("/v0.2.3/MementosSetup-0.2.3.exe")
+                and new_manifest.installer.sha256 == manifest.installer.sha256,
+            )
+        check(
+            "publishing renamed metadata preserves the legacy update pair",
+            metadata_path.read_bytes() == metadata
+            and signature_path.read_bytes() == signature_text,
+        )
+
         missing_key = _run(
             "scripts/build_update_metadata.py",
             "--installer",

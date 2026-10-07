@@ -1,9 +1,9 @@
 """Logging + uncaught-exception capture.
 
-stderr + a 2 MB x 5 rotating file in %APPDATA%/Momento/logs/momento.log.
+stderr + a 2 MB x 5 rotating file in %APPDATA%/Mementos/logs/mementos.log.
 ``install_exception_hook()`` routes any uncaught exception through the same
 logger so we have a traceback on disk before the app dies (especially
-important once Momento runs as a frozen .exe with no console).
+important once Mementos runs as a frozen .exe with no console).
 """
 
 from __future__ import annotations
@@ -75,16 +75,16 @@ def setup_logging(level: int = logging.INFO) -> None:
     stderr_h.setFormatter(formatter)
     root.addHandler(stderr_h)
 
-    # Try the canonical %APPDATA%/Momento/logs/ first, then a couple of safe
+    # Try the canonical %APPDATA%/Mementos/logs/ first, then a couple of safe
     # fallbacks. A frozen build has no stderr console, so losing the file
     # handler entirely would mean crash logs go nowhere.
     candidates = []
     try:
-        candidates.append(logs_dir() / "momento.log")
+        candidates.append(logs_dir() / "mementos.log")
     except OSError:
         pass
     import tempfile
-    candidates.append(Path(tempfile.gettempdir()) / "momento.log")
+    candidates.append(Path(tempfile.gettempdir()) / "mementos.log")
 
     for log_file in candidates:
         try:
@@ -107,9 +107,9 @@ def setup_logging(level: int = logging.INFO) -> None:
 def install_exception_hook() -> None:
     """Route uncaught exceptions through the logger before the app dies.
 
-    Without this, a frozen Momento.exe with `console=False` would die
+    Without this, a frozen Mementos.exe with `console=False` would die
     silently — no console, no traceback, nothing to debug. With it, the
-    crash gets a full stacktrace in ``%APPDATA%/Momento/logs/momento.log``.
+    crash gets a full stacktrace in ``%APPDATA%/Mementos/logs/mementos.log``.
     """
     prev_hook = sys.excepthook
 

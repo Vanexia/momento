@@ -25,7 +25,7 @@ def update_public_key_path() -> Path:
     """Return the Ed25519 public key used to authenticate release metadata."""
     path = resources_dir() / "update_public_key.pem"
     if not path.is_file():
-        raise RuntimeError("Momento's update verification key is missing")
+        raise RuntimeError("Mementos's update verification key is missing")
     return path
 
 
@@ -35,7 +35,7 @@ def icons_dir() -> Path:
 
 def app_icon_path() -> Path | None:
     """Path to the multi-resolution app icon, or None if missing (dev tree)."""
-    p = icons_dir() / "momento.ico"
+    p = icons_dir() / "mementos.ico"
     return p if p.is_file() else None
 
 
@@ -66,7 +66,7 @@ def youtube_client_secrets_path() -> Path | None:
 
 
 def youtube_upload_available() -> bool:
-    """Return whether this Momento version supports YouTube upload.
+    """Return whether this Mementos version supports YouTube upload.
 
     Setup state is deliberately separate: upload controls remain available so
     an unconfigured user can open the setup guide.

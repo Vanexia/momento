@@ -400,7 +400,7 @@ class SettingsPanel(QWidget):
                     "Higher framerates need more GPU and produce larger files. "
                     "Match-the-display is a sensible default for most games.",
                     "Target presets may downscale games above the selected "
-                    "resolution. Momento never upscales.",
+                    "resolution. Mementos never upscales.",
                     "Interrupted MKV recordings are often recoverable, but "
                     "severe truncation can still prevent playback.",
                 ],
@@ -533,8 +533,8 @@ class SettingsPanel(QWidget):
         self._sys_status_label = QLabel("")
         self._sys_status_label.setStyleSheet("font-size: 9pt;")
         sys_hint = _hint_label(
-            "Choose the speakers or headset you want Momento to record. "
-            "Momento captures whatever plays through this device."
+            "Choose the speakers or headset you want Mementos to record. "
+            "Mementos captures whatever plays through this device."
         )
         self._sys_slider, self._sys_vol_spin, sys_vol_row = _slider_with_spin(0, 200, 100)
 
@@ -544,7 +544,7 @@ class SettingsPanel(QWidget):
         self._sys_test_btn = QPushButton("Test system audio")
         self._sys_test_btn.setToolTip(
             "Plays a short chime through the selected device. If you hear "
-            "the chime, that's the device Momento will record from."
+            "the chime, that's the device Mementos will record from."
         )
         self._sys_test_btn.clicked.connect(self._on_sys_audio_test_clicked)
         # Lazily built when first needed so we don't load wav data unless
@@ -601,7 +601,7 @@ class SettingsPanel(QWidget):
         wav = bookmark_sound_path()
         if wav is None or not wav.exists():
             QMessageBox.warning(
-                self, "Momento",
+                self, "Mementos",
                 "Bundled chime is missing — can't test system audio.",
             )
             return
@@ -657,7 +657,7 @@ class SettingsPanel(QWidget):
             mic_key = self._mic_combo.currentData() or ""
             if not mic_key:
                 QMessageBox.information(
-                    self, "Momento",
+                    self, "Mementos",
                     "Pick a microphone first, then start the test.",
                 )
                 self._mic_test_btn.setChecked(False)
@@ -679,7 +679,7 @@ class SettingsPanel(QWidget):
             self._mic_silence_timer.stop()
 
     def _on_mic_monitor_error(self, message: str) -> None:
-        QMessageBox.warning(self, "Momento", message)
+        QMessageBox.warning(self, "Mementos", message)
 
     def _on_mic_monitor_stopped(self) -> None:
         """Worker thread exited (clean or error). Make sure the button + meter
@@ -708,7 +708,7 @@ class SettingsPanel(QWidget):
             self._resolution_combo.addItem(label, value)
         self._resolution_combo.setToolTip(
             "Non-source presets downscale during encode (smaller files, less "
-            "GPU). Momento never upscales — picking 4K with a 1080p game "
+            "GPU). Mementos never upscales — picking 4K with a 1080p game "
             "still records at 1080p."
         )
         layout.addRow("Resolution:", self._resolution_combo)
@@ -860,14 +860,14 @@ class SettingsPanel(QWidget):
         self._disk_free_hint = _hint_label("")
         layout.addRow("", self._disk_free_hint)
 
-        # Max storage — Momento deletes the oldest recordings when this is
+        # Max storage — Mementos deletes the oldest recordings when this is
         # exceeded. Combo of common presets + a Custom… escape hatch reveals
         # a spinner row when picked.
         self._max_storage_combo = AnchoredComboBox()
         for label, value in _MAX_STORAGE_PRESETS:
             self._max_storage_combo.addItem(label, value)
         self._max_storage_combo.setToolTip(
-            "When the limit is reached, Momento deletes the oldest "
+            "When the limit is reached, Mementos deletes the oldest "
             "recordings first. Clips are always kept."
         )
         layout.addRow("Max storage:", self._max_storage_combo)
@@ -883,7 +883,7 @@ class SettingsPanel(QWidget):
             self._max_storage_custom_spin,
         )
         layout.addRow("", _hint_label(
-            "When the limit is reached, Momento deletes the oldest "
+            "When the limit is reached, Mementos deletes the oldest "
             "recordings first. Clips are kept."
         ))
 
@@ -927,16 +927,16 @@ class SettingsPanel(QWidget):
         path = Path(target).expanduser()
         if not path.is_dir():
             QMessageBox.information(
-                self, "Momento",
+                self, "Mementos",
                 "That folder doesn't exist yet — save the settings first so "
-                "Momento can create it.",
+                "Mementos can create it.",
             )
             return
         import os
         try:
             os.startfile(str(path))  # type: ignore[attr-defined]
         except OSError as e:
-            QMessageBox.warning(self, "Momento", f"Couldn't open the folder:\n{e}")
+            QMessageBox.warning(self, "Mementos", f"Couldn't open the folder:\n{e}")
 
     # ----------------------------------------------------------- YouTube
     def _build_youtube_setup_group(self) -> QGroupBox:
@@ -962,7 +962,7 @@ class SettingsPanel(QWidget):
         self._yt_remove_client_btn.setMinimumHeight(38)
         self._yt_remove_client_btn.setAccessibleName("Remove Google OAuth setup")
         self._yt_remove_client_btn.setAccessibleDescription(
-            "Delete Momento's protected OAuth client and disconnect YouTube"
+            "Delete Mementos' protected OAuth client and disconnect YouTube"
         )
         self._yt_remove_client_btn.clicked.connect(self._on_yt_remove_client_clicked)
 
@@ -982,7 +982,7 @@ class SettingsPanel(QWidget):
 
         layout.addWidget(
             _hint_label(
-                "Each person uses their own Google project. Momento protects the "
+                "Each person uses their own Google project. Mementos protects the "
                 "imported client with Windows DPAPI and never adds it to a recording "
                 "or public release."
             )
@@ -1028,8 +1028,8 @@ class SettingsPanel(QWidget):
         layout.addLayout(btn_row)
 
         layout.addWidget(_hint_label(
-            "Momento uses Google's standard OAuth desktop flow — sign-in "
-            "happens in your browser, on Google's site. Momento never sees "
+            "Mementos uses Google's standard OAuth desktop flow — sign-in "
+            "happens in your browser, on Google's site. Mementos never sees "
             "your password. The sign-in token is encrypted on disk via "
             "Windows DPAPI, bound to your Windows account."
         ))
@@ -1124,7 +1124,7 @@ class SettingsPanel(QWidget):
         QMessageBox.information(
             self,
             "Google OAuth setup ready",
-            "Momento stored a protected copy for this Windows account. You may "
+            "Mementos stored a protected copy for this Windows account. You may "
             "delete the downloaded JSON file. Next, connect your YouTube account.",
         )
         self._yt_connect_btn.setFocus(Qt.FocusReason.OtherFocusReason)
@@ -1135,7 +1135,7 @@ class SettingsPanel(QWidget):
         reply = QMessageBox.question(
             self,
             "Remove Google OAuth setup?",
-            "This deletes Momento's protected OAuth client and disconnects the "
+            "This deletes Mementos' protected OAuth client and disconnects the "
             "current YouTube account on this machine. Continue?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
             QMessageBox.StandardButton.Cancel,
@@ -1203,7 +1203,7 @@ class SettingsPanel(QWidget):
             )
         else:
             self._yt_setup_status_label.setText(
-                "Ready. Momento has a protected OAuth setup for this Windows account."
+                "Ready. Mementos has a protected OAuth setup for this Windows account."
             )
 
         self._yt_import_btn.setText(
@@ -1411,9 +1411,9 @@ class SettingsPanel(QWidget):
         box = QGroupBox("Startup")
         layout = QVBoxLayout(box)
 
-        self._autostart_check = QCheckBox("Start Momento with Windows")
+        self._autostart_check = QCheckBox("Start Mementos with Windows")
         self._autostart_check.setToolTip(
-            "Adds Momento to your user-level Run registry key — equivalent to "
+            "Adds Mementos to your user-level Run registry key — equivalent to "
             "dropping it in shell:startup."
         )
         layout.addWidget(self._autostart_check)
@@ -1422,7 +1422,7 @@ class SettingsPanel(QWidget):
             "Begin monitoring games on launch"
         )
         self._monitor_on_launch_check.setToolTip(
-            "If off, Momento sits in the tray without watching for games "
+            "If off, Mementos sits in the tray without watching for games "
             "until you click “Resume monitoring” in the tray menu."
         )
         layout.addWidget(self._monitor_on_launch_check)
@@ -1437,7 +1437,7 @@ class SettingsPanel(QWidget):
         layout.addWidget(self._close_to_tray_check)
 
         layout.addWidget(_hint_label(
-            "When enabled, Momento starts in the system tray without "
+            "When enabled, Mementos starts in the system tray without "
             "opening the main window."
         ))
         return box
@@ -1450,7 +1450,7 @@ class SettingsPanel(QWidget):
             "Game detected — show “Recording started”"
         )
         self._toast_started_check.setToolTip(
-            "Brief confirmation that Momento is now capturing — useful so you "
+            "Brief confirmation that Mementos is now capturing — useful so you "
             "know you don't need to start anything by hand."
         )
         layout.addWidget(self._toast_started_check)
@@ -1541,7 +1541,7 @@ class SettingsPanel(QWidget):
             "Record fullscreen apps not in the game list"
         )
         self._fullscreen_check.setToolTip(
-            "Catches games that aren't in the list. Momento skips a curated "
+            "Catches games that aren't in the list. Mementos skips a curated "
             "block-list of non-games (browsers, OBS, Parsec, VLC, IDEs, "
             "Office, Discord, …) and only fires when the same app is "
             "fullscreen for ~2 seconds, but mis-detection is still possible."
@@ -1603,7 +1603,7 @@ class SettingsPanel(QWidget):
         self._games_table.installEventFilter(self._pill_delegate)
         layout.addWidget(self._games_table, stretch=1)
         layout.addWidget(_hint_label(
-            f"Tick the box to auto-record that game. Momento ships a curated "
+            f"Tick the box to auto-record that game. Mementos ships a curated "
             f"list of {len(DEFAULT_KNOWN_GAMES)} popular titles."
         ))
 
@@ -1625,7 +1625,7 @@ class SettingsPanel(QWidget):
         btn_row.addWidget(remove_btn)
         restore_btn = QPushButton("Restore defaults (merge)")
         restore_btn.setToolTip(
-            "Add every entry from Momento's bundled list, keeping yours."
+            "Add every entry from Mementos' bundled list, keeping yours."
         )
         restore_btn.clicked.connect(self._on_restore_default_games)
         btn_row.addWidget(restore_btn)
@@ -1775,16 +1775,16 @@ class SettingsPanel(QWidget):
         exe = Path(exe).name
         if not exe.lower().endswith(".exe"):
             exe = exe + ".exe"
-        # Launchers/lobbies Momento deliberately refuses to record: from_dict
+        # Launchers/lobbies Mementos deliberately refuses to record: from_dict
         # strips these from every loaded config, so accepting one here would
         # "work" for one session and then silently vanish on restart — tell
         # the user up front instead.
         if exe.lower() in Config._AUTO_PRUNE_GAMES:
             QMessageBox.information(
-                self, "Momento",
+                self, "Mementos",
                 f"{exe} is a game launcher or lobby process, not a game.\n\n"
                 "It lingers in the background and would trigger recordings of "
-                "the launcher window, so Momento deliberately ignores it. Add "
+                "the launcher window, so Mementos deliberately ignores it. Add "
                 "the game's own executable instead.",
             )
             return False
@@ -1809,7 +1809,7 @@ class SettingsPanel(QWidget):
             return
         if not self._add_game_if_new(text):
             QMessageBox.information(
-                self, "Momento",
+                self, "Mementos",
                 "That executable is already in the list (or the name was empty).",
             )
 
@@ -1817,7 +1817,7 @@ class SettingsPanel(QWidget):
         try:
             import psutil
         except ImportError:
-            QMessageBox.warning(self, "Momento", "psutil isn't available; cannot scan running apps.")
+            QMessageBox.warning(self, "Mementos", "psutil isn't available; cannot scan running apps.")
             return
         seen_exes: set[str] = set()
         existing = set()
@@ -1840,7 +1840,7 @@ class SettingsPanel(QWidget):
             seen_exes.add(name)
         if not seen_exes:
             QMessageBox.information(
-                self, "Momento",
+                self, "Mementos",
                 "No new executables found. Try launching the game first, then scan.",
             )
             return
@@ -1861,7 +1861,7 @@ class SettingsPanel(QWidget):
     def _on_remove_selected_games(self) -> None:
         rows = sorted({idx.row() for idx in self._games_table.selectedIndexes()}, reverse=True)
         if not rows:
-            QMessageBox.information(self, "Momento", "Select one or more rows first.")
+            QMessageBox.information(self, "Mementos", "Select one or more rows first.")
             return
         for row in rows:
             self._games_table.removeRow(row)
@@ -1877,7 +1877,7 @@ class SettingsPanel(QWidget):
                 added += 1
         self._load_games_table(known, disabled)
         QMessageBox.information(
-            self, "Momento",
+            self, "Mementos",
             f"Merged {added} new entries; list now has {len(known)} games. "
             "Click Save to keep the changes.",
         )
@@ -1894,7 +1894,7 @@ class SettingsPanel(QWidget):
             with open(path, encoding="utf-8") as fh:
                 data = json.load(fh)
         except (OSError, json.JSONDecodeError) as e:
-            QMessageBox.warning(self, "Momento", f"Could not read {Path(path).name}:\n{e}")
+            QMessageBox.warning(self, "Mementos", f"Could not read {Path(path).name}:\n{e}")
             return
         # Accept either ``[exe, ...]`` (bare list) or ``{"known": [...], "disabled": [...]}``.
         if isinstance(data, list):
@@ -1904,12 +1904,12 @@ class SettingsPanel(QWidget):
             known = [str(x) for x in data.get("known", [])]
             disabled = [str(x) for x in data.get("disabled", [])]
         else:
-            QMessageBox.warning(self, "Momento", "Unrecognised file format.")
+            QMessageBox.warning(self, "Mementos", "Unrecognised file format.")
             return
         self._load_games_table(known, disabled)
 
     def _on_export_games(self) -> None:
-        start = str(Path.home() / "momento-games.json")
+        start = str(Path.home() / "mementos-games.json")
         path, _ = QFileDialog.getSaveFileName(
             self, "Export games list", start, "JSON (*.json)"
         )
@@ -1924,7 +1924,7 @@ class SettingsPanel(QWidget):
                     fh, indent=2, ensure_ascii=False,
                 )
         except OSError as e:
-            QMessageBox.warning(self, "Momento", f"Could not write {Path(path).name}:\n{e}")
+            QMessageBox.warning(self, "Mementos", f"Could not write {Path(path).name}:\n{e}")
 
     def _status_bar_say(self, message: str) -> None:
         """Best-effort status feedback on the host window."""
@@ -2135,7 +2135,7 @@ class SettingsPanel(QWidget):
             parts.append(f"{clips} clip{'s' if clips != 1 else ''}")
         summary = " and ".join(parts)
         box = QMessageBox(self)
-        box.setWindowTitle("Momento — move existing files?")
+        box.setWindowTitle("Mementos — move existing files?")
         box.setIcon(QMessageBox.Icon.Question)
         box.setText(
             f"You have {summary} in:\n  {old_folder}\n\n"
@@ -2166,7 +2166,7 @@ class SettingsPanel(QWidget):
             return 0, 0
 
         progress = _MigrationProgressDialog("Preparing…", "", 0, total, self)
-        progress.setWindowTitle("Momento — Transferring files")
+        progress.setWindowTitle("Mementos — Transferring files")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setAutoClose(False)
         progress.setAutoReset(False)
@@ -2223,12 +2223,12 @@ class SettingsPanel(QWidget):
     def _on_save(self) -> None:
         output_text = self._output_edit.text().strip()
         if not output_text:
-            QMessageBox.warning(self, "Momento", "Choose an output folder before saving.")
+            QMessageBox.warning(self, "Mementos", "Choose an output folder before saving.")
             return
         try:
             output_folder = Path(output_text).expanduser().resolve()
         except (OSError, RuntimeError) as e:
-            QMessageBox.warning(self, "Momento", f"Invalid output folder:\n{e}")
+            QMessageBox.warning(self, "Mementos", f"Invalid output folder:\n{e}")
             return
 
         mic = self._mic_combo.currentData() or ""
@@ -2238,7 +2238,7 @@ class SettingsPanel(QWidget):
         try:
             parse_hotkey(hotkey_spec)  # validates without registering
         except HotkeyError as e:
-            QMessageBox.warning(self, "Momento", f"Invalid bookmark hotkey:\n{e}")
+            QMessageBox.warning(self, "Mementos", f"Invalid bookmark hotkey:\n{e}")
             return
 
         active_output = (
@@ -2255,7 +2255,7 @@ class SettingsPanel(QWidget):
         if active_output is not None and folder_changed:
             QMessageBox.warning(
                 self,
-                "Momento",
+                "Mementos",
                 "Wait for the current recording to finish before changing the "
                 "output folder. Your other settings have not been changed.",
             )
@@ -2331,8 +2331,8 @@ class SettingsPanel(QWidget):
                 if paused is False:
                     QMessageBox.warning(
                         self,
-                        "Momento",
-                        "Momento could not pause game monitoring safely. The output "
+                        "Mementos",
+                        "Mementos could not pause game monitoring safely. The output "
                         "folder and your other settings have not been changed.",
                     )
                     getattr(self._session, "resume_monitoring", lambda: None)()
@@ -2342,7 +2342,7 @@ class SettingsPanel(QWidget):
             try:
                 output_folder.mkdir(parents=True, exist_ok=True)
             except OSError as e:
-                QMessageBox.warning(self, "Momento", f"Cannot create output folder:\n{e}")
+                QMessageBox.warning(self, "Mementos", f"Cannot create output folder:\n{e}")
                 return
 
             # Pausing drains any startup that entered the recorder just before
@@ -2355,7 +2355,7 @@ class SettingsPanel(QWidget):
             if active_output is not None and folder_changed:
                 QMessageBox.warning(
                     self,
-                    "Momento",
+                    "Mementos",
                     "Wait for the current recording to finish before changing the "
                     "output folder. Your other settings have not been changed.",
                 )
@@ -2364,7 +2364,7 @@ class SettingsPanel(QWidget):
             try:
                 save_config(new_cfg)
             except OSError as e:
-                QMessageBox.critical(self, "Momento", f"Could not save settings:\n{e}")
+                QMessageBox.critical(self, "Mementos", f"Could not save settings:\n{e}")
                 return
 
             if migrate:
@@ -2375,7 +2375,7 @@ class SettingsPanel(QWidget):
                 if failed:
                     QMessageBox.warning(
                         self,
-                        "Momento",
+                        "Mementos",
                         f"Moved {moved} media file(s); {failed} media or sidecar "
                         f"item(s) could not be moved "
                         f"(in use, permission denied, under repair, or already present "
@@ -2386,7 +2386,7 @@ class SettingsPanel(QWidget):
                 set_autostart(new_cfg.autostart_with_windows)
             except OSError as e:
                 QMessageBox.warning(
-                    self, "Momento", f"Settings saved, but autostart change failed:\n{e}"
+                    self, "Mementos", f"Settings saved, but autostart change failed:\n{e}"
                 )
 
             self._stop_mic_test()
@@ -2459,7 +2459,7 @@ class _YouTubeConnectWorker(QObject):
         except Exception as exc:  # noqa: BLE001 — contain third-party failures
             logger.warning("YouTube connect worker failed (%s)", type(exc).__name__)
             self.failed.emit(
-                "Couldn't complete YouTube sign-in. Return to Momento and try again."
+                "Couldn't complete YouTube sign-in. Return to Mementos and try again."
             )
 
 

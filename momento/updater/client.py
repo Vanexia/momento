@@ -1,4 +1,4 @@
-"""Bounded GitHub Releases client for authenticated Momento updates."""
+"""Bounded GitHub Releases client for authenticated Mementos updates."""
 
 from __future__ import annotations
 
@@ -117,13 +117,16 @@ class UpdateClient:
                 "https://github.com/Vanexia/momento/releases/download/"
                 f"v{version}"
             )
-            metadata_asset = _one_asset(assets, "Momento-update.json")
-            signature_asset = _one_asset(assets, "Momento-update.json.sig")
-            installer_name = f"MomentoSetup-{version}.exe"
+            # Old cached/published releases remain readable during the rename.
+            # A malformed new contract must fail; never downgrade on failure.
+            brand = "Mementos" if any(a.name.startswith("Mementos") for a in assets) else "Momento"
+            metadata_asset = _one_asset(assets, f"{brand}-update.json")
+            signature_asset = _one_asset(assets, f"{brand}-update.json.sig")
+            installer_name = f"{brand}Setup-{version}.exe"
             installer_asset = _one_asset(assets, installer_name)
-            if metadata_asset.url != f"{expected_base}/Momento-update.json":
+            if metadata_asset.url != f"{expected_base}/{brand}-update.json":
                 raise UpdateMetadataError("Release metadata URL is not allowed")
-            if signature_asset.url != f"{expected_base}/Momento-update.json.sig":
+            if signature_asset.url != f"{expected_base}/{brand}-update.json.sig":
                 raise UpdateMetadataError("Release signature URL is not allowed")
             if installer_asset.url != f"{expected_base}/{installer_name}":
                 raise UpdateMetadataError("Release installer URL is not allowed")
@@ -146,6 +149,8 @@ class UpdateClient:
             )
             if manifest.version != version:
                 raise UpdateMetadataError("Signed version does not match the GitHub release")
+            if manifest.installer.name != installer_name or manifest.installer.url != installer_asset.url:
+                raise UpdateMetadataError("Signed installer does not match the GitHub release")
             if installer_asset.size != manifest.installer.size:
                 raise UpdateMetadataError("GitHub installer size differs from signed metadata")
             if installer_asset.digest is not None:
@@ -197,7 +202,7 @@ class UpdateClient:
                 headers={
                     "Accept": "application/vnd.github+json",
                     "Accept-Encoding": "identity",
-                    "User-Agent": "Momento-Updater/1",
+                    "User-Agent": "Mementos-Updater/1",
                     "X-GitHub-Api-Version": "2022-11-28",
                 },
                 timeout=(_CONNECT_TIMEOUT, _READ_TIMEOUT),
@@ -252,7 +257,7 @@ def _release_version(release: dict[str, Any]) -> Version:
         raise UpdateMetadataError("GitHub release tag is missing")
     match = _VERSION_TAG.fullmatch(tag)
     if match is None:
-        raise UpdateMetadataError("GitHub release tag is not a stable Momento version")
+        raise UpdateMetadataError("GitHub release tag is not a stable Mementos version")
     return Version(match.group(1))
 
 
@@ -326,7 +331,7 @@ def _validate_request_url(url: str, *, is_api: bool, redirect: bool) -> None:
 
 def _safe_error(exc: Exception) -> str:
     if isinstance(exc, requests.Timeout):
-        return "The update check timed out. Momento will try again next launch."
+        return "The update check timed out. Mementos will try again next launch."
     if isinstance(exc, requests.RequestException):
-        return "Momento could not reach the update service. It will try again next launch."
+        return "Mementos could not reach the update service. It will try again next launch."
     return str(exc) or "The update could not be verified."

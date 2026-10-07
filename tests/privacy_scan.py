@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections.abc import Iterable
+from pathlib import PurePosixPath
 
 
 # Digests keep private identifiers out of the public scanner itself. Candidates
@@ -26,6 +27,27 @@ EMAIL = re.compile(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}")
 WORD = re.compile(r"[a-z0-9]+")
 WINDOWS_USER_PATH = re.compile(r"[a-z]:[\\/]users[\\/][^\\/\s\"']+", re.IGNORECASE)
 ASCII_RUN = re.compile(rb"[\x20-\x7e]{4,}")
+RUNTIME_NAMES = {
+    "config.json", "config.json.tmp", "momento.log", "mementos.log",
+    "momento.lock", "mementos.lock", "window_state.ini",
+    "youtube_token.dat", "youtube_token.dat.tmp", "youtube_avatar.png",
+    "youtube_avatar.png.tmp", "client_secrets.json", "youtube_oauth_client.dat",
+    "youtube_oauth_client.dat.tmp", "momento-update.json", "momento-update.json.sig",
+    "mementos-update.json", "mementos-update.json.sig", "update-signing-key.pem",
+    "trusted-state.json", "attempt-state.json",
+}
+RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json", ".mementos.json")
+
+
+def is_private_runtime_path(value: str) -> bool:
+    """Recognize private/generated files across current and legacy branding."""
+    path = PurePosixPath(value.replace("\\", "/").casefold())
+    return (
+        path.name in RUNTIME_NAMES
+        or path.name.endswith(RUNTIME_SUFFIXES)
+        or path.name.startswith(("momento.log.", "mementos.log.", "config.json.broken-"))
+        or any(part.endswith(".egg-info") for part in path.parts)
+    )
 
 
 def _digest(value: str) -> str:

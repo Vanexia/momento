@@ -9,19 +9,22 @@ from pathlib import Path, PurePosixPath
 from privacy_scan import (
     binary_contains_blocked_identity,
     contains_private_windows_user_path,
+    is_private_runtime_path,
 )
 
 
-RUNTIME_NAMES = {
-    "config.json", "momento.log", "momento.lock", "window_state.ini",
-    "youtube_token.dat", "youtube_avatar.png", "client_secrets.json",
-    "youtube_oauth_client.dat", "youtube_oauth_client.dat.tmp",
-}
-RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json")
 PRIVATE_ROOTS = {".agents", ".claude"}
 PRIVATE_NAMES = {"agents.md", "claude.md", "skills-lock.json"}
 PRIVATE_PREFIXES = {("docs", "superpowers")}
 REQUIRED_RELEASE_FILES = {
+    "Mementos-0.2.9-source.zip": {
+        "mementos/__init__.py",
+        "mementos/__main__.py",
+        "build/pyav_runtime.json",
+        "scripts/build_pyav_runtime.ps1",
+        "scripts/build_pyav_runtime.sh",
+        "scripts/verify_pyav_runtime.py",
+    },
     "Momento-0.2.8-source.zip": {
         "build/pyav_runtime.json",
         "scripts/build_pyav_runtime.ps1",
@@ -72,7 +75,7 @@ def main() -> int:
                 folded_parts[: len(prefix)] == prefix for prefix in PRIVATE_PREFIXES
             ):
                 failures.append(f"internal agent file: {info.filename}")
-            if name in RUNTIME_NAMES or name.endswith(RUNTIME_SUFFIXES):
+            if is_private_runtime_path(info.filename):
                 failures.append(f"private runtime file: {info.filename}")
             data = source.read(info)
             if binary_contains_blocked_identity(data):

@@ -1,4 +1,4 @@
-"""Create Momento's Ed25519 release key outside the source repository."""
+"""Create Mementos' Ed25519 release key outside the source repository."""
 
 from __future__ import annotations
 
@@ -20,11 +20,14 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _default_private_key() -> Path:
-    configured = os.environ.get("MOMENTO_UPDATE_SIGNING_KEY")
+    configured = os.environ.get("MEMENTOS_UPDATE_SIGNING_KEY") or os.environ.get(
+        "MOMENTO_UPDATE_SIGNING_KEY"
+    )
     if configured:
         return Path(configured).expanduser()
     local = os.environ.get("LOCALAPPDATA")
     base = Path(local) if local else Path.home() / "AppData" / "Local"
+    # Keep the established signing identity across the product rename.
     return base / "MomentoRelease" / "update-signing-key.pem"
 
 

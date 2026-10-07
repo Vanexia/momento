@@ -42,8 +42,8 @@ class YouTubeSetupDialog(QDialog):
         layout.addWidget(heading)
 
         intro = QLabel(
-            "Momento never ships another person's Google project. Set up your "
-            "own once, then uploads work through the normal Momento dialog."
+            "Mementos never ships another person's Google project. Set up your "
+            "own once, then uploads work through the normal Mementos dialog."
         )
         intro.setWordWrap(True)
         layout.addWidget(intro)
@@ -66,7 +66,7 @@ class YouTubeSetupDialog(QDialog):
                   <code>youtube.upload</code> and <code>youtube.readonly</code>.</li>
               <li>Under Clients, create an OAuth client with application type
                   <b>Desktop app</b>, then download its JSON file.</li>
-              <li>Return here and choose <b>Import OAuth JSON</b>. Momento stores
+              <li>Return here and choose <b>Import OAuth JSON</b>. Mementos stores
                   a DPAPI-protected copy for this Windows account.</li>
               <li>Back in YouTube Settings, choose <b>Connect YouTube account</b>
                   and finish Google's browser sign-in.</li>
@@ -76,9 +76,9 @@ class YouTubeSetupDialog(QDialog):
             <p><b>Upload visibility:</b> Google can force uploads from an
             unverified API project to Private, even when Public or Unlisted was
             requested.</p>
-            <p>Keep the downloaded JSON private. After Momento imports it, you
-            may delete that downloaded copy. Removing setup in Momento deletes
-            only Momento's protected local copy; Google-side access can be
+            <p>Keep the downloaded JSON private. After Mementos imports it, you
+            may delete that downloaded copy. Removing setup in Mementos deletes
+            only Mementos' protected local copy; Google-side access can be
             revoked separately from your Google account.</p>
             <p><a href="https://developers.google.com/youtube/v3/guides/auth/installed-apps">
             Read Google's installed-app OAuth guide</a></p>

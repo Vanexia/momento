@@ -2,7 +2,7 @@
 
 Probes the bundled libav at startup for which H.264 encoders the host
 machine can actually open (not just which encoders libav was compiled
-with — every Momento build ships with all of them). Picks the
+with — every Mementos build ships with all of them). Picks the
 highest-priority working encoder for this hardware and exposes a
 quality-preset → options mapping that's correct for that backend.
 
@@ -175,13 +175,13 @@ def detect_available() -> list[str]:
 
 
 def disable_for_process(encoder: str, error: BaseException | str) -> None:
-    """Skip a failed backend until Momento restarts and probes afresh."""
+    """Skip a failed backend until Mementos restarts and probes afresh."""
     if encoder not in _PRIORITY:
         return
     detail = str(error).strip() or type(error).__name__
     if encoder not in _runtime_disabled:
         logger.warning(
-            "Disabling video encoder for this Momento run: %s (%s)",
+            "Disabling video encoder for this Mementos run: %s (%s)",
             encoder,
             detail,
         )

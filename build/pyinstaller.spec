@@ -1,8 +1,8 @@
 # -*- mode: python ; coding: utf-8 -*-
-"""PyInstaller spec for Momento.
+"""PyInstaller spec for Mementos.
 
 One-folder build (faster startup than one-file). The output is
-``dist/Momento/Momento.exe`` plus a sibling _internal folder containing
+``dist/Mementos/Mementos.exe`` plus a sibling _internal folder containing
 Qt6 dlls, our bundled ffmpeg.exe (offline remux + trim + thumbnails),
 PyAV's libav shared libraries (live recording encode/mux),
 numpy/PyAudioWPatch (PortAudio)/windows_capture binaries.
@@ -11,7 +11,7 @@ Run from the repo root:
 
     .\\.venv\\Scripts\\python.exe -m PyInstaller build\\pyinstaller.spec --noconfirm
 
-The resulting Momento.exe is fully self-contained — no separate Python install
+The resulting Mementos.exe is fully self-contained — no separate Python install
 needed on the target machine.
 """
 
@@ -42,7 +42,7 @@ required_resources = [
     RESOURCES / "ffmpeg" / "SHA256SUMS.txt",
     RESOURCES / "known_games.json",
     RESOURCES / "update_public_key.pem",
-    RESOURCES / "icons" / "momento.ico",
+    RESOURCES / "icons" / "mementos.ico",
     RESOURCES / "sounds" / "bookmark.wav",
     RESOURCES / "version_info.txt",
     PROJECT_ROOT / "LICENSE",
@@ -55,7 +55,7 @@ missing_resources = [path for path in required_resources if not path.is_file()]
 if missing_resources:
     missing = "\n  ".join(str(path) for path in missing_resources)
     raise SystemExit(
-        "Momento packaging resources are missing:\n  " + missing
+        "Mementos packaging resources are missing:\n  " + missing
         + "\nRun scripts\\fetch_ffmpeg.ps1 for FFmpeg, then restore the "
         "tracked resources before building."
     )
@@ -158,6 +158,8 @@ if fonts_dir.is_dir() and any(fonts_dir.iterdir()):
 # Hidden imports — most stuff PyInstaller finds automatically; this is a
 # safety net for COM/ctypes-loaded modules.
 hiddenimports = [
+    "mementos",
+    "mementos.__main__",
     "PyQt6.QtMultimedia",
     "PyQt6.QtMultimediaWidgets",
     "PyQt6.QtCore",
@@ -215,7 +217,7 @@ excludes = [
     "pip",
     "PyInstaller",
     # windows-capture imports cv2 only for optional image-save helpers that
-    # Momento never calls. video_capture installs a tiny import-time stub.
+    # Mementos never calls. video_capture installs a tiny import-time stub.
     "cv2",
     "PyQt6.QtPdf",
     "PyQt6.QtPdfWidgets",
@@ -242,7 +244,7 @@ a = Analysis(
     noarchive=False,
 )
 
-# Qt's image-format hook brings in PDF support even though Momento never opens
+# Qt's image-format hook brings in PDF support even though Mementos never opens
 # PDF files. Removing both files avoids shipping an unused QtWebEngine-derived
 # component and keeps the corresponding-source set precise.
 for toc in (a.binaries, a.datas):
@@ -252,7 +254,7 @@ for toc in (a.binaries, a.datas):
         if Path(entry[0]).name.casefold() not in {"qt6pdf.dll", "qpdf.dll"}
     ]
 
-# Momento is currently English-only and does not open these image formats.
+# Mementos is currently English-only and does not open these image formats.
 # Match complete bundle destinations so similarly named Qt components remain.
 QT_PRUNED_FILES = {
     "pyqt6/qt6/plugins/imageformats/qgif.dll",
@@ -315,7 +317,7 @@ if pyav_dlls != expected_pyav_dlls:
     missing = sorted(expected_pyav_dlls - pyav_dlls)
     unexpected = sorted(pyav_dlls - expected_pyav_dlls)
     raise SystemExit(
-        "Momento's packaged PyAV DLL inventory differs from the minimized contract: "
+        "Mementos's packaged PyAV DLL inventory differs from the minimized contract: "
         f"missing={missing}, unexpected={unexpected}"
     )
 
@@ -327,7 +329,7 @@ qt_destinations = {
 missing_required_qt = sorted(QT_REQUIRED_FILES - qt_destinations)
 if missing_required_qt:
     missing = "\n  ".join(missing_required_qt)
-    raise SystemExit("Momento is missing required Qt runtime files:\n  " + missing)
+    raise SystemExit("Mementos is missing required Qt runtime files:\n  " + missing)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
@@ -336,7 +338,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name="Momento",
+    name="Mementos",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -347,7 +349,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(RESOURCES / "icons" / "momento.ico"),
+    icon=str(RESOURCES / "icons" / "mementos.ico"),
 )
 
 coll = COLLECT(
@@ -358,5 +360,5 @@ coll = COLLECT(
     strip=False,
     upx=False,
     upx_exclude=[],
-    name="Momento",
+    name="Mementos",
 )

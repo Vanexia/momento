@@ -150,7 +150,7 @@ class EditorWindow(QMainWindow):
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Momento")
+        self.setWindowTitle("Mementos")
         self.resize(1200, 700)
         icon_p = app_icon_path()
         if icon_p is not None:
@@ -368,7 +368,7 @@ class EditorWindow(QMainWindow):
             # Re-enable window animations + log the TRUE end state once the WM
             # has settled (a synchronous read here reports the pre-WM state and
             # misleads). The deferred log keeps fullscreen
-            # round-trips diagnosable from momento.log.
+            # round-trips diagnosable from the recording log.
             def _settle() -> None:
                 windows_api.set_window_transitions_enabled(hwnd, True)
                 try:
@@ -638,7 +638,7 @@ class EditorWindow(QMainWindow):
         else:
             msg = (
                 "No recordings yet.\n\n"
-                "Launch a game from your known-games list — Momento records "
+                "Launch a game from your known-games list — Mementos records "
                 "automatically while it's running."
             )
         self._list_empty_label.setText(msg)
@@ -1539,7 +1539,7 @@ class EditorWindow(QMainWindow):
         end = self.timeline.end_seconds
         if end - start < 0.05:
             QMessageBox.warning(
-                self, "Momento",
+                self, "Mementos",
                 "Selected clip is too short. Drag the handles to define a range first.",
             )
             return
@@ -1556,7 +1556,7 @@ class EditorWindow(QMainWindow):
             return
         chosen = chosen.strip()
         if not chosen:
-            QMessageBox.warning(self, "Momento", "Clip name cannot be empty.")
+            QMessageBox.warning(self, "Mementos", "Clip name cannot be empty.")
             return
         try:
             output = _resolve_output_path(Path(path).parent, chosen)
@@ -1659,7 +1659,7 @@ class EditorWindow(QMainWindow):
             QMessageBox.warning(
                 self,
                 "YouTube setup needs attention",
-                "Momento can't read the saved Google OAuth setup. Open Settings "
+                "Mementos can't read the saved Google OAuth setup. Open Settings "
                 "to replace or remove it.",
             )
             self.show_settings("YouTube")
@@ -1669,7 +1669,7 @@ class EditorWindow(QMainWindow):
                 self,
                 "Set up YouTube uploads",
                 "Import a Desktop OAuth JSON from your own Google Cloud project. "
-                "Momento will guide you through the steps.",
+                "Mementos will guide you through the steps.",
             )
             self.show_settings("YouTube")
             return
@@ -1679,7 +1679,7 @@ class EditorWindow(QMainWindow):
             reply = QMessageBox.question(
                 self,
                 "Connect YouTube account",
-                "Momento isn't connected to a YouTube account yet.\n\n"
+                "Mementos isn't connected to a YouTube account yet.\n\n"
                 "Open Settings → YouTube to sign in?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.Yes,
@@ -1754,7 +1754,7 @@ class EditorWindow(QMainWindow):
             QMessageBox.information(
                 self,
                 "YouTube setup changed",
-                "The Google OAuth setup changed while Momento checked your sign-in. "
+                "The Google OAuth setup changed while Mementos checked your sign-in. "
                 "Start the upload again with the current setup.",
             )
             return
@@ -1813,7 +1813,7 @@ class EditorWindow(QMainWindow):
         self._export_progress.setFormat("Done")
         name = Path(output_path).name
         if not mark_recording_owned(output_path):
-            logger.warning("Could not mark exported clip as Momento-owned: %s", output_path)
+            logger.warning("Could not mark exported clip as Mementos-owned: %s", output_path)
         self._status.setText(f"Exported {name}")
         # Pull the new clip into the list immediately — preserving the
         # selection so the recording the user is trimming (and their handle
@@ -1826,7 +1826,7 @@ class EditorWindow(QMainWindow):
         self._status.setText(f"Export failed: {message}")
         if self._app_quitting and message == "Cancelled":
             return
-        QMessageBox.warning(self, "Momento", f"Export failed:\n{message}")
+        QMessageBox.warning(self, "Mementos", f"Export failed:\n{message}")
 
     def _on_trim_thread_finished(self) -> None:
         activity = getattr(self, "_trim_activity", None)
@@ -1893,7 +1893,7 @@ class EditorWindow(QMainWindow):
         prior = self._game_slug_cache.get(path_str)
         self._game_slug_cache[path_str] = slug
         if slug and not mark_recording_owned(path_str):
-            logger.warning("Could not mark recording as Momento-owned: %s", path_str)
+            logger.warning("Could not mark recording as Mementos-owned: %s", path_str)
         # Push the resolved game name onto the card so the secondary line lights
         # up once the embedded MOMENTO_GAME tag is read (renamed files survive).
         if slug:
@@ -1988,7 +1988,7 @@ class EditorWindow(QMainWindow):
             f"Permanently delete the following from\n\n    {existing[0].parent}\n\n"
             f"{names}\n\n"
             "This also removes their thumbnails and bookmark sidecars. Files "
-            "are deleted from disk and cannot be recovered from inside Momento."
+            "are deleted from disk and cannot be recovered from inside Mementos."
         )
         reply = QMessageBox.question(
             self, title, body,
@@ -2035,7 +2035,7 @@ class EditorWindow(QMainWindow):
 
         if errors:
             QMessageBox.warning(
-                self, "Momento",
+                self, "Mementos",
                 "Some files could not be deleted:\n\n" + "\n".join(errors[:20])
                 + ("\n\n…and more" if len(errors) > 20 else ""),
             )
@@ -2099,7 +2099,7 @@ class EditorWindow(QMainWindow):
         # Sanitize using the same rules as clip export.
         cleaned = _INVALID_FS_CHARS.sub("_", new_stem).strip().rstrip(".")
         if not cleaned:
-            QMessageBox.warning(self, "Momento", "Name is empty after removing invalid characters.")
+            QMessageBox.warning(self, "Mementos", "Name is empty after removing invalid characters.")
             return
         new_path = path.with_name(cleaned + path.suffix)
         if self._is_file_busy(path) or self._is_file_busy(new_path):
@@ -2114,7 +2114,7 @@ class EditorWindow(QMainWindow):
         collision = next((target for target in targets if target.exists()), None)
         if collision is not None:
             QMessageBox.warning(
-                self, "Momento",
+                self, "Mementos",
                 f"A file named {collision.name!r} already exists in this folder.",
             )
             return
@@ -2159,7 +2159,7 @@ class EditorWindow(QMainWindow):
                     + "\n".join(rollback_errors)
                 )
             QMessageBox.critical(
-                self, "Momento",
+                self, "Mementos",
                 f"Rename failed:\n{e}\n\n{detail}",
             )
             self.refresh()
@@ -2243,7 +2243,7 @@ class EditorWindow(QMainWindow):
         # elapsed counter is enough to communicate "still working".
         from PyQt6.QtCore import QElapsedTimer
         progress = QProgressDialog("Repairing…", "", 0, 0, self)
-        progress.setWindowTitle("Momento — Repairing recording")
+        progress.setWindowTitle("Mementos — Repairing recording")
         progress.setWindowModality(Qt.WindowModality.WindowModal)
         progress.setAutoClose(False)
         progress.setAutoReset(False)
@@ -2312,7 +2312,7 @@ class EditorWindow(QMainWindow):
             # that the dialog ends up obnoxiously wide and (on Windows)
             # nudges the editor's splitter handle around.
             box = QMessageBox(self)
-            box.setWindowTitle("Momento")
+            box.setWindowTitle("Mementos")
             box.setIcon(QMessageBox.Icon.Warning)
             box.setText(
                 f"Couldn't repair {p.name}.\n\nThe original file is unchanged."
@@ -2400,7 +2400,7 @@ class EditorWindow(QMainWindow):
             try:
                 subprocess.Popen(["explorer.exe", folder])
             except OSError as e:
-                QMessageBox.warning(self, "Momento", f"Could not open folder: {e}")
+                QMessageBox.warning(self, "Mementos", f"Could not open folder: {e}")
 
     # ----------------------------------------------------- window geometry
     _WINDOW_STATE_GROUP = "editor"

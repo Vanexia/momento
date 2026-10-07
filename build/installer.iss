@@ -1,7 +1,7 @@
-#define MyAppName "Momento"
-#define MyAppVersion "0.2.8"
-#define MyAppPublisher "Momento"
-#define MyAppExeName "Momento.exe"
+#define MyAppName "Mementos"
+#define MyAppVersion "0.2.9"
+#define MyAppPublisher "Mementos"
+#define MyAppExeName "Mementos.exe"
 
 [Setup]
 AppId={{8C8A50E4-FCF2-4E1E-9B9C-046B9ED5F3AA}
@@ -9,8 +9,9 @@ AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 VersionInfoVersion={#MyAppVersion}
-DefaultDirName={localappdata}\Programs\Momento
-DefaultGroupName=Momento
+DefaultDirName={localappdata}\Programs\Mementos
+DefaultGroupName=Mementos
+UsePreviousGroup=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
@@ -19,11 +20,11 @@ MinVersion=10.0.18362
 SetupMutex=Momento.GameRecorder.Update
 CloseApplications=no
 RestartApplications=no
-SetupIconFile=..\resources\icons\momento.ico
+SetupIconFile=..\resources\icons\mementos.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 LicenseFile=..\LICENSE
 OutputDir=..\dist\installer
-OutputBaseFilename=MomentoSetup-{#MyAppVersion}
+OutputBaseFilename=MementosSetup-{#MyAppVersion}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -33,24 +34,28 @@ SetupLogging=yes
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
-Source: "..\dist\Momento\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\Mementos\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Refresh an existing executable path so pinned and custom shortcuts keep working.
+Source: "..\dist\Mementos\Mementos.exe"; DestDir: "{app}"; DestName: "Momento.exe"; Flags: ignoreversion; Check: HasLegacyExecutable
 Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\BUILD_INFO.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\SOURCE_OFFER.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\Momento"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\Momento"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{group}\Mementos"; Filename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\Mementos"; Filename: "{app}\{#MyAppExeName}"; Check: ShouldCreateDesktopShortcut
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch Momento"; Flags: nowait postinstall skipifsilent; Check: not IsUpdateMode
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch Mementos"; Flags: nowait postinstall skipifsilent; Check: not IsUpdateMode
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--updated={code:GetAttemptToken}"; Flags: nowait runhidden; Check: IsUpdateMode
 
 [Code]
 const
   RunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
-  RunValueName = 'Momento';
+  RunValueName = 'Mementos';
+  LegacyRunValueName = 'Momento';
+  // Existing clients and installers share these identities during upgrades.
   AppMutexName = 'Momento.GameRecorder.Instance';
   UpdateReadyPrefix = 'Local\Momento.GameRecorder.UpdateReady.';
   ProcessSynchronize = $00100000;
@@ -133,6 +138,17 @@ begin
   Result := UpdateMode;
 end;
 
+function ShouldCreateDesktopShortcut(): Boolean;
+begin
+  Result := WizardIsTaskSelected('desktopicon') or
+    FileExists(ExpandConstant('{autodesktop}\Momento.lnk'));
+end;
+
+function HasLegacyExecutable(): Boolean;
+begin
+  Result := FileExists(ExpandConstant('{app}\Momento.exe'));
+end;
+
 function GetAttemptToken(Param: String): String;
 begin
   Result := UpdateAttemptToken;
@@ -174,7 +190,7 @@ begin
     Result := not CheckForMutexes(AppMutexName);
     if not Result then
       SuppressibleMsgBox(
-        'Momento is still running. Quit it from the system tray before installing.',
+        'Mementos is still running. Quit it from the system tray before installing.',
         mbError, MB_OK, IDOK
       );
     Exit;
@@ -229,7 +245,7 @@ begin
     Log('Waiting for the exact update parent failed.')
   else
     Log('Waiting for the exact update parent returned an unexpected result.');
-  Result := 'Momento could not safely hand the update to Setup.';
+  Result := 'Mementos could not safely hand the update to Setup.';
 end;
 
 procedure RemoveObsoleteRuntime();
@@ -283,17 +299,26 @@ var
   PreviousAutostart: String;
 begin
   if CurStep = ssDone then
+  begin
     UpdateInstallSucceeded := True;
+    DeleteFile(ExpandConstant('{userprograms}\Momento\Momento.lnk'));
+    RemoveDir(ExpandConstant('{userprograms}\Momento'));
+    DeleteFile(ExpandConstant('{autodesktop}\Momento.lnk'));
+  end;
 
   if CurStep = ssPostInstall then
   begin
     RemoveObsoleteRuntime();
     if not HasCommandLineParam('/NOMIGRATEAUTOSTART') then
-      if RegQueryStringValue(HKCU, RunKey, RunValueName, PreviousAutostart) then
-        RegWriteStringValue(
+      if RegQueryStringValue(HKCU, RunKey, RunValueName, PreviousAutostart) or
+         RegQueryStringValue(HKCU, RunKey, LegacyRunValueName, PreviousAutostart) then
+      begin
+        if RegWriteStringValue(
           HKCU, RunKey, RunValueName,
           '"' + ExpandConstant('{app}\{#MyAppExeName}') + '"'
-        );
+        ) then
+          RegDeleteValue(HKCU, RunKey, LegacyRunValueName);
+      end;
   end;
 end;
 
@@ -311,8 +336,10 @@ begin
 
   AppPath := ExpandConstant('{app}\{#MyAppExeName}');
   if not FileExists(AppPath) then
+    AppPath := ExpandConstant('{app}\Momento.exe');
+  if not FileExists(AppPath) then
   begin
-    Log('Could not relaunch Momento after the failed update: executable is unavailable.');
+    Log('Could not relaunch Mementos after the failed update: executable is unavailable.');
     Exit;
   end;
 
@@ -320,10 +347,10 @@ begin
     AppPath, '--updated=' + UpdateAttemptToken, ExtractFileDir(AppPath),
     SW_HIDE, ewNoWait, ResultCode
   ) then
-    Log('Relaunched Momento after the failed update was rolled back.')
+    Log('Relaunched Mementos after the failed update was rolled back.')
   else
     Log(
-      'Could not relaunch Momento after the failed update: ' +
+      'Could not relaunch Mementos after the failed update: ' +
       SysErrorMessage(ResultCode)
     );
 end;
@@ -348,15 +375,30 @@ begin
     Exit;
 
   RegDeleteValue(HKCU, RunKey, RunValueName);
+  RegDeleteValue(HKCU, RunKey, LegacyRunValueName);
   PurgeUserData := HasCommandLineParam('/PURGEUSERDATA');
   if (not PurgeUserData) and (not UninstallSilent) then
     PurgeUserData := MsgBox(
-      'Also remove Momento settings, logs, and local account state?' + #13#10 + #13#10 +
+      'Also remove Mementos settings, logs, and local account state?' + #13#10 + #13#10 +
       'Recordings and clips are never removed.',
       mbConfirmation, MB_YESNO or MB_DEFBUTTON2
     ) = IDYES;
   if PurgeUserData then
   begin
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\config.json'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\config.json.tmp'));
+    DelTree(
+      ExpandConstant('{userappdata}\Mementos\config.json.broken-*.txt'),
+      False, True, False
+    );
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\window_state.ini'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\youtube_token.dat'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\youtube_token.dat.tmp'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\youtube_avatar.png'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\youtube_avatar.png.tmp'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\youtube_oauth_client.dat'));
+    DeleteFile(ExpandConstant('{userappdata}\Mementos\youtube_oauth_client.dat.tmp'));
+    DelTree(ExpandConstant('{userappdata}\Mementos\logs'), True, True, True);
     DeleteFile(ExpandConstant('{userappdata}\Momento\config.json'));
     DeleteFile(ExpandConstant('{userappdata}\Momento\config.json.tmp'));
     DelTree(

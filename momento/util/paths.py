@@ -1,4 +1,4 @@
-"""User-data directory helpers (config, logs, etc.) under %APPDATA%/Momento."""
+"""Mementos data locations, retaining existing Momento profiles in place."""
 
 from __future__ import annotations
 
@@ -9,18 +9,37 @@ import uuid
 from ctypes.wintypes import DWORD, HANDLE
 from pathlib import Path
 
-APP_NAME = "Momento"
+APP_NAME = "Mementos"
+LEGACY_APP_NAME = "Momento"
+
+
+def _roaming_base() -> Path:
+    return Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+
+
+def _has_state(directory: Path, *, ignored: tuple[str, ...] = ()) -> bool:
+    return directory.is_dir() and any(
+        item.name not in ignored for item in directory.iterdir()
+    )
 
 
 def appdata_dir() -> Path:
-    """Return %APPDATA%/Momento, creating it if missing."""
-    base = os.environ.get("APPDATA")
-    if not base:
-        # Fallback for non-Windows dev environments
-        base = str(Path.home() / "AppData" / "Roaming")
-    path = Path(base) / APP_NAME
+    """Use the new name for fresh profiles; never abandon existing user data."""
+    base = _roaming_base()
+    path = base / APP_NAME
+    legacy = base / LEGACY_APP_NAME
+    # A startup can create logs before it acquires the instance lock. Neither
+    # those logs nor an empty folder should shadow an established profile.
+    ignored = ("logs", "momento.lock")
+    if not _has_state(path, ignored=ignored) and _has_state(legacy, ignored=ignored):
+        path = legacy
     path.mkdir(parents=True, exist_ok=True)
     return path
+
+
+def instance_lock_path() -> Path:
+    """Share the original file lock so old and renamed apps cannot both record."""
+    return _roaming_base() / LEGACY_APP_NAME / "momento.lock"
 
 
 def logs_dir() -> Path:
@@ -35,6 +54,12 @@ def update_cache_dir() -> Path:
     if not base:
         base = str(Path.home() / "AppData" / "Local")
     path = Path(base) / APP_NAME / "updates"
+    legacy = Path(base) / LEGACY_APP_NAME / "updates"
+    # Preserve existing trust and pending attempts. Once the new cache contains
+    # state, an old executable creating its cache must not reset that history.
+    # Corrupt state still counts: UpdateCache must reject it, not bypass it.
+    if not _has_state(path) and _has_state(legacy):
+        path = legacy
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -73,7 +98,7 @@ def youtube_avatar_path() -> Path:
 
 
 def default_output_folder() -> Path:
-    """Return a Momento folder beneath the Windows Videos known folder.
+    """Return a Mementos folder beneath the Windows Videos known folder.
 
     Does NOT create the folder — that would crash startup if the user's
     Videos drive happens to be unmounted. The Recorder creates the folder

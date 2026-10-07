@@ -71,7 +71,7 @@ def test_atomic_per_user_state() -> None:
             clock = Clock()
             store = UpdateAttemptStore(now_provider=clock)
             attempt = _begin(store)
-            path = root / "Momento" / "updates" / "attempt-state.json"
+            path = root / "Mementos" / "updates" / "attempt-state.json"
             payload = json.loads(path.read_text(encoding="utf-8"))
 
             check("attempt state is stored below per-user local app data", path.is_file())

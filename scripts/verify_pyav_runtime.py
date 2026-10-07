@@ -1,4 +1,4 @@
-"""Verify Momento's PyAV wheel and its minimized native FFmpeg runtime."""
+"""Verify Mementos's PyAV wheel and its minimized native FFmpeg runtime."""
 
 from __future__ import annotations
 

@@ -1,9 +1,11 @@
-# Momento 0.2.2 Source Provenance
+# Mementos 0.2.2 Source Provenance
 
-This record identifies the source and native build inputs for the Momento 0.2.2
+This release shipped under the former name Momento. Published asset names below remain unchanged.
+
+This record identifies the source and native build inputs for the Mementos 0.2.2
 Windows release.
 
-## Momento
+## Mementos
 
 - Source archive: `Momento-0.2.2-source.zip`
 - Archive producer: `git archive HEAD`
@@ -26,7 +28,7 @@ Windows release.
 
 The recipe disables network access and external-library autodetection. It
 enables only the formats, codecs, filters, protocols, parsers, and bitstream
-filters used by Momento. The helper uses a statically linked GCC runtime and
+filters used by Mementos. The helper uses a statically linked GCC runtime and
 imports only Windows system DLLs.
 
 ## PyAV Native Runtime
@@ -48,7 +50,7 @@ The recipe builds PyAV and FFmpeg from pinned sources. It retains x264, NVIDIA
 codec headers, AMD AMF headers, Intel oneVPL, GCC, and winpthreads. Its FFmpeg
 allowlist covers H.264 encoding through NVENC, AMF, QuickSync, Media Foundation,
 and libx264; AAC audio; Matroska and MP4 muxing; and the decoders and filters
-used by Momento.
+used by Mementos.
 
 Two clean builds produced byte-for-byte identical wheels. The custom native
 DLL payload is `13,058,674` bytes, compared with `67,351,552` bytes in the
@@ -80,18 +82,18 @@ installation. Build the Qt modules with CMake and install them into the prefix
 used when building PyQt6. PyQt6 and SIP use their source archives' standard
 PEP 517 build entry points against that Qt installation.
 
-Momento does not use Qt PDF. `Qt6Pdf.dll` and the `qpdf` image plugin are
+Mementos does not use Qt PDF. `Qt6Pdf.dll` and the `qpdf` image plugin are
 explicitly removed from the frozen application, avoiding an otherwise unused
 QtWebEngine source dependency. Packaged builds also omit Qt translation
 catalogs and the unused GIF, ICNS, TGA, TIFF, WBMP, and WebP image plugins. The
 Qt pruning removes 7.88 MiB while preserving the Windows, multimedia, TLS,
-JPEG, SVG, ICO, and software OpenGL components Momento uses.
+JPEG, SVG, ICO, and software OpenGL components Mementos uses.
 
 ## Third-Party Source Bundle
 
 `Momento-0.2.2-third-party-source.zip` contains 17 exact source inputs:
 
-- FFmpeg 8.1.2 for Momento's helper
+- FFmpeg 8.1.2 for Mementos' helper
 - PyAV 17.0.1, FFmpeg 8.0.1, x264, NVIDIA codec headers, AMD AMF headers, and
   Intel oneVPL for the minimal recording runtime
 - MSYS2 source packages for the shipped GCC/libstdc++ and winpthreads runtimes

@@ -15,7 +15,7 @@ def primary_refresh_rate(default: int = 60) -> int:
 
     Falls back to ``default`` if Qt isn't up yet or reports an unusable
     value (some virtual displays return 0). The clamp matches the
-    framerate range Momento's recorder advertises.
+    framerate range Mementos's recorder advertises.
 
     Should be called from the Qt main thread once a QGuiApplication
     exists — typically right after the app is constructed in __main__.

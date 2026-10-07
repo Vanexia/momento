@@ -101,7 +101,7 @@ def import_user_client_config(source: Path) -> OAuthClientConfig:
         except OSError:
             pass
         raise OAuthClientConfigError(
-            "Momento couldn't save the Google OAuth setup. Check AppData access and try again."
+            "Mementos couldn't save the Google OAuth setup. Check AppData access and try again."
         ) from exc
     logger.info("YouTube OAuth client configuration imported")
     return configuration
@@ -117,7 +117,7 @@ def remove_user_client_config() -> bool:
         temporary.unlink(missing_ok=True)
     except OSError as exc:
         raise OAuthClientConfigError(
-            "Momento couldn't remove the imported Google OAuth setup."
+            "Mementos couldn't remove the imported Google OAuth setup."
         ) from exc
     if changed:
         logger.info("YouTube OAuth client configuration removed")
@@ -150,7 +150,7 @@ def _read_bounded(path: Path, limit: int) -> bytes:
             raw = handle.read(limit + 1)
     except OSError as exc:
         raise OAuthClientConfigError(
-            "Momento couldn't read that file. Choose the JSON downloaded from Google Cloud."
+            "Mementos couldn't read that file. Choose the JSON downloaded from Google Cloud."
         ) from exc
     if not raw:
         raise OAuthClientConfigError("The selected Google OAuth file is empty.")

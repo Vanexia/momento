@@ -83,7 +83,7 @@ def test_persistent_formatter_redacts_private_values(tmp: Path) -> None:
         installed_handlers = list(root_logger.handlers)
         for handler in installed_handlers:
             handler.flush()
-        payload = (log_root / "momento.log").read_text(
+        payload = (log_root / "mementos.log").read_text(
             encoding="utf-8",
             errors="replace",
         )

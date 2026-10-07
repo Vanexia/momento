@@ -1,3 +1,3 @@
-"""Momento — local Windows desktop game recorder."""
+"""Mementos — local Windows desktop game recorder."""
 
-__version__ = "0.2.8"
+__version__ = "0.2.9"

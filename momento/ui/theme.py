@@ -1,6 +1,6 @@
 """Global dark theme — "Obsidian".
 
-A sharp, premium dark gamer aesthetic built around Momento's violet→magenta
+A sharp, premium dark gamer aesthetic built around Mementos' violet→magenta
 heritage. A single QSS string tunes Qt's stock widgets; bespoke widgets
 (status strip, recordings cards, timeline, player) import the colour tokens +
 gradient/logo helpers below and paint themselves to match.
@@ -119,9 +119,9 @@ def _grad(stops: tuple[str, str], p1: QPointF, p2: QPointF) -> QLinearGradient:
 def logo_pixmap(
     size: int, device_ratio: float = 1.0, margin_frac: float = 0.02
 ) -> QPixmap:
-    """Render the Momento brand squircle (violet→magenta + white M + spark).
+    """Render the Mementos brand squircle (violet→magenta + white M + spark).
 
-    Reproduces ``assets/Momento Logo.svg`` (viewBox 0 0 48 48) at any size, so
+    Reproduces ``resources/icons/mementos-mark.svg`` (viewBox 0 0 48 48) at any size, so
     the in-app brand mark stays crisp at every DPI without shipping rasters.
 
     ``margin_frac`` is the transparent padding around the squircle as a fraction

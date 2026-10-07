@@ -1,15 +1,15 @@
-Momento third-party notices
+Mementos third-party notices
 ===========================
 
-Momento 0.2.8 is licensed under GNU GPL version 3. The complete licence is
+Mementos 0.2.9 is licensed under GNU GPL version 3. The complete licence is
 installed as LICENSE. SOURCE_OFFER.txt identifies the matching source archives
-published beside the installer on the Momento 0.2.8 GitHub release:
+published beside the installer on the Mementos 0.2.9 GitHub release:
 
-  Momento-0.2.8-source.zip
-  Momento-0.2.8-third-party-source.zip
+  Mementos-0.2.9-source.zip
+  Mementos-0.2.9-third-party-source.zip
 
 The third-party source bundle contains the exact hash-verified source inputs
-and native build records for Momento's FFmpeg helper, Momento's minimal
+and native build records for Mementos's FFmpeg helper, Mementos's minimal
 FFmpeg/PyAV 17.0.1 recording runtime, and the PyQt/Qt multimedia runtime.
 BUILD_INFO.txt records binary identities, hashes, build records, and
 provenance.
@@ -23,13 +23,13 @@ This application is built with open-source components, including:
   plus FFmpeg 7.1.3 and zlib 1.3.1 used by Qt Multimedia. Unused Qt PDF
   components are excluded from the application.
   https://www.qt.io/licensing/open-source-obligations
-- FFmpeg 8.1.2, built as Momento's minimal LGPL helper from the checked-in
+- FFmpeg 8.1.2, built as Mementos's minimal LGPL helper from the checked-in
   reproducible recipe. Its licence and complete build identity are installed
   under licenses/FFmpeg.
   https://ffmpeg.org/releases/ffmpeg-8.1.2.tar.xz
   https://ffmpeg.org/legal.html
-- PyAV 17.0.1 with Momento's reproducible minimal FFmpeg 8.0.1 recording
-  runtime. The checked-in build recipes retain H.264/AAC recording and Momento's
+- PyAV 17.0.1 with Mementos's reproducible minimal FFmpeg 8.0.1 recording
+  runtime. The checked-in build recipes retain H.264/AAC recording and Mementos's
   NVIDIA, AMD, Intel, Media Foundation, and libx264 encoder paths. The matching
   source bundle includes PyAV, FFmpeg, x264, NVIDIA codec headers, AMD AMF
   headers, Intel oneVPL, GCC, and winpthreads. Unused codec and runtime
@@ -37,7 +37,7 @@ This application is built with open-source components, including:
   https://pyav.org/
   https://ffmpeg.org/
 - CPython 3.12 and the PyInstaller bootloader.
-- windows-capture declares OpenCV for optional image saving. Momento does not
+- windows-capture declares OpenCV for optional image saving. Mementos does not
   use that API and excludes OpenCV and its FFmpeg DLL from the public binary.
 - Plus Jakarta Sans, copyright its project authors and licensed under the SIL
   Open Font License 1.1. The font licence is bundled beside the font files.
@@ -54,8 +54,8 @@ the exact locked Python distributions. Packaging fails if a locked
 distribution supplies no licence or notice file. CPython's licence is installed
 separately under licenses/CPython. This notice does not replace those texts.
 
-Momento release assets do not include a Google OAuth client identity or any
+Mementos release assets do not include a Google OAuth client identity or any
 developer or user account data. Users who enable YouTube upload import a
-Desktop OAuth client from a Google Cloud project they control. Momento stores
+Desktop OAuth client from a Google Cloud project they control. Mementos stores
 the validated client and connected-account token as separate DPAPI-encrypted
 files under that user's AppData directory.

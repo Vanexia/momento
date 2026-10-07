@@ -3,13 +3,13 @@ requires = ["setuptools>=83.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "momento"
-version = "0.2.8"
+name = "mementos"
+version = "0.2.9"
 description = "Local Windows desktop game recorder with simple clip editor"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
 license = "GPL-3.0-only"
-authors = [{ name = "Momento" }]
+authors = [{ name = "Mementos" }]
 classifiers = [
     "Operating System :: Microsoft :: Windows :: Windows 10",
     "Operating System :: Microsoft :: Windows :: Windows 11",
@@ -68,10 +68,11 @@ dev = [
 ]
 
 [project.scripts]
+mementos = "momento.__main__:main"
 momento = "momento.__main__:main"
 
 [tool.setuptools.packages.find]
-include = ["momento*"]
+include = ["momento*", "mementos*"]
 exclude = ["tests*", "resources*", "build*"]
 
 [tool.black]

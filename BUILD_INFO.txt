@@ -1,4 +1,4 @@
-Momento 0.2.8 public release build
+Mementos 0.2.9 public release build
 =================================
 
 Target: Windows 10/11 x64
@@ -6,10 +6,10 @@ Python: CPython 3.12
 Application packager: PyInstaller 6.20.0, one-folder mode
 Installer: Inno Setup 6.7.3, per-user mode
 
-Momento FFmpeg helper
+Mementos FFmpeg helper
 ---------------------
 
-Momento bundles a purpose-built FFmpeg/ffprobe helper for offline metadata,
+Mementos bundles a purpose-built FFmpeg/ffprobe helper for offline metadata,
 thumbnail, trim, and repair operations. Live recording uses PyAV's separate
 native runtime described below.
 
@@ -25,7 +25,7 @@ native runtime described below.
   ffprobe.exe SHA-256: dd7364cd03d86cb5f91fd028174cb6d5f1b2f3ba2606095676e0596b216a4d4d
 
 The helper disables network access, automatic external-library discovery, and
-all codecs, formats, protocols, and filters that Momento does not need. It
+all codecs, formats, protocols, and filters that Mementos does not need. It
 imports only Windows system DLLs. Two clean local builds produced identical
 executables and an identical downloadable helper archive.
 
@@ -46,7 +46,7 @@ PyAV native recording runtime
   General-purpose wheel baseline: 67,351,552 bytes
   Native DLL reduction: 80.6%
 
-Momento builds PyAV and a purpose-built shared FFmpeg runtime from pinned
+Mementos builds PyAV and a purpose-built shared FFmpeg runtime from pinned
 sources. The runtime retains H.264 encoding through NVIDIA NVENC, AMD AMF,
 Intel QuickSync, Media Foundation, and libx264; AAC audio; Matroska and MP4
 muxing; and the filters and decoders used by recording and verification. It
@@ -78,7 +78,7 @@ The exact Qt Base, SVG, Multimedia, and Translations sources are included in
 the third-party source bundle. Unused Qt PDF libraries are removed from the
 application bundle. Packaged builds also remove unused Qt translation catalogs
 and the GIF, ICNS, TGA, TIFF, WBMP, and WebP image plugins, reducing the bundle
-by 7.88 MiB while retaining Momento's required Windows, multimedia, TLS, JPEG,
+by 7.88 MiB while retaining Mementos's required Windows, multimedia, TLS, JPEG,
 SVG, ICO, and software OpenGL support. build/corresponding_sources.json records
 the complete FFmpeg configure line embedded in Qt's DLLs and every
 binary/source hash.
@@ -88,8 +88,8 @@ Corresponding source
 
 The GitHub release publishes both:
 
-  Momento-0.2.8-source.zip
-  Momento-0.2.8-third-party-source.zip
+  Mementos-0.2.9-source.zip
+  Mementos-0.2.9-third-party-source.zip
 
 The installed SOURCE_OFFER.txt points to the exact release page and source
 assets. Keeping the third-party archive as a separate release asset avoids
@@ -97,7 +97,7 @@ inflating the installer while providing matching source from the same download
 location.
 
 The third-party source bundle contains 17 hash-verified inputs covering the
-Momento helper; the minimal PyAV runtime's PyAV, FFmpeg, x264, NVIDIA, AMD,
+Mementos helper; the minimal PyAV runtime's PyAV, FFmpeg, x264, NVIDIA, AMD,
 oneVPL, GCC, and winpthreads sources; PyQt/SIP; Qt
 Base/SVG/Multimedia/Translations; and Qt Multimedia's FFmpeg and zlib inputs.
 scripts/build_corresponding_source.py creates a deterministic ZIP and verifies

@@ -82,9 +82,9 @@ class MomentoTray(QObject):
         self._last_game_name: str | None = None  # so the stop-toast can name it
 
         self._tray = QSystemTrayIcon(self._icon_idle, self)
-        self._tray.setToolTip("Momento — idle")
+        self._tray.setToolTip("Mementos — idle")
 
-        # Tray menu — Momento's primary entry point. Recordings, editing,
+        # Tray menu — Mementos' primary entry point. Recordings, editing,
         # devices etc. live inside the editor window; the tray surfaces the
         # status and the small set of "act on the daemon right now" actions
         # (toggle monitoring, stop the current recording, jump to the
@@ -95,7 +95,7 @@ class MomentoTray(QObject):
         self._menu.addAction(self._status_action)
         self._menu.addSeparator()
 
-        self._open_editor_action = QAction("Open Momento", self._menu)
+        self._open_editor_action = QAction("Open Mementos", self._menu)
         self._open_editor_action.triggered.connect(self._on_open_editor)
         self._menu.addAction(self._open_editor_action)
 
@@ -216,7 +216,7 @@ class MomentoTray(QObject):
         if not self._config.show_failure_toast:
             return
         try:
-            display = humanise_game_name(game.exe_name) if game else "Momento"
+            display = humanise_game_name(game.exe_name) if game else "Mementos"
             if reason == FAILURE_FINALIZE:
                 # Recorded, but the file didn't close cleanly — not a
                 # "couldn't record"; it exists and is recoverable.
@@ -248,13 +248,13 @@ class MomentoTray(QObject):
             display_name = humanise_game_name(game.exe_name)
             label = f"Recording {display_name}"
             self._tray.setIcon(self._icon_rec)
-            self._tray.setToolTip(f"Momento — recording {display_name}")
+            self._tray.setToolTip(f"Mementos — recording {display_name}")
             self._last_game_name = display_name
             self._show_toast_recording(display_name)
         else:
             label = "Idle"
             self._tray.setIcon(self._icon_idle)
-            self._tray.setToolTip("Momento — idle")
+            self._tray.setToolTip("Mementos — idle")
             # Only show the "saved" toast if we were actually mid-recording.
             if self._last_game_name is not None:
                 self._show_toast_idle(self._last_game_name)
@@ -434,7 +434,7 @@ class MomentoTray(QObject):
         except Exception:
             logger.exception("Failed to apply new config to session")
             QMessageBox.warning(
-                None, "Momento", "Settings saved, but applying them to the session failed."
+                None, "Mementos", "Settings saved, but applying them to the session failed."
             )
             return
         # Re-apply hotkey live if the spec changed.
@@ -447,7 +447,7 @@ class MomentoTray(QObject):
             except HotkeyError as e:
                 QMessageBox.warning(
                     None,
-                    "Momento",
+                    "Mementos",
                     f"Settings saved, but the new bookmark hotkey couldn't be registered:\n{e}",
                 )
         logger.info(
@@ -465,7 +465,7 @@ class MomentoTray(QObject):
         if self._update_service is None:
             self._show_update_message(
                 QMessageBox.Icon.Warning,
-                "Momento",
+                "Mementos",
                 "Update checking is not available right now.",
             )
             return
@@ -473,14 +473,14 @@ class MomentoTray(QObject):
 
     def _confirm_update_install(self, staged) -> bool:
         version = str(getattr(getattr(staged, "manifest", None), "version", "")).strip()
-        update_name = f"Momento {version}" if version else "The Momento update"
+        update_name = f"Mementos {version}" if version else "The Mementos update"
         dialog = QMessageBox(self._update_dialog_parent())
         dialog.setIcon(QMessageBox.Icon.Question)
-        dialog.setWindowTitle("Momento update")
+        dialog.setWindowTitle("Mementos update")
         dialog.setText(f"{update_name} is ready to install.")
         dialog.setInformativeText(
-            "Install now to restart Momento and finish the update. Choose Later "
-            "to keep using Momento; the update will install the next time Momento "
+            "Install now to restart Mementos and finish the update. Choose Later "
+            "to keep using Mementos; the update will install the next time Mementos "
             "starts. Your recordings and settings stay in place."
         )
         install_button = dialog.addButton(
@@ -544,7 +544,7 @@ class MomentoTray(QObject):
             icon = QMessageBox.Icon.Warning
         else:
             icon = QMessageBox.Icon.Information
-        self._show_update_message(icon, "Momento updates", message)
+        self._show_update_message(icon, "Mementos updates", message)
 
     # ----------------------------------------------------------- new actions
     def _on_open_folder(self) -> None:

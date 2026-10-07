@@ -9,7 +9,7 @@ $installer = (Resolve-Path -LiteralPath $InstallerPath).Path
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $mockPython = Join-Path $repoRoot ".venv\Scripts\pythonw.exe"
 $mockWindow = Join-Path $repoRoot "tests\mock_game_window.py"
-$testRoot = Join-Path $env:TEMP ("MomentoInstallerTest-" + [guid]::NewGuid().ToString("N"))
+$testRoot = Join-Path $env:TEMP ("MementosInstallerTest-" + [guid]::NewGuid().ToString("N"))
 $installDir = Join-Path $testRoot "Installed"
 $profileRoot = Join-Path $testRoot "Profile"
 $appData = Join-Path $profileRoot "AppData\Roaming"
@@ -22,20 +22,35 @@ $oldLocalAppData = $env:LOCALAPPDATA
 $oldUserProfile = $env:USERPROFILE
 $oldPath = $env:PATH
 $runKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-$oldRunValue = Get-ItemPropertyValue -Path $runKey -Name "Momento" -ErrorAction SilentlyContinue
-$hadRunValue = $null -ne $oldRunValue
+$oldRunValues = @{}
+foreach ($brand in @("Momento", "Mementos")) {
+    $oldRunValues[$brand] = Get-ItemPropertyValue -Path $runKey -Name $brand -ErrorAction SilentlyContinue
+}
 $process = $null
 $target = $null
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8C8A50E4-FCF2-4E1E-9B9C-046B9ED5F3AA}_is1"
 $uninstallKeyNative = "HKCU\Software\Microsoft\Windows\CurrentVersion\Uninstall\{8C8A50E4-FCF2-4E1E-9B9C-046B9ED5F3AA}_is1"
 $uninstallBackup = Join-Path $testRoot "existing-uninstall.reg"
 $hadUninstallKey = Test-Path -LiteralPath $uninstallKey
-$startMenuGroup = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Momento"
-$startMenuBackup = Join-Path $testRoot "existing-start-menu"
-$hadStartMenuGroup = Test-Path -LiteralPath $startMenuGroup
-$desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Momento.lnk"
-$desktopBackup = Join-Path $testRoot "existing-desktop.lnk"
+$startMenuGroup = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Mementos"
+$desktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Mementos.lnk"
 $hadDesktopShortcut = Test-Path -LiteralPath $desktopShortcut
+$legacyStartMenuGroup = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Momento"
+$legacyShortcut = Join-Path $legacyStartMenuGroup "Momento.lnk"
+$legacyDesktopShortcut = Join-Path ([Environment]::GetFolderPath("Desktop")) "Momento.lnk"
+$hadLegacyDesktopShortcut = Test-Path -LiteralPath $legacyDesktopShortcut
+$shortcutBackups = @()
+foreach ($shortcutPath in @(
+    (Join-Path $startMenuGroup "Mementos.lnk"), $desktopShortcut,
+    $legacyShortcut, $legacyDesktopShortcut
+)) {
+    $shortcutBackups += @{
+        Path = $shortcutPath
+        Backup = Join-Path $testRoot ("shortcut-" + $shortcutBackups.Count + ".lnk")
+        Existed = Test-Path -LiteralPath $shortcutPath
+        ParentExisted = Test-Path -LiteralPath (Split-Path -Parent $shortcutPath)
+    }
+}
 
 if (-not (Test-Path -LiteralPath $mockPython) -or -not (Test-Path -LiteralPath $mockWindow)) {
     throw "The mock-window test harness is incomplete."
@@ -44,22 +59,22 @@ if ($hadUninstallKey) {
     & reg.exe export $uninstallKeyNative $uninstallBackup /y | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "Could not back up the existing uninstall registration." }
 }
-if ($hadStartMenuGroup) {
-    Copy-Item -LiteralPath $startMenuGroup -Destination $startMenuBackup -Recurse -Force
-}
-if ($hadDesktopShortcut) {
-    Copy-Item -LiteralPath $desktopShortcut -Destination $desktopBackup -Force
+foreach ($item in $shortcutBackups) {
+    if ($item.Existed) {
+        Copy-Item -LiteralPath $item.Path -Destination $item.Backup -Force
+    }
 }
 
-function Invoke-Installer([switch]$ExpectBlocked) {
+function Invoke-Installer([switch]$ExpectBlocked, [switch]$MigrateAutostart) {
     $arguments = @(
         "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
-        "/NOMIGRATEAUTOSTART", ('/DIR="' + $installDir + '"')
+        ('/DIR="' + $installDir + '"')
     )
+    if (-not $MigrateAutostart) { $arguments += "/NOMIGRATEAUTOSTART" }
     $setup = Start-Process -FilePath $installer -ArgumentList $arguments -PassThru -Wait -WindowStyle Hidden
     if ($ExpectBlocked) {
         if ($setup.ExitCode -eq 0) {
-            throw "Setup did not block while Momento held its installer mutex."
+            throw "Setup did not block while Mementos held its installer mutex."
         }
     }
     elseif ($setup.ExitCode -ne 0) {
@@ -67,10 +82,31 @@ function Invoke-Installer([switch]$ExpectBlocked) {
     }
 }
 
+function Assert-IsolatedAppData {
+    # Inno uses SHGetFolderPath, which is not guaranteed to follow APPDATA on
+    # every Windows account. Never run the purge test against the real profile.
+    $probe = & (Join-Path $repoRoot ".venv\Scripts\python.exe") -c @'
+import ctypes
+buffer = ctypes.create_unicode_buffer(32768)
+result = ctypes.windll.shell32.SHGetFolderPathW(None, 26 | 0x4000, None, 0, buffer)
+if result != 0:
+    raise SystemExit(1)
+print(buffer.value)
+'@
+    if ($LASTEXITCODE -ne 0 -or
+        [IO.Path]::GetFullPath($probe).TrimEnd('\') -ne
+        [IO.Path]::GetFullPath($appData).TrimEnd('\')) {
+        throw "Windows AppData is not isolated; refusing to run the installed state tests."
+    }
+}
+
 try {
     Invoke-Installer
-    $exe = Join-Path $installDir "Momento.exe"
+    $exe = Join-Path $installDir "Mementos.exe"
     $uninstaller = Join-Path $installDir "unins000.exe"
+    if (Test-Path -LiteralPath (Join-Path $installDir "Momento.exe")) {
+        throw "Fresh installation unexpectedly created the legacy executable alias."
+    }
     foreach ($required in @(
         $exe,
         $uninstaller,
@@ -93,7 +129,7 @@ try {
         [System.IO.Path]::GetFullPath($installDir).TrimEnd('\')) {
         throw "Uninstall registration points outside the test installation."
     }
-    $startMenuShortcut = Join-Path $startMenuGroup "Momento.lnk"
+    $startMenuShortcut = Join-Path $startMenuGroup "Mementos.lnk"
     if (-not (Test-Path -LiteralPath $startMenuShortcut)) {
         throw "Setup did not create the Start Menu shortcut."
     }
@@ -108,7 +144,8 @@ try {
     finally {
         [void][System.Runtime.InteropServices.Marshal]::FinalReleaseComObject($shell)
     }
-    if (-not $hadDesktopShortcut -and (Test-Path -LiteralPath $desktopShortcut)) {
+    if (-not $hadDesktopShortcut -and -not $hadLegacyDesktopShortcut -and
+        (Test-Path -LiteralPath $desktopShortcut)) {
         throw "Setup created the optional desktop shortcut without being asked."
     }
 
@@ -116,6 +153,7 @@ try {
     $env:LOCALAPPDATA = $localAppData
     $env:USERPROFILE = $profileRoot
     $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+    Assert-IsolatedAppData
     foreach ($tool in @("ffmpeg.exe", "ffprobe.exe")) {
         $toolPath = Join-Path $installDir "_internal\resources\ffmpeg\$tool"
         & $toolPath -version *> $null
@@ -127,7 +165,7 @@ try {
     if ($process.HasExited) {
         throw "The installed application exited during fresh-profile startup."
     }
-    $config = Join-Path $appData "Momento\config.json"
+    $config = Join-Path $appData "Mementos\config.json"
     if (-not (Test-Path -LiteralPath $config)) {
         throw "Fresh-profile startup did not create resumable setup state."
     }
@@ -161,12 +199,12 @@ try {
     if ($process.HasExited) {
         throw "The installed editor exited when opened without YouTube credentials."
     }
-    $target = Start-Process -FilePath $mockPython -ArgumentList ('"' + $mockWindow + '"') -PassThru
+    $target = Start-Process -FilePath $mockPython -ArgumentList ('"' + $mockWindow + '"') -PassThru -WindowStyle Hidden
 
     $recording = $null
     $recordingDeadline = [DateTime]::UtcNow.AddSeconds(30)
     while ([DateTime]::UtcNow -lt $recordingDeadline) {
-        if ($process.HasExited) { throw "Momento exited while detecting the mock game." }
+        if ($process.HasExited) { throw "Mementos exited while detecting the mock game." }
         $recording = Get-ChildItem -LiteralPath $recordings -Filter "*.mkv" -File -ErrorAction SilentlyContinue |
             Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
         if ($recording) { break }
@@ -180,11 +218,11 @@ try {
     }
     $target = $null
 
-    $log = Join-Path $appData "Momento\logs\momento.log"
+    $log = Join-Path $appData "Mementos\logs\mementos.log"
     $finalizeDeadline = [DateTime]::UtcNow.AddSeconds(30)
     $finalized = $false
     while ([DateTime]::UtcNow -lt $finalizeDeadline) {
-        if ($process.HasExited) { throw "Momento exited while finalizing the mock recording." }
+        if ($process.HasExited) { throw "Mementos exited while finalizing the mock recording." }
         if ((Test-Path -LiteralPath $log) -and
             (Select-String -LiteralPath $log -SimpleMatch "finalised" -Quiet)) {
             $finalized = $true
@@ -210,13 +248,27 @@ try {
     $process.WaitForExit()
     $process = $null
 
-    Invoke-Installer
+    # Simulate the previous name in an otherwise complete test installation.
+    $legacyExe = Join-Path $installDir "Momento.exe"
+    Copy-Item -LiteralPath $exe -Destination $legacyExe
+    Remove-ItemProperty -Path $runKey -Name "Mementos" -ErrorAction SilentlyContinue
+    Set-ItemProperty -Path $runKey -Name "Momento" -Value ('"' + $legacyExe + '"')
+    Invoke-Installer -MigrateAutostart
     if (-not (Test-Path -LiteralPath $exe)) {
         throw "Upgrade did not preserve the installed application."
     }
+    if (-not (Test-Path -LiteralPath $legacyExe) -or
+        (Get-FileHash -LiteralPath $legacyExe -Algorithm SHA256).Hash -ne
+        (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash) {
+        throw "Upgrade did not refresh the legacy shortcut target with the new executable."
+    }
+    if ((Get-ItemPropertyValue -Path $runKey -Name "Mementos") -ne ('"' + $exe + '"') -or
+        $null -ne (Get-ItemPropertyValue -Path $runKey -Name "Momento" -ErrorAction SilentlyContinue)) {
+        throw "Upgrade did not migrate the existing startup entry."
+    }
 
-    $sentinel = Join-Path $appData "Momento\preserve-on-default-uninstall.txt"
-    $oauthSentinel = Join-Path $appData "Momento\youtube_oauth_client.dat"
+    $sentinel = Join-Path $appData "Mementos\preserve-on-default-uninstall.txt"
+    $oauthSentinel = Join-Path $appData "Mementos\youtube_oauth_client.dat"
     Set-Content -LiteralPath $sentinel -Encoding ascii -Value "preserve"
     Set-Content -LiteralPath $oauthSentinel -Encoding ascii -Value "preserve-oauth"
     $uninstall = Start-Process -FilePath $uninstaller -ArgumentList @(
@@ -239,7 +291,7 @@ try {
     }
 
     Invoke-Installer
-    $stateDir = Join-Path $appData "Momento"
+    $stateDir = Join-Path $appData "Mementos"
     New-Item -ItemType Directory -Path (Join-Path $stateDir "logs") -Force | Out-Null
     $purgeTargets = @(
         (Join-Path $stateDir "config.json"),
@@ -252,12 +304,14 @@ try {
         (Join-Path $stateDir "youtube_avatar.png.tmp"),
         (Join-Path $stateDir "youtube_oauth_client.dat"),
         (Join-Path $stateDir "youtube_oauth_client.dat.tmp"),
-        (Join-Path $stateDir "momento.lock"),
-        (Join-Path $stateDir "logs\momento.log")
+        (Join-Path $appData "Momento\momento.lock"),
+        (Join-Path $stateDir "logs\mementos.log")
     )
     foreach ($targetPath in $purgeTargets) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $targetPath) -Force | Out-Null
         Set-Content -LiteralPath $targetPath -Encoding ascii -Value "purge-test"
     }
+    Assert-IsolatedAppData
     $purge = Start-Process -FilePath $uninstaller -ArgumentList @(
         "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/PURGEUSERDATA"
     ) -PassThru -Wait -WindowStyle Hidden
@@ -289,11 +343,13 @@ finally {
             "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"
         ) -Wait -WindowStyle Hidden | Out-Null
     }
-    if ($hadRunValue) {
-        Set-ItemProperty -Path $runKey -Name "Momento" -Value $oldRunValue
-    }
-    else {
-        Remove-ItemProperty -Path $runKey -Name "Momento" -ErrorAction SilentlyContinue
+    foreach ($brand in $oldRunValues.Keys) {
+        if ($null -ne $oldRunValues[$brand]) {
+            Set-ItemProperty -Path $runKey -Name $brand -Value $oldRunValues[$brand]
+        }
+        else {
+            Remove-ItemProperty -Path $runKey -Name $brand -ErrorAction SilentlyContinue
+        }
     }
     $env:APPDATA = $oldAppData
     $env:LOCALAPPDATA = $oldLocalAppData
@@ -303,15 +359,19 @@ finally {
         & reg.exe import $uninstallBackup | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "Could not restore the existing uninstall registration." }
     }
-    if ($hadStartMenuGroup -and (Test-Path -LiteralPath $startMenuBackup)) {
-        New-Item -ItemType Directory -Path $startMenuGroup -Force | Out-Null
-        Copy-Item -Path (Join-Path $startMenuBackup "*") -Destination $startMenuGroup -Force
-    }
-    if ($hadDesktopShortcut -and (Test-Path -LiteralPath $desktopBackup)) {
-        Copy-Item -LiteralPath $desktopBackup -Destination $desktopShortcut -Force
-    }
-    elseif (-not $hadDesktopShortcut -and (Test-Path -LiteralPath $desktopShortcut)) {
-        Remove-Item -LiteralPath $desktopShortcut -Force
+    foreach ($item in $shortcutBackups) {
+        $parent = Split-Path -Parent $item.Path
+        if ($item.Existed -and (Test-Path -LiteralPath $item.Backup)) {
+            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            Copy-Item -LiteralPath $item.Backup -Destination $item.Path -Force
+        }
+        elseif (-not $item.Existed -and (Test-Path -LiteralPath $item.Path)) {
+            Remove-Item -LiteralPath $item.Path -Force
+        }
+        if (-not $item.ParentExisted -and (Test-Path -LiteralPath $parent) -and
+            @(Get-ChildItem -LiteralPath $parent -Force).Count -eq 0) {
+            [IO.Directory]::Delete($parent, $false)
+        }
     }
     if (Test-Path -LiteralPath $testRoot) {
         $resolvedTestRoot = [System.IO.Path]::GetFullPath($testRoot)

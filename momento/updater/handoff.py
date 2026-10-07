@@ -65,7 +65,7 @@ class UpdateHandoffCoordination:
     """App-owned readiness event for one Setup process.
 
     Inno owns ``gate_name`` through ``SetupMutex``. Setup opens a SYNCHRONIZE
-    handle to the live parent before signalling ``ready_event_name``. Momento
+    handle to the live parent before signalling ``ready_event_name``. Mementos
     keeps the event and its normal instance mutex alive until that signal and
     independently confirms that Setup's mutex exists.
     """
@@ -308,7 +308,7 @@ def launch_update(
     except ValueError as exc:
         raise UpdateHandoffError("Invalid update attempt token") from exc
     if not single_instance.is_acquired:
-        raise UpdateHandoffError("Normal Momento instance lock must remain held")
+        raise UpdateHandoffError("Normal Mementos instance lock must remain held")
 
     try:
         installer_path = installer.resolve(strict=True)
@@ -340,7 +340,7 @@ def launch_update(
         # complete CreateProcess call before permitting the handoff to advance.
         os.fstat(verified_handle.fileno())
         if not single_instance.is_acquired:
-            raise UpdateHandoffError("Normal Momento lock was released during Setup launch")
+            raise UpdateHandoffError("Normal Mementos lock was released during Setup launch")
         if not coordination.wait_until_ready(process, readiness_timeout):
             raise UpdateHandoffError("Setup did not claim the update handoff in time")
     except Exception as exc:
@@ -348,7 +348,7 @@ def launch_update(
             _stop_failed_setup(process)
         if isinstance(exc, UpdateHandoffError):
             raise
-        raise UpdateHandoffError("Could not start the verified Momento installer") from exc
+        raise UpdateHandoffError("Could not start the verified Mementos installer") from exc
     finally:
         if coordination is not None:
             coordination.close()

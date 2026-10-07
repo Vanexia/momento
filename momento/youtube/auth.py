@@ -105,7 +105,7 @@ def connect_account() -> ChannelInfo:
 
     BLOCKS until the user completes the consent in their browser (typically
     20-60 seconds) or the flow times out at 5 min. On success, writes the
-    token to ``%APPDATA%/Momento/youtube_token.dat`` and returns the
+    token to ``%APPDATA%/Mementos/youtube_token.dat`` and returns the
     connected channel's display info.
 
     Raises ``YouTubeAuthError`` if:
@@ -139,14 +139,14 @@ def connect_account() -> ChannelInfo:
             prompt="consent",
             timeout_seconds=_FLOW_TIMEOUT_SECONDS,
             success_message=(
-                "Momento is connected. You can close this tab and return "
+                "Mementos is connected. You can close this tab and return "
                 "to the app."
             ),
         )
     except Exception as exc:  # noqa: BLE001 — third-party can raise anything
         logger.warning("OAuth flow failed (%s)", type(exc).__name__)
         raise YouTubeAuthError(
-            "Couldn't complete YouTube sign-in. Return to Momento and try again."
+            "Couldn't complete YouTube sign-in. Return to Mementos and try again."
         ) from None
 
     try:
@@ -348,7 +348,7 @@ def cache_channel_avatar(thumbnail_url: str) -> Optional[Path]:
     try:
         with requests.get(
             thumbnail_url,
-            headers={"User-Agent": "Momento"},
+            headers={"User-Agent": "Mementos"},
             timeout=(5, 10),
             stream=True,
             allow_redirects=True,
@@ -419,7 +419,7 @@ def delete_cached_avatar() -> None:
 
 # ---------- Internals ------------------------------------------------------
 
-# Application-specific DPAPI entropy. Binds the encrypted token blob to Momento
+# Application-specific DPAPI entropy. Binds the encrypted token blob to Mementos
 # in addition to the Windows user, so generic same-user secret-stealers can't
 # CryptUnprotectData the refresh token without also knowing this value. A blob
 # written before this existed (no entropy) is migrated transparently on load.
@@ -444,7 +444,7 @@ def _save_credentials(
         logger.exception("DPAPI encrypt failed — token NOT persisted")
         raise YouTubeAuthError(
             "Windows DPAPI refused to encrypt the YouTube token. "
-            "Your sign-in worked but Momento can't remember it across restarts."
+            "Your sign-in worked but Mementos can't remember it across restarts."
         )
 
     path = youtube_token_path()

@@ -357,7 +357,7 @@ def _game_still_running(game: ActiveGame) -> bool:
     except psutil.NoSuchProcess:
         return False
     except (psutil.AccessDenied, OSError):
-        # Elevated / anti-cheat-protected game (e.g. FFXIV) that Momento can't
+        # Elevated / anti-cheat-protected game (e.g. FFXIV) that Mementos can't
         # query via psutil while running non-elevated. Do NOT treat
         # "can't determine" as "exited" — that made the watcher fire game-stop
         # then re-detect the still-running game by name every ~2s: a

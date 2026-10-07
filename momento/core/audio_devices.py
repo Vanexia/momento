@@ -23,7 +23,7 @@ Configs written by the old soundcard build stored WASAPI endpoint IDs
 (``"{0.0.1.00000000}.{guid}"``); :func:`friendly_name_for_endpoint_id` maps
 those to names so a saved selection survives the upgrade.
 
-Everything here is Windows/WASAPI-specific, matching the rest of Momento.
+Everything here is Windows/WASAPI-specific, matching the rest of Mementos.
 """
 
 from __future__ import annotations

@@ -41,11 +41,11 @@ from momento.util.windows_api import is_window
 
 
 def _unsupported_image_save(*_args, **_kwargs):
-    raise RuntimeError("Momento does not use windows-capture image saving")
+    raise RuntimeError("Mementos does not use windows-capture image saving")
 
 
 # windows-capture imports OpenCV solely for optional save_as_image methods.
-# Momento never calls those methods, so provide the tiny API surface at import
+# Mementos never calls those methods, so provide the tiny API surface at import
 # time and keep the 100+ MB OpenCV/FFmpeg runtime out of the frozen app.
 if "cv2" not in sys.modules:
     cv2_stub = types.ModuleType("cv2")

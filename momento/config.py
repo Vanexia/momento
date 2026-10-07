@@ -1,4 +1,4 @@
-"""Momento's configuration schema and JSON persistence."""
+"""Mementos's configuration schema and JSON persistence."""
 
 from __future__ import annotations
 
@@ -280,7 +280,7 @@ DEFAULT_KNOWN_GAMES: tuple[str, ...] = (
     # NOTE: launchers (Steam / Epic / EA / GOG / Ubisoft / Battle.net) are
     # intentionally NOT in this list. They're nearly always running in the
     # background, and tracking them caused a spurious "Couldn't record …"
-    # toast at every Momento launch when the launcher's main window was
+    # toast at every Mementos launch when the launcher's main window was
     # hidden/minimised. Their display names live in game_names.py for the
     # rare user who explicitly adds them by hand.
     # ------ Indie heavy hitters / popular smaller titles ------
@@ -342,7 +342,7 @@ class Config:
     # Storage hygiene controls — see _enforce_storage_limit at startup +
     # after every recording. ``max_storage_gb`` = 0 means unlimited.
     max_storage_gb: int = 0
-    # Free-space watermark below which Momento warns the user (in GiB).
+    # Free-space watermark below which Mementos warns the user (in GiB).
     # 0 disables the warning.
     low_disk_warning_gb: int = 5
     # A fixed 60 fps is a dependable default for new users. Display-matched
@@ -375,7 +375,7 @@ class Config:
     # so users can keep "recording started" (useful confirmation when a game
     # launches) while silencing "recording saved" (less critical, more
     # likely to land in the middle of a celebration). Not Windows
-    # notifications — rendered by Momento, ignore DnD/Focus Assist.
+    # notifications — rendered by Mementos, ignore DnD/Focus Assist.
     show_recording_started_toast: bool = True
     show_recording_saved_toast: bool = True
     # Couldn't-record warning. Defaults on because failures always need
@@ -405,7 +405,7 @@ class Config:
     close_to_tray: bool = True
     # When False, the game watcher is paused at app launch and the tray
     # menu's "Resume monitoring" must be used to start it. Lets the user
-    # keep Momento ticking in the tray without auto-recording.
+    # keep Mementos ticking in the tray without auto-recording.
     start_monitoring_on_launch: bool = True
     # YouTube upload bridge (Phase 11). Defaults that pre-fill the upload
     # dialog; the user can override per-upload. ``youtube_channel_name`` /

@@ -1,4 +1,4 @@
-"""Build and self-verify signed metadata for a Momento installer."""
+"""Build and self-verify signed metadata for current or legacy installer assets."""
 
 from __future__ import annotations
 
@@ -28,11 +28,14 @@ from momento.updater.file_lock import open_locked_read  # noqa: E402
 
 
 def _default_private_key() -> Path:
-    configured = os.environ.get("MOMENTO_UPDATE_SIGNING_KEY")
+    configured = os.environ.get("MEMENTOS_UPDATE_SIGNING_KEY") or os.environ.get(
+        "MOMENTO_UPDATE_SIGNING_KEY"
+    )
     if configured:
         return Path(configured).expanduser()
     local = os.environ.get("LOCALAPPDATA")
     base = Path(local) if local else Path.home() / "AppData" / "Local"
+    # Keep the established signing identity across the product rename.
     return base / "MomentoRelease" / "update-signing-key.pem"
 
 
@@ -66,9 +69,14 @@ def build_metadata(
         raise ValueError(
             "Schema 1 releases must remain compatible with updater 0.2.2"
         )
-    expected_name = f"MomentoSetup-{version}.exe"
-    if installer.name != expected_name:
-        raise ValueError(f"Installer must be named {expected_name}")
+    allowed_names = {
+        f"MementosSetup-{version}.exe": "Mementos",
+        f"MomentoSetup-{version}.exe": "Momento",
+    }
+    if installer.name not in allowed_names:
+        raise ValueError("Installer must use the current or legacy versioned release name")
+    expected_name = installer.name
+    product_name = allowed_names[expected_name]
     private_key = serialization.load_pem_private_key(
         private_key_path.read_bytes(), password=None
     )
@@ -119,8 +127,8 @@ def build_metadata(
     manifest = authenticate_manifest(metadata, signature, public_bytes)
     validate_manifest_freshness(manifest, now=datetime.now(UTC))
 
-    metadata_path = output_dir / "Momento-update.json"
-    signature_path = output_dir / "Momento-update.json.sig"
+    metadata_path = output_dir / f"{product_name}-update.json"
+    signature_path = output_dir / f"{product_name}-update.json.sig"
     _atomic_write(metadata_path, metadata)
     _atomic_write(signature_path, signature)
 

@@ -195,7 +195,7 @@ class SessionManager:
     def pause_monitoring(self) -> bool:
         """Stop the watcher without affecting an in-flight recording.
 
-        Used by the tray's "Pause monitoring" menu item — keeps Momento
+        Used by the tray's "Pause monitoring" menu item — keeps Mementos
         running in the tray but prevents new auto-recordings from starting.
         """
         watcher_stopped = False
@@ -676,7 +676,7 @@ class SessionManager:
             self._emit_failure(
                 FAILURE_OUTPUT_FOLDER,
                 game,
-                "Recording stopped because Momento could no longer write to the "
+                "Recording stopped because Mementos could no longer write to the "
                 "output drive. Check its free space and connection; this clip may "
                 "need Repair.",
             )
@@ -696,9 +696,9 @@ class SessionManager:
         self._emit_failure(
             FAILURE_VIDEO_PERFORMANCE,
             game,
-            f"Momento is dropping about {max(0.0, drop_rate) * 100:.1f}% of video "
-            "frames. Lower the recording resolution, frame rate, or quality if "
-            "this continues.",
+            f"Mementos dropped about {max(0.0, drop_rate) * 100:.1f}% of recent "
+            "video frames. Recording continues. If this keeps happening, lower "
+            "the recording resolution, frame rate, or quality.",
         )
 
     def _on_video_capture_failed_mid_recording(self, exc: Exception) -> None:
@@ -716,7 +716,7 @@ class SessionManager:
         self._emit_failure(
             FAILURE_VIDEO_CAPTURE,
             game,
-            "Video capture stopped unexpectedly. Momento saved this clip and will "
+            "Video capture stopped unexpectedly. Mementos saved this clip and will "
             "retry while the game remains open.",
         )
         threading.Thread(
@@ -806,11 +806,11 @@ class SessionManager:
             # `not busy and state_game is None` guard already filtered no-op
             # finalises. Without this, that narrow window silently swallowed the
             # warning and a clean "saved" toast claimed an incomplete file. The
-            # tray renders a None game as "Momento".
+            # tray renders a None game as "Mementos".
             if finalize_error is not None and source != "output failure":
                 self._emit_failure(
                     FAILURE_FINALIZE, game,
-                    "The recording may be incomplete. Momento will try to repair it "
+                    "The recording may be incomplete. Mementos will try to repair it "
                     "automatically; if it won't play, right-click it and choose Repair.",
                 )
             finished = final or (finalize_error.path if finalize_error is not None else None)
@@ -1014,7 +1014,7 @@ def _build_output_path(folder: Path, slug: str) -> Path:
 
 
 def kill_orphan_ffmpeg_processes() -> int:
-    """Kill abandoned instances of Momento's bundled ``ffmpeg.exe`` only."""
+    """Kill abandoned instances of Mementos' bundled ``ffmpeg.exe`` only."""
     our_ffmpeg = None
     try:
         our_ffmpeg = ffmpeg_exe().resolve()
@@ -1054,7 +1054,7 @@ def kill_orphan_ffmpeg_processes() -> int:
 
             if is_our_bundled and parent_gone:
                 logger.info(
-                    "Killing abandoned Momento ffmpeg pid=%d exe=%s",
+                    "Killing abandoned Mementos ffmpeg pid=%d exe=%s",
                     proc.info["pid"], exe_path_str,
                 )
                 proc.kill()

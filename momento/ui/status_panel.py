@@ -1,6 +1,6 @@
 """Live recording-status strip shown at the top of the editor window.
 
-Surfaces what Momento is doing right now — whether it's recording, which
+Surfaces what Mementos is doing right now — whether it's recording, which
 game, how long for — plus quick-glance environment checks (mic configured,
 system audio configured, free disk space). Driven from the tray's
 session-status signal and a 1 s QTimer that polls the recorder + filesystem.
@@ -239,7 +239,7 @@ class StatusPanel(QFrame):
         logo.setPixmap(theme.logo_pixmap(24))
         logo.setFixedSize(24, 24)
         lay.addWidget(logo)
-        word = QLabel("Momento")
+        word = QLabel("Mementos")
         word.setStyleSheet(f"color: {theme.TEXT_HIGH}; font-weight: 700; font-size: 13px;")
         lay.addWidget(word)
         self._settings_entry = _SettingsEntry()

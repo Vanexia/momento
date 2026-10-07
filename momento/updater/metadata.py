@@ -1,4 +1,4 @@
-"""Signed metadata contract for stable Momento releases."""
+"""Signed metadata contract for stable Mementos releases."""
 
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ class UpdateSignatureError(UpdateMetadataError):
 
 
 class UpdatePolicyError(UpdateMetadataError):
-    """The metadata is authentic but is not an allowed Momento update."""
+    """The metadata is authentic but is not an allowed Mementos update."""
 
 
 class UpdateNotNewerError(UpdatePolicyError):
@@ -92,7 +92,7 @@ class UpdateManifest:
 
 
 def canonical_manifest_bytes(payload: dict[str, object]) -> bytes:
-    """Serialize a manifest with the one byte representation Momento signs."""
+    """Serialize a manifest with the one byte representation Mementos signs."""
     try:
         return json.dumps(
             payload,
@@ -130,7 +130,7 @@ def parse_signed_manifest(
     if manifest.version < running or (
         manifest.version == running and not allow_current
     ):
-        raise UpdateNotNewerError("Update version is not newer than Momento")
+        raise UpdateNotNewerError("Update version is not newer than Mementos")
     if manifest.minimum_updater_version > running:
         raise UpdatePolicyError("Update requires a newer updater")
     return manifest
@@ -299,13 +299,13 @@ def _installer_info(value: Any, *, version: str) -> InstallerInfo:
     if type(size) is not int or not (0 < size <= MAX_INSTALLER_BYTES):
         raise UpdatePolicyError("Update installer size is invalid")
 
-    expected_name = f"MomentoSetup-{version}.exe"
+    allowed_names = {f"MementosSetup-{version}.exe", f"MomentoSetup-{version}.exe"}
+    if name not in allowed_names:
+        raise UpdatePolicyError("Update installer filename is not allowed")
     expected_url = (
         "https://github.com/Vanexia/momento/releases/download/"
-        f"v{version}/{expected_name}"
+        f"v{version}/{name}"
     )
-    if name != expected_name:
-        raise UpdatePolicyError("Update installer filename is not allowed")
     if url != expected_url:
         raise UpdatePolicyError("Update installer URL is not allowed")
     return InstallerInfo(name=name, url=url, size=size, sha256=sha256)

@@ -24,7 +24,7 @@ class MediaSummary:
 
 
 def probe_media_summary(path: Path | str, *, timeout: float = 20.0) -> MediaSummary:
-    """Read the container, duration, A/V codecs, and Momento tag with ffprobe."""
+    """Read the container, duration, A/V codecs, and Mementos tag with ffprobe."""
     media = Path(path)
     try:
         result = subprocess.run(
@@ -107,7 +107,7 @@ def validate_repair_candidate(source: Path, candidate: Path) -> str | None:
         if missing:
             return f"Repaired file lost source stream(s): {missing}"
         if original.game_tag and repaired.game_tag != original.game_tag:
-            return "Repaired file lost its Momento game metadata"
+            return "Repaired file lost its Mementos game metadata"
     return None
 
 
@@ -141,7 +141,7 @@ def validate_trim_candidate(
         if missing:
             return f"Exported clip lost source stream(s): {missing}"
         if original.game_tag and exported.game_tag != original.game_tag:
-            return "Exported clip lost its Momento game metadata"
+            return "Exported clip lost its Mementos game metadata"
     return None
 
 

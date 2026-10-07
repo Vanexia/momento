@@ -1,4 +1,4 @@
-"""Manage the HKCU Run-key entry that auto-launches Momento on login."""
+"""Manage the HKCU Run-key entry that auto-launches Mementos on login."""
 
 from __future__ import annotations
 
@@ -9,7 +9,8 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 REG_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-REG_VALUE = "Momento"
+REG_VALUE = "Mementos"
+LEGACY_REG_VALUE = "Momento"
 
 
 def autostart_command() -> str:
@@ -17,7 +18,7 @@ def autostart_command() -> str:
 
     Preference order:
       1. Running from a PyInstaller bundle (sys.frozen) — use sys.executable.
-      2. Dev mode but a bundled exe exists at dist/Momento/Momento.exe — prefer
+      2. Dev mode but a bundled exe exists at dist/Mementos/Mementos.exe — prefer
          that. Avoids the foot-gun where toggling autostart in a dev session
          overwrites the registry with the pythonw path and the user gets the
          wrong (slower, console-flashing, dev-state) version on next login.
@@ -28,7 +29,7 @@ def autostart_command() -> str:
 
     # momento/util/autostart.py -> parents[2] is the repo root.
     project_root = Path(__file__).resolve().parents[2]
-    bundled_exe = project_root / "dist" / "Momento" / "Momento.exe"
+    bundled_exe = project_root / "dist" / "Mementos" / "Mementos.exe"
     if bundled_exe.is_file():
         return f'"{bundled_exe}"'
 
@@ -36,7 +37,7 @@ def autostart_command() -> str:
     py = Path(sys.executable)
     pyw = py.with_name("pythonw.exe")
     interpreter = pyw if pyw.exists() else py
-    return f'"{interpreter}" -m momento'
+    return f'"{interpreter}" -m mementos'
 
 
 def set_autostart(enabled: bool) -> None:
@@ -59,6 +60,11 @@ def set_autostart(enabled: bool) -> None:
                     logger.info("Autostart disabled")
                 except FileNotFoundError:
                     pass
+            # Only remove the old entry after the replacement has succeeded.
+            try:
+                winreg.DeleteValue(k, LEGACY_REG_VALUE)
+            except FileNotFoundError:
+                pass
     except OSError:
         logger.exception("Failed to update autostart registry")
         raise

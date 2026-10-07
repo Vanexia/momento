@@ -64,7 +64,7 @@ def _persist_setup_config(config: Config) -> OSError | None:
 
 
 _STEP_TITLES = (
-    "Welcome to Momento",
+    "Welcome to Mementos",
     "Choose a recordings folder",
     "Set up audio",
     "Choose capture quality",
@@ -91,7 +91,7 @@ class WelcomeDialog(QDialog):
 
     def __init__(self, config: Config, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Momento — first-time setup")
+        self.setWindowTitle("Mementos — first-time setup")
         self.setModal(True)
         self.resize(640, 540)
         self.setMinimumSize(560, 480)
@@ -203,12 +203,12 @@ class WelcomeDialog(QDialog):
         # blank/dot path as "unset" and keep the existing configured folder.
         folder_text = self._folder_edit.text().strip()
         if not folder_text:
-            QMessageBox.warning(self, "Momento", "Choose a recordings folder first.")
+            QMessageBox.warning(self, "Mementos", "Choose a recordings folder first.")
             return
         try:
             self._pending["output_folder"] = Path(folder_text).expanduser().resolve()
         except (OSError, RuntimeError) as e:
-            QMessageBox.warning(self, "Momento", f"That folder is invalid:\n{e}")
+            QMessageBox.warning(self, "Mementos", f"That folder is invalid:\n{e}")
             return
         try:
             new_cfg = dataclasses.replace(
@@ -217,7 +217,7 @@ class WelcomeDialog(QDialog):
         except Exception:
             logger.exception("Wizard: building Config from pending values failed")
             QMessageBox.warning(
-                self, "Momento",
+                self, "Mementos",
                 "Something went wrong applying your choices. Please open "
                 "Settings to finish manually.",
             )
@@ -243,26 +243,26 @@ class WelcomeDialog(QDialog):
         output_folder = Path(new_cfg.output_folder).expanduser()
         try:
             output_folder.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(dir=output_folder, prefix=".momento-"):
+            with tempfile.NamedTemporaryFile(dir=output_folder, prefix=".mementos-"):
                 pass
         except OSError as e:
             logger.exception("Wizard: recordings folder is not writable")
             QMessageBox.warning(
-                self, "Momento", f"Momento cannot write to that folder:\n{e}"
+                self, "Mementos", f"Mementos cannot write to that folder:\n{e}"
             )
             return
         try:
             autostart_error = _persist_setup_config(new_cfg)
         except OSError as e:
             QMessageBox.critical(
-                self, "Momento", f"Could not finish setup:\n{e}"
+                self, "Mementos", f"Could not finish setup:\n{e}"
             )
             return
         if autostart_error is not None:
             QMessageBox.warning(
                 self,
-                "Momento",
-                "Setup was saved, but Momento could not update Windows startup:\n"
+                "Mementos",
+                "Setup was saved, but Mementos could not update Windows startup:\n"
                 f"{autostart_error}",
             )
         self.settings_saved.emit(new_cfg)
@@ -280,12 +280,12 @@ class WelcomeDialog(QDialog):
         col = QVBoxLayout(page)
         col.setSpacing(12)
         col.addWidget(_para(
-            "Momento sits in your system tray and watches for games. When "
+            "Mementos sits in your system tray and watches for games. When "
             "one starts, it records the game window with your mic and "
             "system audio, and stops automatically when you close it."
         ))
         col.addWidget(_para(
-            "Momento does not upload recordings or require an account. Files "
+            "Mementos does not upload recordings or require an account. Files "
             "are saved to the folder you choose; cloud sync depends on that folder."
         ))
         col.addWidget(_para(
@@ -301,7 +301,7 @@ class WelcomeDialog(QDialog):
         col = QVBoxLayout(page)
         col.setSpacing(10)
         col.addWidget(_para(
-            "Pick where Momento should save your recordings. Files end up "
+            "Pick where Mementos should save your recordings. Files end up "
             "as ``.mkv`` here; exported clips go into the ``clips/`` "
             "subfolder."
         ))
@@ -420,7 +420,7 @@ class WelcomeDialog(QDialog):
         self._wizard_sys_status.setStyleSheet("font-size: 9pt;")
         form.addRow("", self._wizard_sys_status)
         form.addRow("", _hint(
-            "Momento records whatever plays through the selected system "
+            "Mementos records whatever plays through the selected system "
             "audio device — speakers, headset, virtual cable."
         ))
         self._sys_test_btn = QPushButton("Test system audio")
@@ -499,7 +499,7 @@ class WelcomeDialog(QDialog):
             mic_key = self._wizard_mic_combo.currentData() or ""
             if not mic_key:
                 QMessageBox.information(
-                    self, "Momento",
+                    self, "Mementos",
                     "Pick a microphone first, then start the test.",
                 )
                 self._mic_test_btn.setChecked(False)
@@ -538,7 +538,7 @@ class WelcomeDialog(QDialog):
         )
 
     def _on_mic_error(self, message: str) -> None:
-        QMessageBox.warning(self, "Momento", message)
+        QMessageBox.warning(self, "Mementos", message)
 
     def _on_mic_stopped(self) -> None:
         self._mic_meter.reset()
@@ -554,21 +554,21 @@ class WelcomeDialog(QDialog):
         wav = bookmark_sound_path()
         if wav is None or not wav.exists():
             QMessageBox.warning(
-                self, "Momento",
+                self, "Mementos",
                 "Bundled chime is missing — can't test system audio.",
             )
             return
         device_id = self._wizard_sys_combo.currentData() or ""
         if not device_id:
             QMessageBox.information(
-                self, "Momento", "Pick a system audio device first."
+                self, "Mementos", "Pick a system audio device first."
             )
             return
         target = match_audio_output(device_id)
         if target is None:
             QMessageBox.warning(
                 self,
-                "Momento",
+                "Mementos",
                 "That playback device is unavailable. Refresh the devices or "
                 "choose another one.",
             )
@@ -668,11 +668,11 @@ class WelcomeDialog(QDialog):
         col = QVBoxLayout(page)
         col.setSpacing(10)
         col.addWidget(_para(
-            "Momento watches your running processes for known games. When "
+            "Mementos watches your running processes for known games. When "
             "one starts, recording kicks off automatically — no hotkey to "
             "remember."
         ))
-        self._monitor_check = QCheckBox("Start watching for games when Momento launches")
+        self._monitor_check = QCheckBox("Start watching for games when Mementos launches")
         self._monitor_check.setChecked(self._config.start_monitoring_on_launch)
         self._monitor_check.toggled.connect(
             lambda checked: self._pending.update(start_monitoring_on_launch=checked)
@@ -750,7 +750,7 @@ class WelcomeDialog(QDialog):
         page = QWidget()
         col = QVBoxLayout(page)
         col.setSpacing(8)
-        self._autostart_check = QCheckBox("Start Momento with Windows")
+        self._autostart_check = QCheckBox("Start Mementos with Windows")
         self._autostart_check.setChecked(self._config.autostart_with_windows)
         self._autostart_check.toggled.connect(
             lambda v: self._pending.update(autostart_with_windows=v)
@@ -763,7 +763,7 @@ class WelcomeDialog(QDialog):
         )
         col.addWidget(self._close_to_tray_check)
         col.addWidget(_hint(
-            "When enabled, Momento starts in the system tray without "
+            "When enabled, Mementos starts in the system tray without "
             "opening the main window."
         ))
         col.addStretch(1)
@@ -776,7 +776,7 @@ class WelcomeDialog(QDialog):
         col.setSpacing(10)
         col.addWidget(_para(
             "Here's what you've set up. Click Finish to save and start using "
-            "Momento."
+            "Mementos."
         ))
         self._final_list = QFrame()
         self._final_list.setFrameShape(QFrame.Shape.StyledPanel)

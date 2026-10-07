@@ -1,4 +1,4 @@
-"""Single-instance and installer-handoff enforcement for Momento.
+"""Single-instance and installer-handoff enforcement for Mementos.
 
 The lock is held by the process for its lifetime — if the process crashes, the
 OS releases the lock automatically. The lock file itself is best-effort
@@ -14,7 +14,7 @@ import sys
 import time
 from pathlib import Path
 
-from momento.util.paths import appdata_dir
+from momento.util.paths import instance_lock_path
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ def is_update_gate_active(name: str = UPDATE_GATE_MUTEX_NAME) -> bool:
     try:
         return _windows_named_mutex_exists(name)
     except OSError:
-        logger.exception("Could not inspect the Momento update gate")
+        logger.exception("Could not inspect the Mementos update gate")
         return True
 
 
@@ -97,7 +97,7 @@ def wait_for_update_gate_release(
 
 
 class AlreadyRunningError(RuntimeError):
-    """Raised when another Momento instance is already holding the lock."""
+    """Raised when another Mementos instance is already holding the lock."""
 
 
 class SingleInstance:
@@ -109,7 +109,7 @@ class SingleInstance:
             with SingleInstance():
                 run_app()
         except AlreadyRunningError:
-            print("Momento is already running.")
+            print("Mementos is already running.")
             sys.exit(1)
     """
 
@@ -120,7 +120,7 @@ class SingleInstance:
         mutex_name: str = INSTALLER_MUTEX_NAME,
         update_gate_name: str = UPDATE_GATE_MUTEX_NAME,
     ) -> None:
-        self._lock_path = lock_path or (appdata_dir() / "momento.lock")
+        self._lock_path = lock_path or instance_lock_path()
         self._mutex_name = mutex_name
         self._update_gate_name = update_gate_name
         self._fh = None  # type: ignore[assignment]
@@ -154,13 +154,13 @@ class SingleInstance:
         wait_deadline = time.monotonic() + max(update_wait_timeout, 0)
         if sys.platform == "win32" and is_update_gate_active(self._update_gate_name):
             if not is_valid_update_attempt_token(updated_token):
-                raise AlreadyRunningError("Momento is being updated")
+                raise AlreadyRunningError("Mementos is being updated")
             if not wait_for_update_gate_release(
                 updated_token,
                 timeout=max(0.0, wait_deadline - time.monotonic()),
                 name=self._update_gate_name,
             ):
-                raise AlreadyRunningError("Momento update is still finishing")
+                raise AlreadyRunningError("Mementos update is still finishing")
 
         self._lock_path.parent.mkdir(parents=True, exist_ok=True)
         fh = open(self._lock_path, "a+b")
@@ -187,7 +187,7 @@ class SingleInstance:
                 fh.close()
                 self._close_mutex()
                 raise AlreadyRunningError(
-                    f"Another Momento instance is already running (lock: {self._lock_path})"
+                    f"Another Mementos instance is already running (lock: {self._lock_path})"
                 ) from e
 
             gate_active = is_update_gate_active(self._update_gate_name)
@@ -205,7 +205,7 @@ class SingleInstance:
                     pass
                 fh.close()
                 self._close_mutex()
-                raise AlreadyRunningError("Momento is being updated")
+                raise AlreadyRunningError("Mementos is being updated")
         else:
             # Best-effort on non-Windows for dev convenience
             import fcntl  # type: ignore[import-not-found]
@@ -215,7 +215,7 @@ class SingleInstance:
             except OSError as e:
                 fh.close()
                 raise AlreadyRunningError(
-                    f"Another Momento instance is already running (lock: {self._lock_path})"
+                    f"Another Mementos instance is already running (lock: {self._lock_path})"
                 ) from e
 
         # Record PID for visibility (not used programmatically — the lock is the

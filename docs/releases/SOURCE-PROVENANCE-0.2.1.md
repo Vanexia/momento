@@ -1,8 +1,10 @@
-# Momento 0.2.1 Source Provenance
+# Mementos 0.2.1 Source Provenance
 
-This document identifies the source and build records corresponding to the Momento 0.2.1 Windows release.
+This release shipped under the former name Momento. Published asset names below remain unchanged.
 
-## Momento
+This document identifies the source and build records corresponding to the Mementos 0.2.1 Windows release.
+
+## Mementos
 
 - Public source snapshot: `77d914802549ce7d3ba7f4317fef56c3cd05f6a8`
 - Licence: GPL-3.0-only
@@ -24,7 +26,7 @@ lock, licence notices, build information, and the FFmpeg acquisition script.
 - Corresponding archive: `ffmpeg-8.1.2.tar.xz`
 - Source archive SHA-256: `464BEB5E7BF0C311E68B45AE2F04E9CC2AF88851ABB4082231742A74D97B524C`
 
-The original `README.txt` shipped by the binary provider is retained under `resources/ffmpeg` in the Momento source archive and under `licenses/FFmpeg` in the installed application. It records the complete FFmpeg configuration and the provider's external-library versions. `BUILD_INFO.txt` records the same release's packaging details.
+The original `README.txt` shipped by the binary provider is retained under `resources/ffmpeg` in the Mementos source archive and under `licenses/FFmpeg` in the installed application. It records the complete FFmpeg configuration and the provider's external-library versions. `BUILD_INFO.txt` records the same release's packaging details.
 
 ## Python And Qt Components
 

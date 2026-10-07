@@ -1,10 +1,10 @@
-# Momento site
+# Mementos site
 
 These two HTML files are the materials Google requires for OAuth verification.
 
 | File | Purpose | Required URL field in Cloud Console |
 |---|---|---|
-| `index.html` | Application homepage describing what Momento is | "Application home page" |
+| `index.html` | Application homepage describing what Mementos is | "Application home page" |
 | `privacy.html` | Privacy policy describing data handling | "Application privacy policy link" |
 
 ## GitHub Pages deployment
@@ -34,13 +34,13 @@ Plug those URLs into the OAuth consent screen in Google Cloud Console
 Both pages are single-file static HTML. There is no Jekyll build or local
 dependencies. Edit and push; GH Pages rebuilds in under a minute.
 
-The colour palette matches Momento's violet brand (`--accent: #8b5cf6`).
+The colour palette matches Mementos' violet brand (`--accent: #8b5cf6`).
 If you swap the in-app brand colour later (see `momento/ui/theme.py`),
 keep these in sync.
 
 ## Custom domain (optional, later)
 
-If you want a custom domain like `momento-app.com`:
+If you want a custom domain like `mementos-app.com`:
 1. Buy domain.
 2. Add a `CNAME` file in `docs/` containing just your domain.
 3. Point your DNS at GitHub Pages per their docs.

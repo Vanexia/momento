@@ -2,7 +2,7 @@
 
 A deliberate, opt-in network feature inside an otherwise local-first app.
 Everything in this package is gated on the user explicitly clicking
-"Connect YouTube account" in Settings — Momento makes zero outbound
+"Connect YouTube account" in Settings — Mementos makes zero outbound
 network calls otherwise.
 
 Public surface:

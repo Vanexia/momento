@@ -668,15 +668,20 @@ class InProcessEncoder:
             self._inc_submitted(kind)
             return True
         except queue.Full:
+            dropped_oldest = False
             try:
                 q.get_nowait()  # drop oldest
+                dropped_oldest = True
             except queue.Empty:
+                # The worker may have drained the queue since put_nowait()
+                # observed Full. That is progress, not a discarded frame.
                 pass
             try:
                 q.put_nowait(item)
                 self._inc_submitted(kind)
-                self._inc_dropped(kind)
-                return False
+                if dropped_oldest:
+                    self._inc_dropped(kind)
+                return not dropped_oldest
             except queue.Full:
                 self._inc_dropped(kind)
                 return False

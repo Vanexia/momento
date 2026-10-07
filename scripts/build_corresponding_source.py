@@ -1,4 +1,4 @@
-"""Download, verify, and package Momento's native corresponding sources."""
+"""Download, verify, and package Mementos's native corresponding sources."""
 
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def _download(source: dict[str, str], cache: Path, *, offline: bool) -> Path:
         partial.unlink()
     request = urllib.request.Request(
         source["url"],
-        headers={"User-Agent": "Momento-source-bundler/1.0"},
+        headers={"User-Agent": "Mementos-source-bundler/1.0"},
     )
     last_error: Exception | None = None
     for attempt in range(1, 4):
@@ -134,9 +134,9 @@ def _zip_info(name: str) -> zipfile.ZipInfo:
 def _readme(data: dict, sources: list[dict[str, str]]) -> bytes:
     pyav = data["binary_provenance"]["pyav_wheel"]
     lines = [
-        f"Momento {data['release']} third-party corresponding source",
+        f"Mementos {data['release']} third-party corresponding source",
         "",
-        "This archive accompanies the Momento Windows binary release.",
+        "This archive accompanies the Mementos Windows binary release.",
         "It contains the exact source archives and build recipe used by the",
         "bundled FFmpeg helper, PyAV native runtime, and PyQt/Qt runtime.",
         "",
@@ -148,7 +148,7 @@ def _readme(data: dict, sources: list[dict[str, str]]) -> bytes:
         f"- PyAV SOURCE_DATE_EPOCH: {pyav['source_date_epoch']}",
         "- PyQt/Qt wheel identities: binary_provenance in manifest.json",
         "- Qt Multimedia FFmpeg configure line: binary_provenance in manifest.json",
-        "- Momento helper recipe: scripts/build_ffmpeg_helper.sh in the Momento source archive",
+        "- Mementos helper recipe: scripts/build_ffmpeg_helper.sh in the Mementos source archive",
         "",
         "All files were accepted only after SHA-256 verification against manifest.json.",
         "The original archive formats are retained under sources/.",

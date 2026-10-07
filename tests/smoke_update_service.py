@@ -75,7 +75,7 @@ class FakeAction:
 def _staged(version: str = "0.2.3"):
     return SimpleNamespace(
         manifest=SimpleNamespace(version=version),
-        installer_path=Path("MomentoSetup.exe"),
+        installer_path=Path("MementosSetup.exe"),
     )
 
 
@@ -135,7 +135,7 @@ def test_update_result_is_owned_by_visible_editor() -> None:
     MomentoTray._on_update_status(
         tray,
         "current",
-        "You're using the latest version of Momento.",
+        "You're using the latest version of Mementos.",
         True,
     )
     check(
@@ -144,8 +144,8 @@ def test_update_result_is_owned_by_visible_editor() -> None:
         == [
             (
                 QMessageBox.Icon.Information,
-                "Momento updates",
-                "You're using the latest version of Momento.",
+                "Mementos updates",
+                "You're using the latest version of Mementos.",
             )
         ],
     )
@@ -210,13 +210,13 @@ def test_manual_update_requires_an_install_choice() -> None:
     check("manual update asks once after download", decision_calls == [result.staged])
     check("Later keeps the staged installer", not launch_calls)
     check("Later does not quiesce the app", session.acquire_calls == 0)
-    check("Later keeps Momento running", not quit_calls)
+    check("Later keeps Mementos running", not quit_calls)
     check(
         "Later schedules installation for next start",
         statuses[-1]
         == (
             "deferred",
-            "The update is ready and will install the next time Momento starts.",
+            "The update is ready and will install the next time Mementos starts.",
             False,
         ),
     )
@@ -362,7 +362,7 @@ def test_manual_update_prompt_copy_and_choices() -> None:
     check("Later is the escape choice", dialog.escape_button.label == "Later")
     check(
         "manual update prompt explains next-start installation",
-        "next time Momento starts" in dialog.informative_text,
+        "next time Mementos starts" in dialog.informative_text,
     )
     check(
         "manual update prompt promises user-data preservation",

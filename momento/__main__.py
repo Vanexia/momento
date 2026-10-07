@@ -1,4 +1,4 @@
-"""Momento entry point: single-instance check, QApplication, tray + session wiring."""
+"""Mementos entry point: single-instance check, QApplication, tray + session wiring."""
 
 from __future__ import annotations
 
@@ -51,7 +51,7 @@ def _warn_if_low_disk(tray, config) -> None:
     user's low-disk watermark.
 
     ``config.low_disk_warning_gb == 0`` disables the check. Failure to
-    stat the drive is a non-event — Momento just won't warn.
+    stat the drive is a non-event — Mementos just won't warn.
     """
     threshold_gb = config.low_disk_warning_gb
     if threshold_gb <= 0:
@@ -149,7 +149,7 @@ def _monitoring_allowed_on_launch(
 
 
 def _set_app_user_model_id() -> None:
-    """Give the process an explicit AppUserModelID so Windows treats Momento as
+    """Give the process an explicit AppUserModelID so Windows treats Mementos as
     its own application on the taskbar — correct icon (the window icon, not the
     host pythonw/python interpreter's), correct grouping, and proper pinning.
     Without this a Python-hosted launch shows the generic Python taskbar icon.
@@ -158,6 +158,7 @@ def _set_app_user_model_id() -> None:
         import ctypes
 
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            # Keep existing Windows taskbar pins grouped with the renamed app.
             "Momento.Desktop"
         )
     except Exception:  # pragma: no cover — cosmetic taskbar hint only
@@ -175,19 +176,19 @@ def main() -> int:
         instance.acquire(updated_token=updated_token)
     except AlreadyRunningError:
         # Setting the app-level icon BEFORE constructing the dialog gives
-        # the title bar Momento's icon instead of Qt's default.
+        # the title bar Mementos's icon instead of Qt's default.
         app = QApplication.instance() or QApplication(sys.argv)
         icon_path = app_icon_path()
         if icon_path is not None:
             app.setWindowIcon(QIcon(str(icon_path)))
         QMessageBox.information(
-            None, "Momento", "Momento is already running (check the system tray)."
+            None, "Mementos", "Mementos is already running (check the system tray)."
         )
         return 1
 
     try:
         app = QApplication(sys.argv)
-        app.setApplicationName("Momento")
+        app.setApplicationName("Mementos")
         app.setApplicationVersion(__version__)
         app.setQuitOnLastWindowClosed(False)
         apply_dark_theme(app)
@@ -197,7 +198,7 @@ def main() -> int:
             app.setWindowIcon(QIcon(str(icon_path)))
 
         if not QSystemTrayIcon.isSystemTrayAvailable():
-            QMessageBox.critical(None, "Momento", "System tray is not available on this platform.")
+            QMessageBox.critical(None, "Mementos", "System tray is not available on this platform.")
             return 2
 
         update_runtime = None
@@ -281,10 +282,10 @@ def main() -> int:
             config, is_first_run=is_first_run, setup_accepted=setup_accepted
         ):
             session.start()
-            logger.info("Momento started; tray is live")
+            logger.info("Mementos started; tray is live")
         else:
             logger.info(
-                "Momento started with game monitoring paused",
+                "Mementos started with game monitoring paused",
             )
 
         # Recovery pass for recordings left in a broken state by a previous

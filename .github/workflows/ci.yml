@@ -15,7 +15,7 @@ on:
 
 jobs:
   check:
-    # Windows runner: Momento is Windows-only (PyQt6 + win32 ctypes + WGC +
+    # Windows runner: Mementos is Windows-only (PyQt6 + win32 ctypes + WGC +
     # PyAudioWPatch all assume Windows), so imports must be exercised there.
     runs-on: windows-latest
     timeout-minutes: 20
@@ -37,13 +37,13 @@ jobs:
           python -m pip install -c constraints-release.txt -e .[dev]
 
       - name: Lint (ruff — pyflakes + syntax)
-        run: ruff check momento tests scripts --select F,E9
+        run: ruff check momento mementos tests scripts --select F,E9
 
       - name: Byte-compile
-        run: python -m compileall -q momento tests scripts
+        run: python -m compileall -q momento mementos tests scripts
 
       - name: Import check
-        run: python -c "import momento.__main__, momento.core.recorder, momento.core.session, momento.core.audio_devices, momento.ui.editor, momento.ui.settings_dialog, momento.ui.toast; print('imports OK')"
+        run: python -c "import mementos, mementos.__main__, momento.__main__, momento.core.recorder, momento.core.session, momento.core.audio_devices, momento.ui.editor, momento.ui.settings_dialog, momento.ui.toast; print('imports OK')"
 
       - name: Pure-logic tests
         run: |
@@ -59,6 +59,7 @@ jobs:
           python tests/smoke_audio_stall.py
           python tests/smoke_audio_downmix.py
           python tests/smoke_encoder_audio_guard.py
+          python tests/smoke_encoder_backpressure.py
           python tests/smoke_recording_failures.py
           python tests/smoke_window_retry.py
           python tests/smoke_repair_lock.py
@@ -79,6 +80,7 @@ jobs:
           python tests/smoke_first_run.py
           python tests/smoke_welcome_setup.py
           python tests/smoke_installer_contract.py
+          python tests/smoke_rebrand.py
           python tests/smoke_update_metadata.py
           python tests/smoke_update_client.py
           python tests/smoke_update_attempts.py
@@ -89,6 +91,7 @@ jobs:
           python tests/smoke_update_release_tools.py
           python tests/smoke_encoder_portability.py
           python tests/smoke_public_release.py
+          python tests/smoke_release_privacy.py
           python tests/smoke_git_history_privacy.py
           python tests/smoke_single_instance.py
           python tests/smoke_release_environment.py

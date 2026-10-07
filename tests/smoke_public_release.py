@@ -12,12 +12,14 @@ from privacy_scan import (  # noqa: E402
     binary_contains_blocked_identity,
     contains_blocked_identity,
     contains_private_windows_user_path,
+    is_private_runtime_path,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TEXT_ROOTS = (
     ROOT / "momento",
+    ROOT / "mementos",
     ROOT / "build",
     ROOT / "scripts",
     ROOT / "resources",
@@ -31,21 +33,6 @@ TEXT_FILES = (
     ROOT / "requirements-release-hashed.txt",
     ROOT / "SOURCE_OFFER.txt",
 )
-RUNTIME_NAMES = {
-    "config.json",
-    "momento.log",
-    "momento.lock",
-    "window_state.ini",
-    "youtube_token.dat",
-    "youtube_avatar.png",
-    "youtube_oauth_client.dat",
-    "youtube_oauth_client.dat.tmp",
-    "Momento-update.json",
-    "Momento-update.json.sig",
-    "update-signing-key.pem",
-    "trusted-state.json",
-}
-RUNTIME_SUFFIXES = (".thumb.jpg", ".bookmarks.json", ".momento.json")
 GENERATED_PARTS = {"bdist.win-amd64", "lib", "pyinstaller_work", "release_env"}
 checks = 0
 failures = 0
@@ -164,13 +151,15 @@ def main() -> int:
     )
     check("fresh user: 60 fps is the default", cfg.framerate == 60 and not cfg.framerate_auto)
 
-    dist = ROOT / "dist" / "Momento"
+    dist = ROOT / "dist" / "Mementos"
     if dist.exists():
         names = {path.name.casefold() for path in dist.rglob("*") if path.is_file()}
         check(
             "bundle: no runtime config/log/token/state files",
-            not (names & RUNTIME_NAMES)
-            and not any(name.endswith(RUNTIME_SUFFIXES) for name in names),
+            not any(
+                is_private_runtime_path(path.relative_to(dist).as_posix())
+                for path in dist.rglob("*") if path.is_file()
+            ),
         )
         check(
             "bundle: no OAuth client identity or imported client state",

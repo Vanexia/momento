@@ -1,4 +1,4 @@
-"""Authenticated application updates for Momento."""
+"""Authenticated application updates for Mementos."""
 
 from momento.updater.metadata import (
     InstallerInfo,

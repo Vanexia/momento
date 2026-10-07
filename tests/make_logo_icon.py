@@ -1,15 +1,15 @@
-"""Regenerate every Momento brand raster from the Obsidian squircle
+"""Regenerate every Mementos brand raster from the Obsidian squircle
 (violet→magenta gradient, white "M", yellow spark).
 
 Renders the mark crisply via the same Qt painter the in-app brand uses
 (momento.ui.theme.logo_pixmap), then writes:
 
-  resources/icons/momento.ico     — window/taskbar icon, toast mark, exe embed
-  resources/icons/momento.png     — 512px canonical raster
-  resources/icons/momento-256.png — landing-page hero/favicon source
-  resources/icons/momento-120.png — Cloud Console branding (square, <1 MB)
-  docs/momento.png                — GitHub Pages copy (512)
-  docs/momento-256.png            — GitHub Pages favicon/hero/og:image (256)
+  resources/icons/mementos.ico     — window/taskbar icon, toast mark, exe embed
+  resources/icons/mementos.png     — 512px canonical raster
+  resources/icons/mementos-256.png — landing-page hero/favicon source
+  resources/icons/mementos-120.png — Cloud Console branding (square, <1 MB)
+  docs/mementos.png                — GitHub Pages copy (512)
+  docs/mementos-256.png            — GitHub Pages favicon/hero/og:image (256)
 """
 
 from __future__ import annotations
@@ -53,23 +53,23 @@ def main() -> int:
     base = _render(256)  # .ico source (Pillow downsamples to each size)
 
     outputs = {
-        ICONS / "momento.png": png512,
-        ICONS / "momento-256.png": png256,
-        ICONS / "momento-120.png": png120,
-        DOCS / "momento.png": png512,
-        DOCS / "momento-256.png": png256,
+        ICONS / "mementos.png": png512,
+        ICONS / "mementos-256.png": png256,
+        ICONS / "mementos-120.png": png120,
+        DOCS / "mementos.png": png512,
+        DOCS / "mementos-256.png": png256,
     }
     for path, img in outputs.items():
         img.save(path)
 
-    base.save(ICONS / "momento.ico", format="ICO", sizes=[(s, s) for s in ICO_SIZES])
+    base.save(ICONS / "mementos.ico", format="ICO", sizes=[(s, s) for s in ICO_SIZES])
 
     # Sanity: the Phase-13 footgun was a baked-white (RGB) source. Confirm the
     # corners are genuinely transparent so nothing carries a white box.
     corner = base.getpixel((0, 0))
     assert corner[3] == 0, f"corner not transparent: {corner}"
     print("Regenerated brand rasters:")
-    for path in (ICONS / "momento.ico", *outputs.keys()):
+    for path in (ICONS / "mementos.ico", *outputs.keys()):
         print(f"  {path.relative_to(ROOT)}")
     print(f"(corner alpha={corner[3]} OK)")
     return 0

@@ -43,14 +43,14 @@ jobs:
           python tests/smoke_ffmpeg_helper.py dist/ffmpeg-helper
           if ((Get-FileHash dist/ffmpeg-helper/ffmpeg.exe -Algorithm SHA256).Hash -ne "A53993C4FBFBC3FA9ED201AE03502F053182699B3580C7523DC66D176D0371FC") { throw "ffmpeg.exe differs from the reviewed release" }
           if ((Get-FileHash dist/ffmpeg-helper/ffprobe.exe -Algorithm SHA256).Hash -ne "DD7364CD03D86CB5F91FD028174CB6D5F1B2F3BA2606095676E0596B216A4D4D") { throw "ffprobe.exe differs from the reviewed release" }
-          python scripts/package_ffmpeg_helper.py dist/ffmpeg-helper dist/Momento-ffmpeg-helper-8.1.2-1.zip
-          if ((Get-FileHash dist/Momento-ffmpeg-helper-8.1.2-1.zip -Algorithm SHA256).Hash -ne "BB8E4FC7A4E8E3BB5EA4F509BFA49E01BAD1932F8CD1E4399D145D90C080F0B5") { throw "helper archive differs from the reviewed release" }
+          python scripts/package_ffmpeg_helper.py dist/ffmpeg-helper dist/Mementos-ffmpeg-helper-8.1.2-1.zip
+          if ((Get-FileHash dist/Mementos-ffmpeg-helper-8.1.2-1.zip -Algorithm SHA256).Hash -ne "BB8E4FC7A4E8E3BB5EA4F509BFA49E01BAD1932F8CD1E4399D145D90C080F0B5") { throw "helper archive differs from the reviewed release" }
 
       - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
         with:
-          name: Momento-FFmpeg-helper-8.1.2-1
+          name: Mementos-FFmpeg-helper-8.1.2-1
           if-no-files-found: error
           retention-days: 30
           path: |
-            dist/Momento-ffmpeg-helper-8.1.2-1.zip
+            dist/Mementos-ffmpeg-helper-8.1.2-1.zip
             toolchain-packages.txt

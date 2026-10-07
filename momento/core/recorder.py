@@ -732,7 +732,7 @@ def _resolve_target_dims(
 
     ``source`` (and any unrecognised value) returns the source dimensions.
     Numeric presets downscale, preserving the source aspect ratio, and only
-    when they're smaller than the source — Momento never upscales. Output
+    when they're smaller than the source — Mementos never upscales. Output
     dimensions are forced even for NVENC + yuv420p.
     """
     if preset == "source" or preset not in _RESOLUTION_HEIGHTS:

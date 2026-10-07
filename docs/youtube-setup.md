@@ -1,10 +1,10 @@
 # Set up YouTube uploads
 
-Momento does not ship a Google OAuth client identity. To upload from Momento,
+Mementos does not ship a Google OAuth client identity. To upload from Mementos,
 create a Desktop OAuth client in a Google Cloud project that you control, then
 import its JSON file in **Settings > YouTube**.
 
-Momento uses these permissions:
+Mementos uses these permissions:
 
 - `https://www.googleapis.com/auth/youtube.upload` to upload the video and
   metadata you confirm in the upload dialog.
@@ -38,9 +38,9 @@ Open **Google Auth Platform** for the same project:
 1. Under **Branding**, enter the app name and the support details Google
    requests. These details appear on Google's consent screen.
 2. Under **Audience**, choose **External**. If the publishing status is
-   **Testing**, add the Google account that will connect to Momento as a test
+   **Testing**, add the Google account that will connect to Mementos as a test
    user.
-3. Under **Data Access**, add both Momento scopes shown at the top of this
+3. Under **Data Access**, add both Mementos scopes shown at the top of this
    guide.
 
 Google expires refresh tokens for an External app in Testing after seven days
@@ -58,23 +58,25 @@ and [audience and test-user guidance](https://support.google.com/cloud/answer/15
 3. Choose **Desktop app** as the application type.
 4. Create the client and download its JSON file.
 
-Momento rejects Web application credentials and OAuth files with non-Google
+Mementos rejects Web application credentials and OAuth files with non-Google
 endpoints or non-local redirect addresses. Google's
 [installed-app OAuth guide](https://developers.google.com/youtube/v3/guides/auth/installed-apps)
 explains the Desktop flow.
 
-## 5. Import the JSON in Momento
+## 5. Import the JSON in Mementos
 
 1. Open **Settings > YouTube**.
 2. Select **Import OAuth JSON...** and choose the file from Google.
-3. Wait for Momento to report that the Google project is ready.
+3. Wait for Mementos to report that the Google project is ready.
 4. Delete the downloaded JSON if you no longer need it for another local
    installation.
 
-Momento validates and normalises the file, encrypts the stored copy with
+Mementos validates and normalises the file, encrypts the stored copy with
 Windows Data Protection API (DPAPI), and writes it to
-`%APPDATA%\Momento\youtube_oauth_client.dat`. Windows binds that encrypted
-copy to your Windows account. Momento does not add the file to recordings,
+`youtube_oauth_client.dat` in your app-data folder. Fresh profiles use
+`%APPDATA%\Mementos`; existing profiles keep `%APPDATA%\Momento` so the rename
+preserves your settings and YouTube connection. Windows binds that encrypted
+copy to your Windows account. Mementos does not add the file to recordings,
 logs, source archives, installers, or release assets.
 
 ## 6. Connect your YouTube account
@@ -82,10 +84,10 @@ logs, source archives, installers, or release assets.
 1. Select **Connect YouTube account...**.
 2. Review the project name and requested permissions on Google's page.
 3. Continue only if they match the project and scopes you configured.
-4. Return to Momento after the browser confirms the connection.
+4. Return to Mementos after the browser confirms the connection.
 
-Momento stores the resulting refresh token in
-`%APPDATA%\Momento\youtube_token.dat`, encrypted with DPAPI. It caches the
+Mementos stores the resulting refresh token in
+`youtube_token.dat` in the same app-data folder, encrypted with DPAPI. It caches the
 channel name and ID in `config.json` and the public channel avatar in
 `youtube_avatar.png`.
 
@@ -93,7 +95,7 @@ channel name and ID in `config.json` and the public channel avatar in
 
 Google restricts videos uploaded through unverified API projects created after
 28 July 2020 to private visibility. Google keeps that restriction until the
-project passes its API audit. Selecting Public or Unlisted in Momento cannot
+project passes its API audit. Selecting Public or Unlisted in Mementos cannot
 override it. See the restriction in Google's
 [`videos.insert` documentation](https://developers.google.com/youtube/v3/docs/videos/insert).
 
@@ -103,10 +105,10 @@ limit if Google reports that the upload quota has run out.
 
 ## Disconnect, revoke, or remove setup
 
-- **Disconnect the account:** Open **Settings > YouTube > Disconnect**. Momento
+- **Disconnect the account:** Open **Settings > YouTube > Disconnect**. Mementos
   deletes the local token, channel avatar, and cached channel details.
 - **Remove the imported client:** Select **Remove OAuth setup** on the same
-  page. Momento deletes `youtube_oauth_client.dat` and clears the local YouTube
+  page. Mementos deletes `youtube_oauth_client.dat` and clears the local YouTube
   connection.
 - **Revoke Google access:** Open your
   [Google Account permissions](https://myaccount.google.com/permissions), find
@@ -120,11 +122,11 @@ Google-side revocation applies to the connected Google account.
 
 - **Access blocked or user not authorised:** Add the connecting Google account
   under **Audience > Test users** while the app remains in Testing.
-- **Redirect URI mismatch:** Download a Desktop app client. Momento does not
+- **Redirect URI mismatch:** Download a Desktop app client. Mementos does not
   support Web application OAuth clients.
 - **Connection stops working after seven days:** Reconnect, or review the
   project's publishing status and verification requirements.
 - **The upload is private:** This is Google's restriction for an unaudited API
-  project. Momento cannot change the video to Public or Unlisted until Google
+  project. Mementos cannot change the video to Public or Unlisted until Google
   lifts the restriction.
 - **Quota exceeded:** Review the YouTube Data API v3 quota for your project.
