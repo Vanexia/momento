@@ -16,8 +16,11 @@ from privacy_scan import (  # noqa: E402
 )
 
 ROOT = Path(__file__).resolve().parents[1]
+# Dependabot PR refs carry GitHub's public bot identity, not a person's email.
+# Keep its fixed account ID and login exact; other no-reply users stay rejected.
 ALLOWED_EMAIL = re.compile(
-    r"^(?:214237761\+vanexia@users\.noreply\.github\.com|noreply@github\.com)$",
+    r"^(?:214237761\+vanexia@users\.noreply\.github\.com|noreply@github\.com|"
+    r"49699333\+dependabot\[bot\]@users\.noreply\.github\.com)$",
     re.IGNORECASE,
 )
 
@@ -80,8 +83,28 @@ def _payload_is_private(payload: bytes) -> bool:
     return False
 
 
+def _identity_policy_failures() -> list[str]:
+    """Keep the exact public allowlist from becoming a generic no-reply bypass."""
+    cases = (
+        ("214237761+vanexia@users.noreply.github.com", True),
+        ("noreply@github.com", True),
+        ("49699333+dependabot[bot]@users.noreply.github.com", True),
+        ("person@example.invalid", False),
+        ("123456+unexpected@users.noreply.github.com", False),
+        ("49699334+dependabot[bot]@users.noreply.github.com", False),
+        ("49699333+dependabot@users.noreply.github.com", False),
+        ("49699333+dependabot[bot]@users.noreply.github.com.example.invalid", False),
+        ("noreply@example.invalid", False),
+    )
+    return [
+        f"public identity allowlist regression in fixture {index}"
+        for index, (email, expected) in enumerate(cases, start=1)
+        if bool(ALLOWED_EMAIL.fullmatch(email)) != expected
+    ]
+
+
 def main() -> int:
-    failures: list[str] = []
+    failures = _identity_policy_failures()
     try:
         object_ids, listing = _reachable_objects()
         if _payload_is_private(listing):
