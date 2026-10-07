@@ -39,6 +39,10 @@ dependencies = [
     # password. Refresh tokens are encrypted via Windows DPAPI before being
     # written to %APPDATA%/Momento/youtube_token.dat.
     "requests>=2.32",
+    # Security floors for the HTTP transport and Google's transitive OAuth
+    # client stack; release locks also verify the exact downloaded wheels.
+    "urllib3>=2.8.0",
+    "oauthlib>=4.0.0",
     "google-api-python-client>=2.130",
     "google-auth-oauthlib>=1.2",
     "google-auth-httplib2>=0.2",

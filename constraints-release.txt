@@ -1,4 +1,4 @@
-# Momento 0.2.8 release environment: Windows x64, CPython 3.12.
+# Mementos 0.2.9 release environment: Windows x64, CPython 3.12.
 # Regenerate deliberately after dependency review; do not hand-edit around
 # resolver conflicts. Development-only lint/audit tools are not pinned here.
 altgraph==0.17.5
@@ -16,7 +16,7 @@ googleapis-common-protos==1.75.0
 httplib2==0.32.0
 idna==3.16
 numpy==2.4.6
-oauthlib==3.3.1
+oauthlib==4.0.0
 opencv-python==4.13.0.92
 packaging==26.2
 pefile==2024.8.26
@@ -39,6 +39,6 @@ requests==2.34.2
 requests-oauthlib==2.0.0
 setuptools==83.0.0
 uritemplate==4.2.0
-urllib3==2.7.0
+urllib3==2.8.0
 wheel==0.47.0
 windows-capture==2.0.0

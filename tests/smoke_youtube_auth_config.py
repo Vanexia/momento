@@ -5,12 +5,17 @@ from __future__ import annotations
 import sys
 import tempfile
 import hashlib
+import json
 from pathlib import Path
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from momento.youtube import auth, client_config  # noqa: E402
+from oauthlib.oauth2 import MismatchingStateError  # noqa: E402
+from requests import Response  # noqa: E402
+from requests.adapters import BaseAdapter  # noqa: E402
 
 
 def check(label: str, condition: bool) -> None:
@@ -36,7 +41,77 @@ def _configuration() -> client_config.OAuthClientConfig:
     )
 
 
+def check_real_oauth_client_flow() -> None:
+    """Exercise Google/Requests/OAuthlib together without browser or network."""
+    configuration = _configuration()
+    verifier = "test-verifier-" + "a" * 64
+    flow = auth.InstalledAppFlow.from_client_config(
+        configuration.document, auth.SCOPES,
+        state="expected-state", code_verifier=verifier,
+    )
+    flow.redirect_uri = "http://localhost:8080/"
+    url, state = flow.authorization_url(prompt="consent")
+    query = parse_qs(urlsplit(url).query)
+    check("real OAuth client retains state, offline access and PKCE", (
+        state == "expected-state"
+        and query["state"] == [state]
+        and query["access_type"] == ["offline"]
+        and query["code_challenge_method"] == ["S256"]
+        and bool(query["code_challenge"][0])
+    ))
+
+    class TokenEndpoint(BaseAdapter):
+        def __init__(self):
+            self.requests = []
+
+        def send(self, request, **_kwargs):
+            self.requests.append(request)
+            response = Response()
+            response.status_code = 200
+            response.url = request.url
+            response.request = request
+            response.headers["Content-Type"] = "application/json"
+            response._content = json.dumps({
+                "access_token": "fixture-access-token", "token_type": "Bearer",
+                "refresh_token": "fixture-refresh-token", "expires_in": 3600,
+                "scope": " ".join(auth.SCOPES),
+            }).encode()
+            return response
+
+        def close(self):
+            pass
+
+    endpoint = TokenEndpoint()
+    flow.oauth2session.mount("https://", endpoint)
+    try:
+        try:
+            flow.fetch_token(authorization_response="https://localhost:8080/?state=wrong&code=fixture")
+        except MismatchingStateError:
+            pass
+        else:
+            raise AssertionError("OAuth client accepted a mismatched state")
+        check("real OAuth client rejects mismatched state before HTTP", not endpoint.requests)
+        flow.fetch_token(authorization_response=f"https://localhost:8080/?state={state}&code=fixture")
+        request = endpoint.requests[0]
+        body = parse_qs(request.body)
+        credentials = flow.credentials
+        check("real OAuth client exchanges code and retains refresh credentials", (
+            len(endpoint.requests) == 1
+            and request.method == "POST"
+            and request.url == "https://oauth2.googleapis.com/token"
+            and body["grant_type"] == ["authorization_code"]
+            and body["code"] == ["fixture"]
+            and body["code_verifier"] == [verifier]
+            and credentials.refresh_token == "fixture-refresh-token"
+            and credentials.client_id == configuration.client_id
+            and credentials.valid
+        ))
+    finally:
+        flow.oauth2session.close()
+
+
 def main() -> int:
+    check_real_oauth_client_flow()
     originals = {
         "load_client": client_config.load_active_client_config,
         "from_config": auth.InstalledAppFlow.from_client_config,
