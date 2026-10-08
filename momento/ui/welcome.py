@@ -5,13 +5,10 @@ system — it's the same dialog the app has always opened on first launch,
 just rebuilt to walk new users through the live settings rather than just
 explaining them.
 
-Each step reads/writes the user's Config in-place via ``_pending``; on
-Finish the dialog saves the new Config and emits ``settings_saved`` so
-the tray's existing ``_apply_new_config`` slot reloads the session.
-
-Skippable from any page. Re-openable from the editor's File menu so
-returning users can revisit it; the auto-launch path stays gated on
-``not config_path().exists()`` in ``__main__.py``.
+Choices stay in ``_pending`` until Finish saves a new Config and emits
+``settings_saved``. Closing setup leaves the existing Config unchanged.
+The editor's File menu can reopen setup; automatic setup is gated on
+``config.setup_complete`` in ``__main__.py``.
 """
 
 from __future__ import annotations
@@ -19,6 +16,7 @@ from __future__ import annotations
 import dataclasses
 import logging
 import tempfile
+from html import escape
 from pathlib import Path
 
 from PyQt6.QtCore import Qt, QUrl, pyqtSignal
@@ -28,7 +26,6 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
-    QFileDialog,
     QFormLayout,
     QFrame,
     QHBoxLayout,
@@ -36,6 +33,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -45,9 +43,11 @@ from momento.config import Config, save_config
 from momento.core.audio_loopback import list_loopback_devices
 from momento.core.mic_capture import list_mic_devices
 from momento.core.mic_monitor import MicMonitor
+from momento.ui.folder_dialog import choose_recordings_folder
 from momento.ui.level_meter import LevelMeter
 from momento.ui.widgets import AnchoredComboBox, match_audio_output
 from momento.util.autostart import set_autostart
+from momento.util.hotkey import HotkeyError, parse_hotkey
 from momento.util.resources import app_icon_path, bookmark_sound_path
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ _STEP_TITLES = (
     "Game monitoring",
     "Notifications & bookmarks",
     "Startup & tray",
-    "You're all set",
+    "Review your choices",
 )
 
 
@@ -102,6 +102,7 @@ class WelcomeDialog(QDialog):
         self._config = config
         # Field-name → new value. Applied via dataclasses.replace on finish.
         self._pending: dict[str, object] = {}
+        self._validated_folder: Path | None = None
         # Built lazily once the user lands on the Audio step.
         self._mic_monitor: MicMonitor | None = None
         self._sys_test_player: tuple[QMediaPlayer, QAudioOutput] | None = None
@@ -149,7 +150,7 @@ class WelcomeDialog(QDialog):
         self._back_btn.clicked.connect(self._on_back)
         footer.addWidget(self._back_btn)
         footer.addStretch(1)
-        self._skip_btn = QPushButton("Skip setup")
+        self._skip_btn = QPushButton("Review choices")
         self._skip_btn.clicked.connect(self._on_skip)
         footer.addWidget(self._skip_btn)
         self._next_btn = QPushButton("Next")
@@ -169,13 +170,12 @@ class WelcomeDialog(QDialog):
         self._title_label.setText(_STEP_TITLES[index])
         self._back_btn.setEnabled(index > 0)
         self._next_btn.setText("Finish" if index == total - 1 else "Next")
+        self._skip_btn.setVisible(index != total - 1)
         # The final page needs a refreshed checklist whenever we land on it.
         if index == total - 1:
             self._refresh_final_checklist()
-        # Stop the mic test the moment we navigate away from the Audio page.
-        if index != 2 and self._mic_monitor is not None and self._mic_monitor.is_running:
-            self._mic_monitor.stop()
-            self._mic_test_btn.setChecked(False)
+        if index != 2:
+            self._stop_audio_tests()
 
     def _on_back(self) -> None:
         idx = self._stack.currentIndex()
@@ -187,28 +187,73 @@ class WelcomeDialog(QDialog):
         if idx == self._stack.count() - 1:
             self._on_finish()
             return
+        if not self._validate_page(idx):
+            return
         self._stack.setCurrentIndex(idx + 1)
 
     def _on_skip(self) -> None:
         """Jump straight to the final page so the user can still review their
         current settings + finish without abandoning the dialog mid-flow."""
-        self._stack.setCurrentIndex(self._stack.count() - 1)
+        if self._validate_folder() and self._validate_hotkey():
+            self._stack.setCurrentIndex(self._stack.count() - 1)
+
+    def _validation_error(self, page: int, field: QLineEdit, message: str) -> bool:
+        self._stack.setCurrentIndex(page)
+        QMessageBox.warning(self, "Mementos", message)
+        field.setFocus()
+        field.selectAll()
+        return False
+
+    def _validate_page(self, index: int) -> bool:
+        if index == 1:
+            return self._validate_folder()
+        if index == 5:
+            return self._validate_hotkey()
+        return True
+
+    def _on_folder_changed(self, _text: str) -> None:
+        self._validated_folder = None
+        self._pending.pop("output_folder", None)
+
+    def _validate_folder(self) -> bool:
+        text = self._folder_edit.text().strip()
+        if not text or Path(text) == Path("."):
+            return self._validation_error(
+                1, self._folder_edit, "Choose a recordings folder first."
+            )
+        try:
+            folder = Path(text).expanduser().resolve()
+            # Probe the existing parent without creating directories that
+            # would survive a cancelled setup.
+            parent = folder
+            while not parent.exists() and parent != parent.parent:
+                parent = parent.parent
+            if not parent.is_dir():
+                raise OSError("Choose a folder on an available drive, not a file.")
+            with tempfile.NamedTemporaryFile(dir=parent, prefix=".mementos-"):
+                pass
+        except (OSError, RuntimeError, ValueError) as error:
+            return self._validation_error(
+                1, self._folder_edit, f"Mementos cannot use that recordings folder:\n{error}"
+            )
+        self._pending["output_folder"] = folder
+        self._validated_folder = folder
+        return True
+
+    def _validate_hotkey(self) -> bool:
+        hotkey = self._hotkey_edit.text().strip() or "F8"
+        try:
+            parse_hotkey(hotkey)
+        except HotkeyError as error:
+            return self._validation_error(
+                5, self._hotkey_edit, f"Invalid bookmark hotkey:\n{error}"
+            )
+        self._pending["bookmark_hotkey"] = hotkey
+        return True
 
     def _on_finish(self) -> None:
-        # An empty/whitespace recordings-folder field resolves to Path('.') (the
-        # process CWD), which would silently misfile every recording there and
-        # make the library look empty on the next launch. Unlike SettingsPanel,
-        # the wizard builds the Config via dataclasses.replace (bypassing
-        # Config.from_dict's emptiness guard), so sanitise here: treat a
-        # blank/dot path as "unset" and keep the existing configured folder.
-        folder_text = self._folder_edit.text().strip()
-        if not folder_text:
-            QMessageBox.warning(self, "Mementos", "Choose a recordings folder first.")
-            return
-        try:
-            self._pending["output_folder"] = Path(folder_text).expanduser().resolve()
-        except (OSError, RuntimeError) as e:
-            QMessageBox.warning(self, "Mementos", f"That folder is invalid:\n{e}")
+        # Recheck if the user skipped steps or the disk became unavailable.
+        if not self._validate_folder() or not self._validate_hotkey():
             return
         try:
             new_cfg = dataclasses.replace(
@@ -247,8 +292,9 @@ class WelcomeDialog(QDialog):
                 pass
         except OSError as e:
             logger.exception("Wizard: recordings folder is not writable")
-            QMessageBox.warning(
-                self, "Mementos", f"Mementos cannot write to that folder:\n{e}"
+            self._validated_folder = None
+            self._validation_error(
+                1, self._folder_edit, f"Mementos cannot write to that folder:\n{e}"
             )
             return
         try:
@@ -268,10 +314,32 @@ class WelcomeDialog(QDialog):
         self.settings_saved.emit(new_cfg)
         self.accept()
 
+    def done(self, result: int) -> None:
+        # QDialog.reject (including Escape) bypasses closeEvent.
+        self._stop_audio_tests()
+        super().done(result)
+
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt API)
+        self._stop_audio_tests()
+        super().closeEvent(event)
+
+    def _stop_mic_test(self) -> None:
         if self._mic_monitor is not None:
             self._mic_monitor.stop()
-        super().closeEvent(event)
+        self._on_mic_stopped()
+
+    def _stop_system_test(self) -> None:
+        playback = self._sys_test_player
+        self._sys_test_player = None
+        if playback is not None:
+            player, output = playback
+            player.stop()
+            player.deleteLater()
+            output.deleteLater()
+
+    def _stop_audio_tests(self) -> None:
+        self._stop_mic_test()
+        self._stop_system_test()
 
     # =============================================================== pages
     # ---- 1. Welcome ----
@@ -289,8 +357,9 @@ class WelcomeDialog(QDialog):
             "are saved to the folder you choose; cloud sync depends on that folder."
         ))
         col.addWidget(_para(
-            "This setup will take you through the basics. You can skip "
-            "and come back to it later from the File menu."
+            "This setup takes you through the basics. Review your choices "
+            "at any time, then click Finish to save. Closing setup leaves "
+            "your settings unchanged."
         ))
         col.addStretch(1)
         return page
@@ -302,14 +371,12 @@ class WelcomeDialog(QDialog):
         col.setSpacing(10)
         col.addWidget(_para(
             "Pick where Mementos should save your recordings. Files end up "
-            "as ``.mkv`` here; exported clips go into the ``clips/`` "
+            "as .mkv here; exported clips go into the clips/ "
             "subfolder."
         ))
         row = QHBoxLayout()
         self._folder_edit = QLineEdit(str(self._config.output_folder))
-        self._folder_edit.textChanged.connect(
-            lambda t: self._pending.update(output_folder=Path(t.strip()).expanduser())
-        )
+        self._folder_edit.textChanged.connect(self._on_folder_changed)
         row.addWidget(self._folder_edit, stretch=1)
         browse = QPushButton("Browse…")
         browse.clicked.connect(self._on_browse_folder)
@@ -324,13 +391,9 @@ class WelcomeDialog(QDialog):
         return page
 
     def _on_browse_folder(self) -> None:
-        start = self._folder_edit.text().strip() or str(Path.home())
-        dlg = QFileDialog(self, "Choose recordings folder", start)
-        dlg.setFileMode(QFileDialog.FileMode.Directory)
-        dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
-        dlg.setOption(QFileDialog.Option.ShowDirsOnly, True)
-        if dlg.exec() and dlg.selectedFiles():
-            self._folder_edit.setText(dlg.selectedFiles()[0])
+        selected = choose_recordings_folder(self, self._folder_edit.text())
+        if selected is not None:
+            self._folder_edit.setText(selected)
 
     # ---- 3. Audio ----
     def _build_audio_page(self) -> QWidget:
@@ -345,12 +408,7 @@ class WelcomeDialog(QDialog):
         _select_combo_by_value(self._wizard_mic_combo, self._config.mic_device)
         self._pending["mic_device"] = self._wizard_mic_combo.currentData() or ""
         self._wizard_mic_combo.currentIndexChanged.connect(
-            lambda _: self._pending.update(
-                mic_device=self._wizard_mic_combo.currentData() or ""
-            )
-        )
-        self._wizard_mic_combo.currentIndexChanged.connect(
-            self._refresh_wizard_device_status
+            self._on_mic_device_changed
         )
         form.addRow("Microphone:", self._wizard_mic_combo)
         self._wizard_mic_status = QLabel("")
@@ -408,12 +466,7 @@ class WelcomeDialog(QDialog):
             self._wizard_sys_combo.currentData() or ""
         )
         self._wizard_sys_combo.currentIndexChanged.connect(
-            lambda _: self._pending.update(
-                system_audio_device=self._wizard_sys_combo.currentData() or ""
-            )
-        )
-        self._wizard_sys_combo.currentIndexChanged.connect(
-            self._refresh_wizard_device_status
+            self._on_system_device_changed
         )
         form.addRow("System audio:", self._wizard_sys_combo)
         self._wizard_sys_status = QLabel("")
@@ -440,8 +493,7 @@ class WelcomeDialog(QDialog):
 
     def _reload_audio_devices(self) -> None:
         """Re-enumerate devices and reconcile persistence with visible choices."""
-        if self._mic_monitor is not None and self._mic_monitor.is_running:
-            self._mic_monitor.stop()
+        self._stop_audio_tests()
         current_mic = self._wizard_mic_combo.currentData() or ""
         current_sys = self._wizard_sys_combo.currentData() or ""
         self._mic_devices = list_mic_devices()
@@ -464,6 +516,16 @@ class WelcomeDialog(QDialog):
             _select_combo_by_value(combo, previous)
             combo.blockSignals(False)
             self._pending[field] = combo.currentData() or ""
+        self._refresh_wizard_device_status()
+
+    def _on_mic_device_changed(self, _index: int) -> None:
+        self._stop_mic_test()
+        self._pending["mic_device"] = self._wizard_mic_combo.currentData() or ""
+        self._refresh_wizard_device_status()
+
+    def _on_system_device_changed(self, _index: int) -> None:
+        self._stop_system_test()
+        self._pending["system_audio_device"] = self._wizard_sys_combo.currentData() or ""
         self._refresh_wizard_device_status()
 
     def _refresh_wizard_device_status(self) -> None:
@@ -513,12 +575,7 @@ class WelcomeDialog(QDialog):
                 "color: #b8c1d1; font-size: 9pt; font-style: italic;"
             )
         else:
-            if self._mic_monitor is not None:
-                self._mic_monitor.stop()
-            self._mic_meter.reset()
-            self._mic_test_btn.setText("Test mic")
-            self._mic_caption.setText("")
-            self._mic_silence_timer.stop()
+            self._stop_mic_test()
 
     def _on_mic_level(self, level: float) -> None:
         if level > 0.05 and not self._mic_input_seen:
@@ -551,6 +608,7 @@ class WelcomeDialog(QDialog):
         self._mic_silence_timer.stop()
 
     def _on_sys_test_clicked(self) -> None:
+        self._stop_system_test()
         wav = bookmark_sound_path()
         if wav is None or not wav.exists():
             QMessageBox.warning(
@@ -578,9 +636,16 @@ class WelcomeDialog(QDialog):
         out.setVolume(0.6)
         player.setAudioOutput(out)
         player.setSource(QUrl.fromLocalFile(str(wav)))
-        player.play()
-        # Hold a ref so Qt doesn't GC mid-playback.
         self._sys_test_player = (player, out)
+        player.errorOccurred.connect(
+            lambda _error, message: self._on_system_test_error(player, message)
+        )
+        player.play()
+
+    def _on_system_test_error(self, player: QMediaPlayer, message: str) -> None:
+        if self._sys_test_player is not None and self._sys_test_player[0] is player:
+            self._stop_system_test()
+            QMessageBox.warning(self, "Mementos", f"Could not play the test chime:\n{message}")
 
     # ---- 4. Capture ----
     def _build_capture_page(self) -> QWidget:
@@ -615,13 +680,16 @@ class WelcomeDialog(QDialog):
             ("120 fps", 120),
         ):
             self._fps_combo.addItem(label, value)
-        # Pick a sensible preset for the current config.
+        # Preserve values set in Settings when this wizard is reopened.
         if self._config.framerate_auto:
             idx = self._fps_combo.findData(-1)
         elif self._config.framerate in (30, 60, 120):
             idx = self._fps_combo.findData(self._config.framerate)
         else:
-            idx = self._fps_combo.findData(-1)  # fall back to Match
+            self._fps_combo.addItem(
+                f"{self._config.framerate} fps (current)", self._config.framerate
+            )
+            idx = self._fps_combo.count() - 1
         self._fps_combo.setCurrentIndex(max(0, idx))
         self._fps_combo.currentIndexChanged.connect(self._on_wizard_fps_changed)
         form.addRow("FPS:", self._fps_combo)
@@ -631,14 +699,18 @@ class WelcomeDialog(QDialog):
             ("Low (smaller files)", "low"),
             ("Medium", "medium"),
             ("High (best quality)", "high"),
-            ("Custom 16 Mbit/s (recommended)", "custom"),
+            ("16 Mbit/s (recommended)", "custom"),
         ):
             self._quality_combo.addItem(label, value)
+        if self._config.custom_bitrate_kbps != 16_000:
+            bitrate = self._config.custom_bitrate_kbps / 1000
+            self._quality_combo.addItem(f"Custom {bitrate:g} Mbit/s (current)", "current_custom")
+        quality = self._config.quality_preset
+        if quality == "custom" and self._config.custom_bitrate_kbps != 16_000:
+            quality = "current_custom"
         _select_combo_by_value(
             self._quality_combo,
-            self._config.quality_preset
-            if self._config.quality_preset in {"low", "medium", "high", "custom"}
-            else "custom",
+            quality,
         )
         self._quality_combo.currentIndexChanged.connect(self._on_wizard_quality_changed)
         form.addRow("Quality:", self._quality_combo)
@@ -658,9 +730,11 @@ class WelcomeDialog(QDialog):
 
     def _on_wizard_quality_changed(self, _index: int) -> None:
         value = self._quality_combo.currentData() or "custom"
-        self._pending["quality_preset"] = value
+        self._pending["quality_preset"] = "custom" if value == "current_custom" else value
         if value == "custom":
             self._pending["custom_bitrate_kbps"] = 16_000
+        elif value == "current_custom":
+            self._pending["custom_bitrate_kbps"] = self._config.custom_bitrate_kbps
 
     # ---- 5. Game monitoring ----
     def _build_monitoring_page(self) -> QWidget:
@@ -763,8 +837,9 @@ class WelcomeDialog(QDialog):
         )
         col.addWidget(self._close_to_tray_check)
         col.addWidget(_hint(
-            "When enabled, Mementos starts in the system tray without "
-            "opening the main window."
+            "Windows startup opens Mementos in the system tray. Closing the "
+            "editor keeps Mementos running; choose Quit from its tray menu "
+            "to exit."
         ))
         col.addStretch(1)
         return page
@@ -786,35 +861,53 @@ class WelcomeDialog(QDialog):
         final_lay = QVBoxLayout(self._final_list)
         final_lay.setContentsMargins(14, 12, 14, 12)
         final_lay.setSpacing(6)
-        # Six checklist rows, populated by _refresh_final_checklist().
+        # One or two rows per setup step, refreshed on entry.
         self._final_labels: list[QLabel] = []
-        for _ in range(6):
+        for _ in range(9):
             lbl = QLabel("")
             lbl.setStyleSheet("color: #e6e8ee; font-size: 10pt;")
             lbl.setWordWrap(True)
             final_lay.addWidget(lbl)
             self._final_labels.append(lbl)
-        col.addWidget(self._final_list)
+        review_scroll = QScrollArea()
+        review_scroll.setWidgetResizable(True)
+        review_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        review_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        review_scroll.setWidget(self._final_list)
+        col.addWidget(review_scroll, stretch=1)
         col.addWidget(_hint(
             "You can re-open this setup any time from the File menu → "
             "\"Run setup tutorial…\"."
         ))
-        col.addStretch(1)
         return page
 
     def _refresh_final_checklist(self) -> None:
-        """Render the six-item checklist from the merged pending+config state."""
+        """Show the choices that Finish will save without claiming untested readiness."""
         merged = dataclasses.replace(self._config, **self._pending)
         mic_ok = bool(merged.mic_device)
         sys_ok = bool(merged.system_audio_device)
+        folder_text = self._folder_edit.text().strip()
+        hotkey = self._hotkey_edit.text().strip() or "F8"
+        try:
+            parse_hotkey(hotkey)
+            hotkey_ok = True
+        except HotkeyError:
+            hotkey_ok = False
+        notifications = [
+            name for name, enabled in (
+                ("recording started", merged.show_recording_started_toast),
+                ("recording saved", merged.show_recording_saved_toast),
+                ("bookmark added", merged.show_bookmark_toast),
+            ) if enabled
+        ]
         items = (
-            (bool(merged.output_folder), f"Recordings folder: {merged.output_folder}"),
-            (mic_ok, "Microphone selected" if mic_ok else "Microphone not set"),
-            (sys_ok, "System audio selected" if sys_ok else "System audio not set"),
+            (self._validated_folder is not None, f"Recordings folder: {self._validated_folder or folder_text or 'not set'}"),
+            (mic_ok, f"Microphone: {self._wizard_mic_combo.currentText()}" if mic_ok else "Microphone: off"),
+            (sys_ok, f"System audio: {self._wizard_sys_combo.currentText()}" if sys_ok else "System audio: off"),
             (
                 True,
                 f"Capture: {_human_resolution(merged.target_resolution)} · "
-                f"{_human_fps(merged)} · {_human_quality(merged.quality_preset)}",
+                f"{_human_fps(merged)} · {_human_quality(merged.quality_preset, merged.custom_bitrate_kbps)}",
             ),
             (
                 merged.start_monitoring_on_launch,
@@ -823,15 +916,18 @@ class WelcomeDialog(QDialog):
                 else "Game monitoring is paused on launch",
             ),
             (
-                True,
-                f"Bookmark hotkey: {merged.bookmark_hotkey or 'F8'}",
+                hotkey_ok,
+                f"Bookmark hotkey: {hotkey}",
             ),
+            (True, "Notifications: " + (", ".join(notifications) or "off")),
+            (True, "Start with Windows: " + ("on" if merged.autostart_with_windows else "off")),
+            (True, "Close button: " + ("minimises to tray" if merged.close_to_tray else "closes the editor window")),
         )
         for label, (ok, text) in zip(self._final_labels, items):
             tick = "✓" if ok else "—"
             colour = "#5cb85c" if ok else "#d4a64a"
             label.setText(
-                f"<span style='color:{colour}; font-weight:600'>{tick}</span>  {text}"
+                f"<span style='color:{colour}; font-weight:600'>{tick}</span>  {escape(text)}"
             )
             label.setTextFormat(Qt.TextFormat.RichText)
 
@@ -879,7 +975,9 @@ def _human_fps(config: Config) -> str:
     return f"{config.framerate} fps"
 
 
-def _human_quality(value: str) -> str:
+def _human_quality(value: str, bitrate_kbps: int = 16_000) -> str:
+    if value == "custom":
+        return f"{bitrate_kbps / 1000:g} Mbit/s"
     return {
         "low": "Low",
         "medium": "Medium",

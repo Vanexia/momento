@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "release": "0.2.9",
-  "bundle_name": "Mementos-0.2.9-third-party-source.zip",
+  "release": "0.2.10",
+  "bundle_name": "Mementos-0.2.10-third-party-source.zip",
   "binary_provenance": {
     "pyav_wheel": {
       "filename": "av-17.0.1-cp311-abi3-win_amd64.whl",

@@ -17,6 +17,15 @@ PRIVATE_ROOTS = {".agents", ".claude"}
 PRIVATE_NAMES = {"agents.md", "claude.md", "skills-lock.json"}
 PRIVATE_PREFIXES = {("docs", "superpowers")}
 REQUIRED_RELEASE_FILES = {
+    "Mementos-0.2.10-source.zip": {
+        "mementos/__init__.py",
+        "mementos/__main__.py",
+        "momento/ui/folder_dialog.py",
+        "build/pyav_runtime.json",
+        "scripts/build_pyav_runtime.ps1",
+        "scripts/build_pyav_runtime.sh",
+        "scripts/verify_pyav_runtime.py",
+    },
     "Mementos-0.2.9-source.zip": {
         "mementos/__init__.py",
         "mementos/__main__.py",

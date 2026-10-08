@@ -189,7 +189,7 @@ try {
 
     $manifest = Join-Path $bundle "RELEASE_MANIFEST.txt"
     $manifestLines = @(
-        "Mementos 0.2.9 release manifest",
+        "Mementos 0.2.10 release manifest",
         "Git commit: $(git rev-parse HEAD)",
         "Format: SHA256  bytes  relative path",
         ""
@@ -212,13 +212,13 @@ try {
     & $python "tests\smoke_git_history_privacy.py"
     if ($LASTEXITCODE -ne 0) { throw "The Git-history privacy scan failed." }
 
-    $sourceArchive = Join-Path $sourceDir "Mementos-0.2.9-source.zip"
+    $sourceArchive = Join-Path $sourceDir "Mementos-0.2.10-source.zip"
     & git archive --format=zip --output=$sourceArchive HEAD
     if ($LASTEXITCODE -ne 0) { throw "Could not create the corresponding source archive." }
     & $python "tests\smoke_source_archive.py" $sourceArchive
     if ($LASTEXITCODE -ne 0) { throw "The corresponding source privacy scan failed." }
 
-    $thirdPartySource = Join-Path $sourceDir "Mementos-0.2.9-third-party-source.zip"
+    $thirdPartySource = Join-Path $sourceDir "Mementos-0.2.10-third-party-source.zip"
     & $python "scripts\build_corresponding_source.py" --output $thirdPartySource
     if ($LASTEXITCODE -ne 0) { throw "Could not build the third-party source bundle." }
     & $python "tests\smoke_corresponding_source.py" $thirdPartySource
@@ -235,7 +235,7 @@ try {
     & $iscc "build\installer.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
 
-    $installer = Join-Path $installerDir "MementosSetup-0.2.9.exe"
+    $installer = Join-Path $installerDir "MementosSetup-0.2.10.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "The installer was not produced."
     }
@@ -253,11 +253,11 @@ try {
     # Reserve two increasing identities per release. An old client trusts the
     # legacy manifest before upgrade; the renamed client must then accept its
     # distinct manifest without triggering the same-version digest guard.
-    $legacyMetadataVersion = [Int64](2 * (0 * 1000000000000 + 2 * 1000000 + 9))
+    $legacyMetadataVersion = [Int64](2 * (0 * 1000000000000 + 2 * 1000000 + 10))
     $metadataVersion = $legacyMetadataVersion + 1
     & $python "scripts\build_update_metadata.py" `
         --installer $installer `
-        --version "0.2.9" `
+        --version "0.2.10" `
         --minimum-updater-version "0.2.2" `
         --metadata-version $metadataVersion `
         --published-at $publishedAt `
@@ -272,11 +272,11 @@ try {
     }
     # Clients through 0.2.8 require the historical asset names. Keep a separate
     # signed manifest pointing at an identical copy of the renamed installer.
-    $legacyInstaller = Join-Path $installerDir "MomentoSetup-0.2.9.exe"
+    $legacyInstaller = Join-Path $installerDir "MomentoSetup-0.2.10.exe"
     Copy-Item -LiteralPath $installer -Destination $legacyInstaller
     & $python "scripts\build_update_metadata.py" `
         --installer $legacyInstaller `
-        --version "0.2.9" `
+        --version "0.2.10" `
         --minimum-updater-version "0.2.2" `
         --metadata-version $legacyMetadataVersion `
         --published-at $publishedAt `
@@ -288,8 +288,8 @@ try {
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash
     $legacyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $legacyInstaller).Hash
     if ($hash -ne $legacyHash) { throw "The legacy installer alias differs from the release." }
-    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MementosSetup-0.2.9.exe"
-    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.9.txt"
+    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MementosSetup-0.2.10.exe"
+    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.10.txt"
     $checksumLines = @(
         $installer,
         $sourceArchive,

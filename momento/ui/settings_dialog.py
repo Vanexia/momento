@@ -16,8 +16,8 @@ from dataclasses import replace
 from pathlib import Path
 
 from PyQt6.QtCore import (
-    QEvent, QObject, QPoint, QRect, QRectF, QRunnable, QSettings, QSize, QStandardPaths, Qt,
-    QThread, QThreadPool, QTimer, QUrl, pyqtSignal,
+    QEvent, QObject, QPoint, QRect, QRectF, QRunnable, QSize, Qt,
+    QThread, QThreadPool, QTimer, pyqtSignal,
 )
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -63,12 +63,12 @@ from momento.core.mic_monitor import MicMonitor
 from momento.core.storage_cleanup import MigrationWorker, count_movable
 from momento.ui import icons
 from momento.ui import theme as _theme
+from momento.ui.folder_dialog import choose_recordings_folder
 from momento.ui.level_meter import LevelMeter
 from momento.ui.widgets import AnchoredComboBox, match_audio_output
 from momento.util.autostart import set_autostart
 from momento.util.format import format_bytes, free_bytes_for
-from momento.util.paths import window_state_path, youtube_oauth_client_path
-from momento.util.windows_api import logical_drives
+from momento.util.paths import youtube_oauth_client_path
 from momento.util.hotkey import HotkeyError, parse_hotkey
 
 logger = logging.getLogger(__name__)
@@ -2051,64 +2051,12 @@ class SettingsPanel(QWidget):
         self._update_yt_status_label()
 
     def _on_browse_output(self) -> None:
-        start = self._output_edit.text().strip() or str(Path.home())
-        # The native Windows picker crashes in this app (likely COM/STA
-        # conflict with the WGC + WASAPI background threads). Use Qt's own
-        # picker, but pre-populate the sidebar with the standard Windows
-        # locations the user expects — Home, Desktop, Documents, Downloads,
-        # Videos, Pictures, plus the current output folder if it's set
-        # somewhere unusual.
-        dlg = QFileDialog(self.window(), "Choose output folder", start)
-        dlg.setFileMode(QFileDialog.FileMode.Directory)
-        dlg.setOption(QFileDialog.Option.DontUseNativeDialog, True)
-        dlg.setOption(QFileDialog.Option.ShowDirsOnly, True)
-
-        sidebar: list[QUrl] = []
-        seen: set[str] = set()
-        for loc in (
-            QStandardPaths.StandardLocation.HomeLocation,
-            QStandardPaths.StandardLocation.DesktopLocation,
-            QStandardPaths.StandardLocation.DocumentsLocation,
-            QStandardPaths.StandardLocation.DownloadLocation,
-            QStandardPaths.StandardLocation.MoviesLocation,
-            QStandardPaths.StandardLocation.PicturesLocation,
-        ):
-            for p in QStandardPaths.standardLocations(loc):
-                if p and p not in seen:
-                    sidebar.append(QUrl.fromLocalFile(p))
-                    seen.add(p)
-        # Every mounted drive — without these the user can't navigate off
-        # the C: profile tree, since Qt's non-native dialog has no "This PC"
-        # shell root.
-        for drive in logical_drives():
-            p = str(drive)
-            if p not in seen:
-                sidebar.append(QUrl.fromLocalFile(p))
-                seen.add(p)
-        # Pin the current output folder too — quick "back where I was".
-        cur = self._output_edit.text().strip()
-        if cur and cur not in seen:
-            sidebar.append(QUrl.fromLocalFile(cur))
-        dlg.setSidebarUrls(sidebar)
-
-        # Restore size from the last time the user opened this dialog; fall
-        # back to a comfortably large default. Qt's non-native picker opens
-        # tiny otherwise and forgets the size after every save.
-        settings = QSettings(str(window_state_path()), QSettings.Format.IniFormat)
-        geom = settings.value("dialogs/output_folder/geometry")
-        if geom:
-            dlg.restoreGeometry(geom)
-        else:
-            dlg.resize(900, 600)
-
-        accepted = dlg.exec()
-        settings.setValue("dialogs/output_folder/geometry", dlg.saveGeometry())
-        if accepted:
-            selected = dlg.selectedFiles()
-            if selected:
-                self._output_edit.setText(selected[0])
-                self._refresh_disk_free_hint()
-
+        selected = choose_recordings_folder(
+            self.window(), self._output_edit.text(), title="Choose output folder"
+        )
+        if selected is not None:
+            self._output_edit.setText(selected)
+            self._refresh_disk_free_hint()
 
     def _maybe_migrate_recordings(self, new_folder: Path) -> bool | None:
         """If the output folder changed and the old location has recordings
