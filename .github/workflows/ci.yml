@@ -58,6 +58,7 @@ jobs:
           python tests/smoke_audio_resync.py
           python tests/smoke_audio_stall.py
           python tests/smoke_audio_downmix.py
+          python tests/smoke_mic_calibration.py
           python tests/smoke_encoder_audio_guard.py
           python tests/smoke_encoder_backpressure.py
           python tests/smoke_recording_failures.py

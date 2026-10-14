@@ -428,7 +428,7 @@ class WelcomeDialog(QDialog):
         self._mic_caption = QLabel("")
         self._mic_caption.setStyleSheet("color: #9aa1b1; font-size: 9pt;")
         self._mic_caption.setMinimumWidth(140)
-        meter_label = QLabel("Mic input level")
+        meter_label = QLabel("Mic input level (-60 to 0 dBFS)")
         meter_label.setStyleSheet("color: #9aa1b1; font-size: 9pt;")
         meter_block = QVBoxLayout()
         meter_block.setContentsMargins(0, 0, 0, 0)
@@ -448,7 +448,7 @@ class WelcomeDialog(QDialog):
         form.addRow("", test_wrap)
 
         # Silence-timer matches the Settings page behaviour — fires once a
-        # few seconds in, flips caption to "No input detected" if quiet.
+        # few seconds in, reports a very low or absent signal if quiet.
         from PyQt6.QtCore import QTimer
         self._mic_silence_timer = QTimer(self)
         self._mic_silence_timer.setSingleShot(True)
@@ -578,10 +578,10 @@ class WelcomeDialog(QDialog):
             self._stop_mic_test()
 
     def _on_mic_level(self, level: float) -> None:
-        if level > 0.05 and not self._mic_input_seen:
+        if level > 0.001 and not self._mic_input_seen:
             self._mic_input_seen = True
             self._mic_silence_timer.stop()
-            self._mic_caption.setText("Input detected")
+            self._mic_caption.setText("Signal detected")
             self._mic_caption.setStyleSheet(
                 "color: #5cb85c; font-size: 9pt; font-weight: 600;"
             )
@@ -589,7 +589,7 @@ class WelcomeDialog(QDialog):
     def _on_wizard_mic_silence(self) -> None:
         if self._mic_input_seen or not self._mic_test_btn.isChecked():
             return
-        self._mic_caption.setText("No input detected")
+        self._mic_caption.setText("Very low or no signal")
         self._mic_caption.setStyleSheet(
             "color: #d4a64a; font-size: 9pt; font-weight: 600;"
         )

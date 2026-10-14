@@ -37,7 +37,7 @@ class MicMonitor(QObject):
     main thread via the default auto-connection.
     """
 
-    level_changed = pyqtSignal(float)   # peak amplitude in [0, 1]
+    level_changed = pyqtSignal(float)   # peak after gain; 1.0 is 0 dBFS
     error = pyqtSignal(str)             # human-readable failure reason
     stopped = pyqtSignal()              # fires once the worker thread exits
 
@@ -50,6 +50,7 @@ class MicMonitor(QObject):
         self._stop = threading.Event()
         self._device_key: str = ""
         self._monitor_to_speaker = False
+        self._gain = 1.0
 
     # ------------------------------------------------------------------ API
     @property
@@ -57,7 +58,9 @@ class MicMonitor(QObject):
         t = self._thread
         return t is not None and t.is_alive()
 
-    def start(self, mic_device_key: str, monitor_to_speaker: bool) -> None:
+    def start(
+        self, mic_device_key: str, monitor_to_speaker: bool, *, gain: float = 1.0
+    ) -> None:
         """Start the monitor. If one is already running, restart with the new
         settings.
 
@@ -67,6 +70,7 @@ class MicMonitor(QObject):
         self.stop()
         self._device_key = mic_device_key
         self._monitor_to_speaker = bool(monitor_to_speaker)
+        self.set_gain(gain)
         # New Event each run: the previous worker (if still unwinding) holds a
         # reference to the OLD event, so it exits on its own and can't be
         # resurrected by this reset.
@@ -75,6 +79,10 @@ class MicMonitor(QObject):
             target=self._run, args=(self._stop,), name="MicMonitor", daemon=True
         )
         self._thread.start()
+
+    def set_gain(self, gain: float) -> None:
+        """Apply the recording's linear gain to subsequent test-audio blocks."""
+        self._gain = max(0.0, float(gain))
 
     def stop(self, timeout: float = 1.0) -> None:
         self._stop.set()
@@ -134,13 +142,13 @@ class MicMonitor(QObject):
                                 break
                             raise
                         arr = np.frombuffer(raw, dtype=np.float32).reshape(-1, native_ch)
+                        arr = audio_devices.to_channels(arr, _CHANNELS) * self._gain
                         peak = float(np.max(np.abs(arr))) if arr.size else 0.0
                         self.level_changed.emit(peak)
                         if speaker is not None:
                             try:
-                                out = audio_devices.to_channels(arr, _CHANNELS)
                                 speaker.write(
-                                    np.ascontiguousarray(out, dtype=np.float32).tobytes()
+                                    np.ascontiguousarray(arr, dtype=np.float32).tobytes()
                                 )
                             except Exception:
                                 logger.exception("MicMonitor: speaker write failed")

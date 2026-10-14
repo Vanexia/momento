@@ -8,6 +8,8 @@ silence between updates so the bar feels responsive without jittering.
 
 from __future__ import annotations
 
+import math
+
 from PyQt6.QtCore import QRectF, Qt, QTimer
 from PyQt6.QtGui import QColor, QLinearGradient, QPainter
 from PyQt6.QtWidgets import QSizePolicy, QWidget
@@ -20,6 +22,8 @@ _PEAK_HOLD = QColor("#e6e8ee")
 _GREEN = QColor("#3fb058")
 _YELLOW = QColor("#d4a64a")
 _RED = QColor("#dc3c40")
+_FLOOR_DB = -60.0
+_SILENT_DESCRIPTION = "No signal. Meter scale: -60 to 0 dBFS."
 
 
 class LevelMeter(QWidget):
@@ -35,14 +39,25 @@ class LevelMeter(QWidget):
         self._decay_timer = QTimer(self)
         self._decay_timer.setInterval(40)  # ~25 fps decay
         self._decay_timer.timeout.connect(self._decay)
+        self.setAccessibleName("Microphone level")
+        self.setToolTip(_SILENT_DESCRIPTION)
+        self.setAccessibleDescription(_SILENT_DESCRIPTION)
 
     # ----------------------------------------------------------- public API
     def set_level(self, level: float) -> None:
-        """Push a fresh peak value in [0, 1]."""
-        level = max(0.0, min(1.0, float(level)))
-        self._level = level
-        if level > self._peak_hold:
-            self._peak_hold = level
+        """Push a linear peak; show it on a -60 to 0 dBFS scale."""
+        amplitude = max(0.0, float(level))
+        db = 20.0 * math.log10(amplitude) if amplitude > 0 else -math.inf
+        position = max(0.0, min(1.0, (db - _FLOOR_DB) / -_FLOOR_DB))
+        self._level = position
+        if position > self._peak_hold:
+            self._peak_hold = position
+        description = (
+            f"Latest peak: {db:.1f} dBFS. Meter scale: -60 to 0 dBFS."
+            if amplitude > 0 else _SILENT_DESCRIPTION
+        )
+        self.setToolTip(description)
+        self.setAccessibleDescription(description)
         self.update()
         if not self._decay_timer.isActive():
             self._decay_timer.start()
@@ -50,12 +65,14 @@ class LevelMeter(QWidget):
     def reset(self) -> None:
         self._level = 0.0
         self._peak_hold = 0.0
+        self.setToolTip(_SILENT_DESCRIPTION)
+        self.setAccessibleDescription(_SILENT_DESCRIPTION)
         self._decay_timer.stop()
         self.update()
 
     # ------------------------------------------------------------- internals
     def _decay(self) -> None:
-        # Live bar drops fast; peak-hold lingers so transients stay visible.
+        # Decay in decibels: 3.6 dB per tick, with a slower peak-hold tick.
         self._level = max(0.0, self._level - 0.06)
         self._peak_hold = max(self._level, self._peak_hold - 0.02)
         self.update()

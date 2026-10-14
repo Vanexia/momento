@@ -245,6 +245,7 @@ class RebrandTests(unittest.TestCase):
         for version, old_sequence, new_sequence in (
             ("0.2.9", 4_000_018, 4_000_019),
             ("0.2.10", 4_000_020, 4_000_021),
+            ("0.2.11", 4_000_022, 4_000_023),
         ):
             with self.subTest(version=version):
                 old = UpdateClient(

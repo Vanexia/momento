@@ -1,4 +1,4 @@
-Mementos 0.2.10 public release build
+Mementos 0.2.11 public release build
 =================================
 
 Target: Windows 10/11 x64
@@ -88,8 +88,8 @@ Corresponding source
 
 The GitHub release publishes both:
 
-  Mementos-0.2.10-source.zip
-  Mementos-0.2.10-third-party-source.zip
+  Mementos-0.2.11-source.zip
+  Mementos-0.2.11-third-party-source.zip
 
 The installed SOURCE_OFFER.txt points to the exact release page and source
 assets. Keeping the third-party archive as a separate release asset avoids

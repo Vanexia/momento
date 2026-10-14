@@ -471,6 +471,7 @@ class SettingsPanel(QWidget):
         self._mic_status_label = QLabel("")
         self._mic_status_label.setStyleSheet("font-size: 9pt;")
         self._mic_slider, self._mic_vol_spin, mic_vol_row = _slider_with_spin(0, 200, 100)
+        self._mic_vol_spin.valueChanged.connect(self._on_mic_volume_changed)
 
         # Mic test row: a "Test mic" toggle + a live level meter. The button
         # opens the configured mic, plays it through the default speaker,
@@ -480,23 +481,19 @@ class SettingsPanel(QWidget):
         self._mic_test_btn.setCheckable(True)
         self._mic_test_btn.setToolTip(
             "Plays your mic through the default speaker so you can hear "
-            "yourself. Wear headphones — speakers will produce feedback. "
+            "yourself at the selected microphone volume. Wear headphones to avoid feedback. "
             "Click again to stop."
         )
         self._mic_test_btn.toggled.connect(self._on_mic_test_toggled)
         self._mic_meter = LevelMeter()
         self._mic_meter.setMinimumHeight(20)
-        self._mic_meter.setToolTip(
-            "Mic peak level. The bar only moves while Test mic is running."
-        )
-        # Caption tracks three states: Listening… (warm-up), Input detected
-        # (peak above threshold), No input detected (silent for ~4s).
+        # Signal detection only confirms a measurable level, not speech.
         self._mic_status_caption = QLabel("")
         self._mic_status_caption.setStyleSheet("color: #9aa1b1; font-size: 9pt;")
         self._mic_status_caption.setMinimumWidth(140)
         # Small label above the meter so it reads as a level meter, not an
         # interactive input field.
-        meter_label = QLabel("Mic input level")
+        meter_label = QLabel("Mic level after volume (-60 to 0 dBFS)")
         meter_label.setStyleSheet("color: #9aa1b1; font-size: 9pt;")
         meter_block = QVBoxLayout()
         meter_block.setContentsMargins(0, 0, 0, 0)
@@ -515,7 +512,7 @@ class SettingsPanel(QWidget):
         mic_test_wrap.setLayout(mic_test_row)
         # Triggered once a few seconds after the test starts; if the live peak
         # hasn't crossed the threshold by then, the caption switches to
-        # "No input detected" so the user gets useful feedback.
+        # low-signal caption so the user gets useful feedback.
         from PyQt6.QtCore import QTimer
         self._mic_silence_timer = QTimer(self)
         self._mic_silence_timer.setSingleShot(True)
@@ -630,12 +627,14 @@ class SettingsPanel(QWidget):
         return self._mic_monitor
 
     def _update_mic_caption(self, level: float) -> None:
-        """Once any sample crosses the noise floor, switch to "Input detected"
-        and cancel the silence timer."""
-        if level > 0.05 and not self._mic_input_seen:
+        """Recognise a measurable signal without claiming it contains speech."""
+        # A queued peak from before muting must not restore the old status.
+        if self._mic_vol_spin.value() == 0:
+            return
+        if level > 0.001 and not self._mic_input_seen:
             self._mic_input_seen = True
             self._mic_silence_timer.stop()
-            self._mic_status_caption.setText("Input detected")
+            self._mic_status_caption.setText("Signal detected")
             self._mic_status_caption.setStyleSheet(
                 "color: #5cb85c; font-size: 9pt; font-weight: 600;"
             )
@@ -647,7 +646,7 @@ class SettingsPanel(QWidget):
             return
         if not self._mic_test_btn.isChecked():
             return
-        self._mic_status_caption.setText("No input detected")
+        self._mic_status_caption.setText("Very low or no signal")
         self._mic_status_caption.setStyleSheet(
             "color: #d4a64a; font-size: 9pt; font-weight: 600;"
         )
@@ -662,7 +661,9 @@ class SettingsPanel(QWidget):
                 )
                 self._mic_test_btn.setChecked(False)
                 return
-            self._ensure_mic_monitor().start(mic_key, monitor_to_speaker=True)
+            self._ensure_mic_monitor().start(
+                mic_key, monitor_to_speaker=True, gain=self._mic_vol_spin.value() / 100.0
+            )
             self._mic_test_btn.setText("Stop test")
             self._mic_input_seen = False
             self._mic_silence_timer.start()
@@ -677,6 +678,17 @@ class SettingsPanel(QWidget):
             self._mic_test_btn.setText("Test mic")
             self._mic_status_caption.setText("")
             self._mic_silence_timer.stop()
+
+    def _on_mic_volume_changed(self, volume: int) -> None:
+        if self._mic_monitor is not None:
+            self._mic_monitor.set_gain(volume / 100.0)
+        if self._mic_test_btn.isChecked():
+            self._mic_input_seen = False
+            self._mic_silence_timer.start()
+            self._mic_status_caption.setText("Listening…")
+            self._mic_status_caption.setStyleSheet(
+                "color: #b8c1d1; font-size: 9pt; font-style: italic;"
+            )
 
     def _on_mic_monitor_error(self, message: str) -> None:
         QMessageBox.warning(self, "Mementos", message)

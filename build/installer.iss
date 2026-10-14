@@ -1,5 +1,5 @@
 #define MyAppName "Mementos"
-#define MyAppVersion "0.2.10"
+#define MyAppVersion "0.2.11"
 #define MyAppPublisher "Mementos"
 #define MyAppExeName "Mementos.exe"
 
