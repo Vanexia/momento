@@ -13,6 +13,14 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+# Never touch the real Mementos profile. This suite builds a real EditorWindow,
+# which saves its geometry into window_state.ini when closed, and the release
+# build runs it without a profile override: it was resetting the user's real
+# editor window state. Redirect every profile-derived path before importing.
+_PROFILE = tempfile.mkdtemp(prefix="momento-youtube-setup-profile-")
+os.environ["APPDATA"] = os.path.join(_PROFILE, "Roaming")
+os.environ["LOCALAPPDATA"] = os.path.join(_PROFILE, "Local")
+
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox  # noqa: E402
 
 import momento.ui.editor as editor_mod  # noqa: E402
