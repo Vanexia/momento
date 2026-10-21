@@ -3,7 +3,7 @@
 # resolver conflicts. Development-only lint/audit tools are not pinned here.
 altgraph==0.17.5
 av==17.0.1
-certifi==2026.5.20
+certifi==2026.10.19
 cffi==2.0.0
 charset-normalizer==3.4.7
 cryptography==50.0.0
@@ -20,7 +20,7 @@ oauthlib==4.0.0
 opencv-python==4.13.0.92
 packaging==26.2
 pefile==2024.8.26
-pip==26.2.1
+pip==26.2.2
 proto-plus==1.28.0
 protobuf==7.35.0
 psutil==7.2.2

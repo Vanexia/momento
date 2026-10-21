@@ -41,6 +41,8 @@ dependencies = [
     "requests>=2.32",
     # Security floors for the HTTP transport and Google's transitive OAuth
     # client stack; release locks also verify the exact downloaded wheels.
+    # certifi 2026.10.19 removes the compromised emSign trust root.
+    "certifi>=2026.10.19",
     "urllib3>=2.8.0",
     "oauthlib>=4.0.0",
     "google-api-python-client>=2.130",
