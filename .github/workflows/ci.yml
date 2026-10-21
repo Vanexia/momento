@@ -48,9 +48,11 @@ jobs:
       - name: Pure-logic tests
         run: |
           python tests/smoke_config_robustness.py
+          python tests/smoke_config_load_failures.py
           python tests/smoke_settings_save.py
           python tests/smoke_worker_lifecycle.py
           python tests/smoke_capture_safety.py
+          python tests/smoke_shutdown_waits_for_finalize.py
           python tests/smoke_log_privacy.py
           python tests/smoke_pyav_runtime_contract.py --unit-only
           python tests/smoke_editor_live_recording.py
@@ -58,9 +60,11 @@ jobs:
           python tests/smoke_audio_resync.py
           python tests/smoke_audio_stall.py
           python tests/smoke_audio_downmix.py
+          python tests/smoke_audio_timeline.py
           python tests/smoke_mic_calibration.py
           python tests/smoke_encoder_audio_guard.py
           python tests/smoke_encoder_backpressure.py
+          python tests/smoke_video_drop_warning.py
           python tests/smoke_recording_failures.py
           python tests/smoke_window_retry.py
           python tests/smoke_repair_lock.py
@@ -78,6 +82,7 @@ jobs:
           python tests/smoke_fullscreen_blocklist.py
           python tests/smoke_preview_prime.py
           python tests/smoke_storage_migration.py
+          python tests/smoke_migration_move.py
           python tests/smoke_first_run.py
           python tests/smoke_welcome_setup.py
           python tests/smoke_installer_contract.py

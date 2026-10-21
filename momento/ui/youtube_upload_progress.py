@@ -82,6 +82,7 @@ class YouTubeUploadProgressDialog(QDialog):
         self._last_speed_bps = 0.0
         self._uploaded_bytes = 0.0  # real bytes sent (from the job's bytes_uploaded signal)
         self._terminal = False  # set when finished/failed signal arrives
+        self._cancel_requested = False
         self._watch_url = ""
 
         # ---- UI ----
@@ -186,8 +187,18 @@ class YouTubeUploadProgressDialog(QDialog):
         self._terminal = True
         self._watch_url = watch_url
         self._progress.setValue(100)
-        self._state_label.setText("Upload complete.")
-        self._state_label.setStyleSheet("color: #6c6; font-weight: bold;")
+        if self._cancel_requested:
+            # The final bytes reached YouTube before the cancel took effect, so
+            # the video exists. Say so instead of implying it was cancelled.
+            self._state_label.setText(
+                "The upload finished before the cancel took effect. The video "
+                "is on YouTube; delete it in YouTube Studio if you don't want it."
+            )
+            self._state_label.setWordWrap(True)
+            self._state_label.setStyleSheet("color: #e6b84d; font-weight: bold;")
+        else:
+            self._state_label.setText("Upload complete.")
+            self._state_label.setStyleSheet("color: #6c6; font-weight: bold;")
         self._stats_label.setText(watch_url)
         self._cancel_btn.setVisible(False)
         self._view_btn.setVisible(True)
@@ -199,7 +210,7 @@ class YouTubeUploadProgressDialog(QDialog):
         self._terminal = True
         # Distinguish user-cancel (silent close) from real failure (show msg).
         if message == "Cancelled by user":
-            self.reject()
+            QDialog.reject(self)
             return
         self._state_label.setText("Upload failed.")
         self._state_label.setStyleSheet("color: #e66; font-weight: bold;")
@@ -232,19 +243,33 @@ class YouTubeUploadProgressDialog(QDialog):
 
     def _request_cancel(self) -> None:
         if self._terminal:
-            self.reject()
+            QDialog.reject(self)
             return
+        if self._confirm_cancel("The upload is still in progress. Cancel it?"):
+            self._begin_cancel()
+
+    def _confirm_cancel(self, question: str) -> bool:
         reply = QMessageBox.question(
             self,
             "Cancel upload?",
-            "The upload is still in progress. Cancel it?",
+            question,
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
-        if reply == QMessageBox.StandardButton.Yes:
-            self._cancel_btn.setEnabled(False)
-            self._state_label.setText("Cancelling…")
-            self._job.cancel()
+        return reply == QMessageBox.StandardButton.Yes
+
+    def _begin_cancel(self) -> None:
+        """Ask the worker to stop and wait for its answer without blocking.
+
+        The dialog stays open showing "Cancelling…" until the worker reports
+        back (normally within moments, because cancel() aborts the socket).
+        That way the user learns if the upload completed before the cancel
+        landed, instead of a hidden dialog implying it never happened.
+        """
+        self._cancel_requested = True
+        self._cancel_btn.setEnabled(False)
+        self._state_label.setText("Cancelling…")
+        self._job.cancel()
 
     def _open_watch_url(self) -> None:
         if self._watch_url:
@@ -252,26 +277,30 @@ class YouTubeUploadProgressDialog(QDialog):
 
     # ---- Window-close interception --------------------------------------
 
+    def reject(self) -> None:
+        """Esc routes here; it must never hide a running upload.
+
+        Qt's Esc calls reject() directly, without a closeEvent, so without this
+        an upload kept running invisibly with no result ever shown.
+        """
+        if self._terminal or self._cancel_requested:
+            # Done, or the user already confirmed a cancel and closes again:
+            # let it go. The worker winds down in the background registry.
+            super().reject()
+            return
+        if self._confirm_cancel("Closing this dialog will cancel the upload. Continue?"):
+            self._begin_cancel()
+
     def closeEvent(self, event: QCloseEvent) -> None:
-        if not self._terminal:
-            reply = QMessageBox.question(
-                self,
-                "Cancel upload?",
-                "Closing this dialog will cancel the upload. Continue?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.No,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                event.ignore()
-                return
-            # Request cancellation and close the dialog immediately. cancel()
-            # closes the HTTP session so a wedged send unblocks promptly, and the
-            # worker + thread outlive this dialog (kept by the module registry),
-            # so they tear themselves down in the background. Crucially we do NOT
-            # wait() on the GUI thread here — waiting on a worker stuck in a
-            # stalled 16 MiB send is exactly what froze the whole app.
-            self._job.cancel()
-        super().closeEvent(event)
+        if self._terminal or self._cancel_requested:
+            super().closeEvent(event)
+            return
+        # Never wait() on the worker here: waiting on a worker stuck in a
+        # stalled send is what once froze the whole app. Request the cancel and
+        # keep the dialog open until the worker reports its outcome.
+        event.ignore()
+        if self._confirm_cancel("Closing this dialog will cancel the upload. Continue?"):
+            self._begin_cancel()
 
 
 # ---- Module helpers ------------------------------------------------------

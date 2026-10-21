@@ -11,7 +11,9 @@ Runs at startup and at the end of every recording. The work is cheap (stat
 
 from __future__ import annotations
 
+import errno
 import logging
+import os
 import shutil
 from pathlib import Path
 
@@ -101,6 +103,58 @@ def enforce_storage_limit(folder: Path, max_gb: int) -> int:
     return deleted
 
 
+_ERROR_NOT_SAME_DEVICE = 17  # Windows: "cannot move the file to a different disk drive"
+
+
+def _is_cross_device(exc: OSError) -> bool:
+    return exc.errno == errno.EXDEV or getattr(exc, "winerror", None) == _ERROR_NOT_SAME_DEVICE
+
+
+def move_file_safely(src: Path, dst: Path) -> None:
+    """Move ``src`` to ``dst`` without ever leaving two copies behind.
+
+    ``shutil.move`` falls back to copy-then-delete after ANY rename failure,
+    including a Windows sharing violation from a file another program holds
+    open. It then copies gigabytes, fails to delete the locked source, and
+    leaves a duplicate that a retry skips as "already at destination".
+
+    Same volume: a plain rename, which fails cleanly on a locked file.
+    Different volume: the source is first renamed to a hidden staging name in
+    its own folder. That proves no other handle blocks deleting it before any
+    byte is copied, and hides it from the library while it moves. The copy goes
+    to a hidden partial name and is only published once complete. Every
+    failure rolls back to the original state. Raises OSError on failure.
+    """
+    try:
+        os.rename(src, dst)
+        return
+    except OSError as exc:
+        if not _is_cross_device(exc):
+            raise
+
+    staged = src.with_name(f".{src.name}.moving")
+    partial = dst.with_name(f".{dst.name}.partial")
+    os.rename(src, staged)  # raises if another handle blocks the move
+    try:
+        shutil.copy2(staged, partial)
+        os.replace(partial, dst)
+    except OSError:
+        partial.unlink(missing_ok=True)
+        os.rename(staged, src)
+        raise
+    try:
+        staged.unlink()
+    except OSError:
+        # Couldn't remove the original: undo so exactly one copy remains.
+        try:
+            dst.unlink()
+        except OSError:
+            logger.error("Migration left a moved copy it could not remove")
+            raise
+        os.rename(staged, src)
+        raise
+
+
 class MigrationWorker:
     """Move every recording + clip + sidecar from ``old`` to ``new``.
 
@@ -142,7 +196,7 @@ class MigrationWorker:
                     logger.info("Migration skipped media already at destination")
                     failed += 1
                     continue
-                shutil.move(str(src), str(dst))
+                move_file_safely(src, dst)
             except OSError as e:
                 logger.warning("Migration could not move media: %s", e)
                 failed += 1
@@ -160,7 +214,7 @@ class MigrationWorker:
                     failed += 1
                     continue
                 try:
-                    shutil.move(str(sidecar), str(sidecar_dst))
+                    move_file_safely(sidecar, sidecar_dst)
                 except OSError as e:
                     logger.warning("Migration could not move a sidecar: %s", e)
                     # The media was moved successfully, but leaving an original

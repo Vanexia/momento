@@ -725,8 +725,22 @@ class EditorWindow(QMainWindow):
                 self._on_youtube_configuration_changed
             )
             self._settings_panel.done.connect(self._show_editor_view)
+            self._settings_panel.migration_starting.connect(
+                self._release_media_for_migration
+            )
             self._stack.addWidget(self._settings_panel)
         return self._settings_panel
+
+    def _release_media_for_migration(self) -> None:
+        """Recordings are about to move folders: let go of the previewed file.
+
+        The preview player holds its file open without delete sharing, which
+        blocks the move. The selection is cleared because the file is about
+        to have a new path; the refresh after saving re-lists the new folder.
+        """
+        if self._current_selection is not None:
+            self.preview.load(None)
+            self._current_selection = None
 
     def _show_settings_view(self, open_tab: str | None = None) -> None:
         """Swap the stack to the settings page. ``open_tab`` can be e.g. "Audio"."""

@@ -109,6 +109,7 @@ def _fixture(
     release_overrides: dict[str, object] | None = None,
     metadata_version: int = 1,
     expires_at: str = "2027-02-13T12:00:00Z",
+    published_at: str = "2026-08-17T12:00:00Z",
 ) -> tuple[dict[str, FakeResponse | Exception], bytes, bytes, bytes, str]:
     filename = f"MomentoSetup-{version}.exe"
     release_base = f"https://github.com/Vanexia/momento/releases/download/v{version}"
@@ -126,7 +127,7 @@ def _fixture(
         },
         "minimum_updater_version": "0.2.2",
         "metadata_version": metadata_version,
-        "published_at": "2026-08-17T12:00:00Z",
+        "published_at": published_at,
         "schema": 1,
         "version": version,
     }
@@ -252,6 +253,41 @@ def test_current_release_is_authenticated(tmp: Path, private_key: Ed25519Private
     )
 
 
+def test_expired_current_release_still_reports_current(
+    tmp: Path, private_key: Ed25519PrivateKey
+) -> None:
+    """A user on the latest release must not see "update check failed" once
+    that release's signed metadata passes its 180-day expiry."""
+    now = datetime(2026, 8, 17, 12, tzinfo=UTC)
+    public_key = _public_pem(private_key)
+    # Authentic metadata signed in February that expired the day before "now".
+    expired_current, *_ = _fixture(
+        private_key, version="0.2.2",
+        published_at="2026-02-17T12:00:00Z", expires_at="2026-08-16T12:00:00Z",
+    )
+    result = UpdateClient(
+        session=FakeSession(expired_current),
+        cache=UpdateCache(tmp / "expired-current", public_key, now_provider=lambda: now),
+        public_key=public_key,
+        now_provider=lambda: now,
+    ).check(current_version="0.2.2")
+    check("expired metadata for the running release reports current",
+          result.status is UpdateStatus.CURRENT)
+
+    expired_newer, *_ = _fixture(
+        private_key, version="0.2.3",
+        published_at="2026-02-17T12:00:00Z", expires_at="2026-08-16T12:00:00Z",
+    )
+    newer = UpdateClient(
+        session=FakeSession(expired_newer),
+        cache=UpdateCache(tmp / "expired-newer", public_key, now_provider=lambda: now),
+        public_key=public_key,
+        now_provider=lambda: now,
+    ).check(current_version="0.2.2")
+    check("expired metadata for a NEWER release still fails closed",
+          newer.status is UpdateStatus.FAILED)
+
+
 def test_release_policy_failures(tmp: Path, private_key: Ed25519PrivateKey) -> None:
     cases: list[tuple[str, dict[str, object]]] = [
         ("draft releases are rejected", {"draft": True}),
@@ -374,10 +410,13 @@ def test_metadata_freshness_and_clock_rollback(tmp: Path, private_key: Ed25519Pr
     ).check(current_version="0.2.2")
     check("older signed metadata is rejected after a newer one was seen", replay.status is UpdateStatus.FAILED)
 
+    # Published before it expired, so this exercises expiry itself rather
+    # than the "expiry must follow publication" shape check.
     expired_responses, *_ = _fixture(
         private_key,
         version="0.2.5",
         metadata_version=3,
+        published_at="2026-02-17T12:00:00Z",
         expires_at="2026-08-16T12:00:00Z",
     )
     expired = UpdateClient(
@@ -551,6 +590,7 @@ def main() -> int:
         tmp = Path(d)
         test_valid_download_and_cache(tmp, private_key)
         test_current_release_is_authenticated(tmp, private_key)
+        test_expired_current_release_still_reports_current(tmp, private_key)
         test_release_policy_failures(tmp, private_key)
         test_download_failures_leave_no_stage(tmp, private_key)
         test_metadata_freshness_and_clock_rollback(tmp, private_key)

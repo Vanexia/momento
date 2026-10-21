@@ -1,12 +1,12 @@
 Mementos third-party notices
 ===========================
 
-Mementos 0.2.11 is licensed under GNU GPL version 3. The complete licence is
+Mementos 0.2.12 is licensed under GNU GPL version 3. The complete licence is
 installed as LICENSE. SOURCE_OFFER.txt identifies the matching source archives
-published beside the installer on the Mementos 0.2.11 GitHub release:
+published beside the installer on the Mementos 0.2.12 GitHub release:
 
-  Mementos-0.2.11-source.zip
-  Mementos-0.2.11-third-party-source.zip
+  Mementos-0.2.12-source.zip
+  Mementos-0.2.12-third-party-source.zip
 
 The third-party source bundle contains the exact hash-verified source inputs
 and native build records for Mementos's FFmpeg helper, Mementos's minimal

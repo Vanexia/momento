@@ -588,7 +588,8 @@ def _coerce_int(value: object, default: int) -> int:
         return default
     try:
         return int(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
+        # OverflowError: JSON numbers like 1e400 parse as float('inf').
         return default
 
 
@@ -626,60 +627,136 @@ def _coerce_output_folder(value: object, default: Path) -> Path:
         return default
 
 
-def load_config(path: Path | None = None) -> Config:
-    """Load config from JSON; on missing/malformed file, return defaults.
+@dataclass(frozen=True)
+class ConfigLoadResult:
+    """A loaded config plus whether the on-disk file was actually used.
 
-    Malformed configs get a side-cared backup at ``<config>.broken-<ts>.json``
-    so the user can recover hand-edited values; the loud log line tells them
-    where to look. We don't show a modal here because this runs before the
-    QApplication exists.
+    ``problem`` is None when the file was absent (a genuine first run) or
+    loaded cleanly. Otherwise ``config`` holds defaults and the caller must not
+    write them back over the user's file automatically.
     """
+
+    config: Config
+    problem: str | None = None
+    backup: Path | None = None
+
+
+# Antivirus, backup and sync tools (OneDrive) can hold config.json open for a
+# moment at sign-in, exactly when an autostarted Mementos reads it.
+_READ_ATTEMPTS = 5
+_READ_RETRY_DELAY_S = 0.25
+# Notepad and hand edits may add a BOM or save in the Windows ANSI code page.
+_TEXT_ENCODINGS = ("utf-8-sig", "mbcs", "cp1252")
+
+
+def load_config(path: Path | None = None) -> Config:
+    """Load config from JSON; on missing/malformed file, return defaults."""
+    return load_config_result(path).config
+
+
+def load_config_result(path: Path | None = None) -> ConfigLoadResult:
+    """Load config, reporting whether an existing file could not be used.
+
+    Every fallback keeps a ``<config>.broken-<ts>.txt`` copy of whatever bytes
+    could be read so hand-edited values are recoverable. This runs before the
+    QApplication exists, so it only logs; the caller decides what to show.
+    """
+    import time
+
     p = path or config_path()
     if not p.exists():
-        return Config()
-    try:
-        text = p.read_text(encoding="utf-8")
-    except OSError:
-        logger.exception("Could not read config %s; using defaults", p)
-        return Config()
+        return ConfigLoadResult(Config())
+
+    raw: bytes | None = None
+    for attempt in range(_READ_ATTEMPTS):
+        try:
+            raw = p.read_bytes()
+            break
+        except FileNotFoundError:
+            return ConfigLoadResult(Config())
+        except OSError as exc:
+            if attempt + 1 == _READ_ATTEMPTS:
+                logger.error(
+                    "Could not read config %s after %d attempts (%s); using "
+                    "defaults for this session without overwriting it",
+                    p, _READ_ATTEMPTS, type(exc).__name__,
+                )
+                return ConfigLoadResult(
+                    Config(), problem="unreadable", backup=_copy_broken_config(p)
+                )
+            time.sleep(_READ_RETRY_DELAY_S)
+    assert raw is not None
+
+    text = _decode_config_bytes(raw)
+    if text is None:
+        backup = _stash_broken_config(p, raw)
+        logger.error("Config %s is not readable text — using defaults. Original saved as %s.", p, backup)
+        return ConfigLoadResult(Config(), problem="undecodable", backup=backup)
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        backup = _stash_broken_config(p, text)
+        backup = _stash_broken_config(p, raw)
         logger.error(
             "Config %s is not valid JSON — using defaults. "
             "Original saved as %s for inspection.",
             p, backup,
         )
-        return Config()
+        return ConfigLoadResult(Config(), problem="invalid_json", backup=backup)
     if not isinstance(data, dict):
-        logger.warning("Config %s is not a JSON object; using defaults", p)
-        return Config()
+        backup = _stash_broken_config(p, raw)
+        logger.error("Config %s is not a JSON object — using defaults. Original saved as %s.", p, backup)
+        return ConfigLoadResult(Config(), problem="not_an_object", backup=backup)
     try:
-        return Config.from_dict(data)
+        return ConfigLoadResult(Config.from_dict(data))
     except Exception:
         # Valid JSON object but a field holds a type-invalid value that survived
         # from_dict's per-field coercions (e.g. a future field-type change, or a
         # nested-structure mismatch). Degrade to defaults instead of crashing
         # before the tray ever appears — same intent as the JSONDecodeError path.
-        backup = _stash_broken_config(p, text)
+        backup = _stash_broken_config(p, raw)
         logger.exception(
             "Config %s has invalid values — using defaults. "
             "Original saved as %s for inspection.",
             p, backup,
         )
-        return Config()
+        return ConfigLoadResult(Config(), problem="invalid_values", backup=backup)
 
 
-def _stash_broken_config(path: Path, raw_text: str) -> Path:
-    """Move/copy the broken config aside so user fixes can be recovered."""
+def _decode_config_bytes(raw: bytes) -> str | None:
+    for encoding in _TEXT_ENCODINGS:
+        try:
+            return raw.decode(encoding)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return None
+
+
+def _broken_config_backup_path(path: Path) -> Path:
     from datetime import datetime
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup = path.with_name(f"{path.name}.broken-{stamp}.txt")
+    return path.with_name(f"{path.name}.broken-{stamp}.txt")
+
+
+def _stash_broken_config(path: Path, raw: bytes) -> Path:
+    """Copy the broken config's exact bytes aside so user fixes can be recovered."""
+    backup = _broken_config_backup_path(path)
     try:
-        backup.write_text(raw_text, encoding="utf-8")
+        backup.write_bytes(raw)
     except OSError:
         logger.exception("Could not write broken-config backup to %s", backup)
+    return backup
+
+
+def _copy_broken_config(path: Path) -> Path | None:
+    """Best-effort copy of a config that could not be read in place."""
+    import shutil
+
+    backup = _broken_config_backup_path(path)
+    try:
+        shutil.copy2(path, backup)
+    except OSError:
+        logger.warning("Could not copy unreadable config aside")
+        return None
     return backup
 
 

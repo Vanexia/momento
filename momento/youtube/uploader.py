@@ -28,15 +28,21 @@ Public surface:
   ``thread.started.connect(job.run)``. Job emits one of
   ``finished(video_id, watch_url)`` or ``failed(error_message)`` exactly once and
   then doesn't talk again.
-- ``cancel()`` — flips an atomic; the next chunk boundary surfaces the
-  cancellation as ``failed("Cancelled by user")``.
+- ``cancel()`` — sets the cancel flag and aborts the upload's live sockets, so a
+  request in flight fails immediately and surfaces as
+  ``failed("Cancelled by user")``. If the cancel interrupts the final chunk,
+  one status check decides: a video YouTube already created is reported as
+  ``finished`` rather than as a cancellation.
 """
 
 from __future__ import annotations
 
+import _socket
 import logging
 import random
+import socket
 import time
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event, Lock
@@ -46,8 +52,120 @@ import requests
 from PyQt6.QtCore import QObject, pyqtSignal
 from google.auth.transport.requests import AuthorizedSession
 from google.oauth2.credentials import Credentials
+from requests.adapters import HTTPAdapter
+from urllib3.connection import HTTPConnection, HTTPSConnection
+from urllib3.connectionpool import HTTPConnectionPool, HTTPSConnectionPool
 
 logger = logging.getLogger(__name__)
+
+
+class _SocketTracker:
+    """Live sockets of one upload, so cancel() can abort a request in flight.
+
+    ``Session.close()`` only closes idle pooled connections; the connection
+    carrying the current PUT is checked out of the pool and keeps sending until
+    its own timeouts expire (minutes on a stalled link). Shutting the socket
+    down makes that blocked send/receive fail immediately.
+    """
+
+    def __init__(self) -> None:
+        self._lock = Lock()
+        self._sockets: "weakref.WeakSet[socket.socket]" = weakref.WeakSet()
+        self._aborted = False
+
+    def add(self, sock: socket.socket) -> None:
+        with self._lock:
+            if not self._aborted:
+                self._sockets.add(sock)
+                return
+        _shutdown_socket(sock)
+
+    def discard(self, sock: socket.socket) -> None:
+        with self._lock:
+            self._sockets.discard(sock)
+
+    def abort(self) -> None:
+        with self._lock:
+            self._aborted = True
+            sockets = list(self._sockets)
+        for sock in sockets:
+            _shutdown_socket(sock)
+
+
+def _shutdown_socket(sock: socket.socket) -> None:
+    """Abort a socket another thread may be blocked on, in send or receive.
+
+    shutdown() alone is not enough on Windows: it does not wake a thread
+    waiting in recv(), which is where an upload sits while YouTube acknowledges
+    each chunk. Closing the OS handle wakes both directions. Both calls use the
+    C-level base methods: SSLSocket's own shutdown()/close() discard its SSL
+    state, which is unsafe while the worker is mid-call, and socket.close()
+    defers the real close while http.client's response reader holds a
+    reference. Closing marks the Python socket invalid, so the worker's next
+    call fails cleanly instead of touching a recycled handle.
+    """
+    try:
+        socket.socket.shutdown(sock, socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        _socket.socket.close(sock)
+    except OSError:
+        pass
+
+
+def _tracking_pool_classes(tracker: _SocketTracker) -> dict:
+    def track(base):
+        class _Tracked(base):
+            def connect(self) -> None:
+                super().connect()
+                if self.sock is not None:
+                    tracker.add(self.sock)
+
+            def close(self) -> None:
+                sock = self.sock
+                try:
+                    super().close()
+                finally:
+                    if sock is not None:
+                        tracker.discard(sock)
+
+        return _Tracked
+
+    class _HTTPPool(HTTPConnectionPool):
+        ConnectionCls = track(HTTPConnection)
+
+    class _HTTPSPool(HTTPSConnectionPool):
+        ConnectionCls = track(HTTPSConnection)
+
+    return {"http": _HTTPPool, "https": _HTTPSPool}
+
+
+class _CancellableAdapter(HTTPAdapter):
+    """A requests adapter whose connections register with a tracker."""
+
+    def __init__(self, tracker: _SocketTracker, **kwargs) -> None:
+        self._tracker = tracker
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs) -> None:
+        super().init_poolmanager(*args, **kwargs)
+        self.poolmanager.pool_classes_by_scheme = _tracking_pool_classes(self._tracker)
+
+
+def _cancellable_session(credentials, tracker: _SocketTracker) -> AuthorizedSession:
+    session = AuthorizedSession(credentials)
+    adapter = _CancellableAdapter(tracker)
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    return session
+
+
+# The transport error text from requests includes the full request URL, and the
+# resumable session URL is a bearer credential for the unfinished upload. Never
+# log or display it; the exception type is enough to diagnose.
+def _describe_network_error(exc: BaseException) -> str:
+    return type(exc).__name__
 
 # YouTube resumable-upload endpoints (note the /upload/ host prefix — distinct
 # from the regular Data API host).
@@ -188,9 +306,10 @@ class UploadJob(QObject):
         self._creds = credentials
         self._options = options
         self._cancel = Event()
-        # The live AuthorizedSession, so cancel() can close it to interrupt a
-        # blocking send. Guarded because cancel() runs on the GUI thread while
-        # the worker uses the session on its own thread.
+        # Every socket this upload opens, so cancel() can abort the request in
+        # flight. Guarded internally: cancel() runs on the GUI thread while the
+        # worker sends on its own thread.
+        self._sockets = _SocketTracker()
         self._session: Optional[AuthorizedSession] = None
         self._session_lock = Lock()
 
@@ -199,15 +318,15 @@ class UploadJob(QObject):
     def cancel(self) -> None:
         """Request cancellation. Safe to call from any thread.
 
-        Sets the cancel flag AND closes the HTTP session's pooled connections.
-        The flag alone is only checked at chunk boundaries, so a worker parked
-        inside a blocking ``session.put()`` (a 16 MiB body send that stalls — the
-        request-body send is NOT bounded by the read timeout) would hang until
-        the OS TCP timeout, and the dialog waiting on it froze the whole app.
-        Closing the session makes the in-flight request raise promptly, so the
-        worker unwinds to ``failed("Cancelled by user")`` within moments.
+        Sets the cancel flag and shuts down the live sockets. The flag alone is
+        only checked between chunks, and closing the session only drops idle
+        pooled connections, so a worker inside a blocking ``session.put()`` (a
+        16 MiB body send on a slow or stalled link) would otherwise keep going
+        for minutes — long enough for a "cancelled" upload to finish and go
+        live. Aborting the socket makes that request fail immediately.
         """
         self._cancel.set()
+        self._sockets.abort()
         with self._session_lock:
             sess = self._session
         if sess is not None:
@@ -230,6 +349,12 @@ class UploadJob(QObject):
         except _UploadCancelled:
             self.failed.emit("Cancelled by user")
         except Exception as exc:  # noqa: BLE001
+            if isinstance(exc, (requests.RequestException, OSError)):
+                # Transport errors embed the secret resumable-session URL.
+                logger.error("Unhandled network error during YouTube upload (%s)",
+                             _describe_network_error(exc))
+                self.failed.emit(f"Upload failed ({_describe_network_error(exc)}).")
+                return
             logger.exception("Unhandled error during YouTube upload")
             self.failed.emit(f"Upload failed: {exc}")
 
@@ -264,7 +389,7 @@ class UploadJob(QObject):
         # AuthorizedSession wraps a requests.Session: urllib3 connection pooling
         # (keep-alive across the chunked PUTs — the whole point) plus automatic
         # access-token refresh mid-upload for multi-hour transfers.
-        session = AuthorizedSession(self._creds)
+        session = _cancellable_session(self._creds, self._sockets)
         with self._session_lock:
             self._session = session
 
@@ -279,11 +404,18 @@ class UploadJob(QObject):
                 self.failed.emit(str(exc))
                 return
             except (requests.RequestException, OSError) as exc:  # noqa: BLE001
-                # A session.close() from cancel() surfaces here — treat it as a
+                # An aborted socket from cancel() surfaces here — treat it as a
                 # cancellation, not a network failure to report.
                 self._raise_if_cancelled()
-                logger.exception("Network error during YouTube upload")
-                self.failed.emit(f"Network error during upload: {exc}")
+                logger.error(
+                    "Network error during YouTube upload (%s)",
+                    _describe_network_error(exc),
+                )
+                self.failed.emit(
+                    "Network error during upload "
+                    f"({_describe_network_error(exc)}). Check your connection "
+                    "and try again."
+                )
                 return
 
             video_id = (video or {}).get("id")
@@ -293,8 +425,9 @@ class UploadJob(QObject):
 
             # Thumbnail is best-effort. If it fails we still consider the upload a
             # success — the video is up; the user can swap the thumbnail later from
-            # YouTube Studio.
-            if opts.thumbnail_path:
+            # YouTube Studio. Skip it if the user already asked to cancel: the
+            # video only exists because it finished before the cancel landed.
+            if opts.thumbnail_path and not self._cancel.is_set():
                 self.state_changed.emit("Setting thumbnail")
                 try:
                     self._set_thumbnail(session, video_id, opts.thumbnail_path)
@@ -336,11 +469,14 @@ class UploadJob(QObject):
                 allow_redirects=False,
             )
         except (requests.RequestException, OSError) as exc:
-            # cancel() closes the live session to interrupt a request that is
+            # cancel() aborts the live socket to interrupt a request that is
             # still negotiating the resumable upload. Preserve cancellation as
             # a user action instead of relabelling it as a network failure.
             self._raise_if_cancelled()
-            raise _UploadError(f"Couldn't start the upload (network error): {exc}")
+            raise _UploadError(
+                "Couldn't start the upload (network error: "
+                f"{_describe_network_error(exc)})."
+            )
         if resp.status_code not in (200, 201):
             raise _UploadError(_format_resp_error(resp))
         location = resp.headers.get("Location")
@@ -383,17 +519,25 @@ class UploadJob(QObject):
                         allow_redirects=False,  # 308 is "Resume Incomplete" here, NOT a redirect
                     )
                 except (requests.RequestException, OSError) as exc:
-                    # A cancel() closed the session mid-send: surface it as a
-                    # cancellation immediately rather than burning a retry.
-                    self._raise_if_cancelled()
+                    if self._cancel.is_set():
+                        # cancel() aborted this request. If it was carrying the
+                        # final bytes, YouTube may already have created the
+                        # video; find out rather than report a cancellation for
+                        # a video that is live.
+                        if end + 1 >= total:
+                            resource = self._status_after_cancel(upload_url, total)
+                            if resource is not None:
+                                return self._complete(resource, total)
+                        raise _UploadCancelled()
                     failures += 1
                     if failures > _MAX_RETRIES:
                         raise _UploadError(
-                            f"Upload failed after repeated network errors: {exc}"
+                            "Upload failed after repeated network errors "
+                            f"({_describe_network_error(exc)})."
                         )
                     logger.warning(
                         "Network error sending chunk at byte %d (try %d/%d): %s",
-                        start, failures, _MAX_RETRIES, exc,
+                        start, failures, _MAX_RETRIES, _describe_network_error(exc),
                     )
                     self._sleep_backoff(delay)
                     delay = min(30.0, delay * 2 + random.random())
@@ -517,6 +661,35 @@ class UploadJob(QObject):
             off = _confirmed_offset(resp)
             return (off if off is not None else fallback), None
         return fallback, None
+
+    def _status_after_cancel(self, upload_url: str, total: int) -> Optional[dict]:
+        """One bounded status check after a cancel interrupted the final chunk.
+
+        Uses a fresh, untracked session: the upload's own sockets are aborted.
+        Returns the video resource if YouTube already completed the upload.
+        """
+        probe = AuthorizedSession(self._creds)
+        try:
+            resp = probe.put(
+                upload_url,
+                headers={"Content-Range": f"bytes */{total}"},
+                timeout=(10, 15),
+                allow_redirects=False,
+            )
+        except (requests.RequestException, OSError) as exc:
+            logger.warning(
+                "Couldn't confirm upload state after cancel (%s)",
+                _describe_network_error(exc),
+            )
+            return None
+        finally:
+            probe.close()
+        if resp.status_code not in (200, 201):
+            return None
+        try:
+            return resp.json() or {}
+        except ValueError:
+            return {}
 
     def _set_thumbnail(
         self, session: AuthorizedSession, video_id: str, thumb_path: Path

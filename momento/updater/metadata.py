@@ -54,6 +54,10 @@ class UpdateNotNewerError(UpdatePolicyError):
     """The signed release is not newer than the running application."""
 
 
+class UpdateMetadataExpiredError(UpdatePolicyError):
+    """The metadata is authentic but past its signed expiry time."""
+
+
 @dataclass(frozen=True, slots=True)
 class InstallerInfo:
     name: str
@@ -169,7 +173,7 @@ def validate_manifest_freshness(
     if manifest.published_at > now + MAX_FUTURE_CLOCK_SKEW:
         raise UpdatePolicyError("Update metadata publication time is implausibly in the future")
     if manifest.expires_at <= now:
-        raise UpdatePolicyError("Update metadata has expired")
+        raise UpdateMetadataExpiredError("Update metadata has expired")
 
 
 def _decode_signature(value: bytes) -> bytes:

@@ -69,18 +69,18 @@ def test_sidecar_failure_is_reported(tmp: Path) -> None:
     if not marker_created:
         return
 
-    real_move = storage_mod.shutil.move
+    real_move = storage_mod.move_file_safely
 
     def fail_sidecar(src, dst, *args, **kwargs):
         if Path(src) == sidecar:
             raise OSError("simulated sidecar move failure")
         return real_move(src, dst, *args, **kwargs)
 
-    storage_mod.shutil.move = fail_sidecar
+    storage_mod.move_file_safely = fail_sidecar
     try:
         moved, failed = MigrationWorker(old, new).run()
     finally:
-        storage_mod.shutil.move = real_move
+        storage_mod.move_file_safely = real_move
 
     check("media move is still counted when its sidecar fails", moved == 1)
     check("sidecar failure increments the failed count", failed == 1)

@@ -1,5 +1,11 @@
 [CmdletBinding()]
-param()
+param(
+    # Raise this to re-sign an already-published version (for example to
+    # extend its 180-day metadata expiry or replace a botched upload). Every
+    # client rejects a reused metadata number that carries different bytes.
+    [ValidateRange(0, 999)]
+    [int]$MetadataRevision = 0
+)
 
 $ErrorActionPreference = "Stop"
 $root = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
@@ -94,6 +100,16 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Fullscreen detection policy checks failed." }
     & $python "tests\smoke_library_file_failures.py"
     if ($LASTEXITCODE -ne 0) { throw "Library file-failure regressions failed." }
+    & $python "tests\smoke_config_load_failures.py"
+    if ($LASTEXITCODE -ne 0) { throw "Config load-failure regressions failed." }
+    & $python "tests\smoke_shutdown_waits_for_finalize.py"
+    if ($LASTEXITCODE -ne 0) { throw "Shutdown finalise regressions failed." }
+    & $python "tests\smoke_audio_timeline.py"
+    if ($LASTEXITCODE -ne 0) { throw "Audio timeline regressions failed." }
+    & $python "tests\smoke_video_drop_warning.py"
+    if ($LASTEXITCODE -ne 0) { throw "Frame-loss warning regressions failed." }
+    & $python "tests\smoke_migration_move.py"
+    if ($LASTEXITCODE -ne 0) { throw "Folder migration regressions failed." }
     & $python "tests\smoke_welcome_setup.py"
     if ($LASTEXITCODE -ne 0) { throw "First-run wizard checks failed." }
     & $python "tests\smoke_mic_calibration.py"
@@ -191,7 +207,7 @@ try {
 
     $manifest = Join-Path $bundle "RELEASE_MANIFEST.txt"
     $manifestLines = @(
-        "Mementos 0.2.11 release manifest",
+        "Mementos 0.2.12 release manifest",
         "Git commit: $(git rev-parse HEAD)",
         "Format: SHA256  bytes  relative path",
         ""
@@ -214,13 +230,13 @@ try {
     & $python "tests\smoke_git_history_privacy.py"
     if ($LASTEXITCODE -ne 0) { throw "The Git-history privacy scan failed." }
 
-    $sourceArchive = Join-Path $sourceDir "Mementos-0.2.11-source.zip"
+    $sourceArchive = Join-Path $sourceDir "Mementos-0.2.12-source.zip"
     & git archive --format=zip --output=$sourceArchive HEAD
     if ($LASTEXITCODE -ne 0) { throw "Could not create the corresponding source archive." }
     & $python "tests\smoke_source_archive.py" $sourceArchive
     if ($LASTEXITCODE -ne 0) { throw "The corresponding source privacy scan failed." }
 
-    $thirdPartySource = Join-Path $sourceDir "Mementos-0.2.11-third-party-source.zip"
+    $thirdPartySource = Join-Path $sourceDir "Mementos-0.2.12-third-party-source.zip"
     & $python "scripts\build_corresponding_source.py" --output $thirdPartySource
     if ($LASTEXITCODE -ne 0) { throw "Could not build the third-party source bundle." }
     & $python "tests\smoke_corresponding_source.py" $thirdPartySource
@@ -237,7 +253,7 @@ try {
     & $iscc "build\installer.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed." }
 
-    $installer = Join-Path $installerDir "MementosSetup-0.2.11.exe"
+    $installer = Join-Path $installerDir "MementosSetup-0.2.12.exe"
     if (-not (Test-Path -LiteralPath $installer)) {
         throw "The installer was not produced."
     }
@@ -255,11 +271,15 @@ try {
     # Reserve two increasing identities per release. An old client trusts the
     # legacy manifest before upgrade; the renamed client must then accept its
     # distinct manifest without triggering the same-version digest guard.
-    $legacyMetadataVersion = [Int64](2 * (0 * 1000000000000 + 2 * 1000000 + 11))
-    $metadataVersion = $legacyMetadataVersion + 1
+    # Each identity also reserves 1000 revisions, so a published version can
+    # be re-signed with -MetadataRevision. Through 0.2.12 the number was the
+    # bare rank (0.2.11 = 4000022/4000023); 0.2.12's 4000024000 stays above it.
+    $versionRank = [Int64](2 * (0 * 1000000000000 + 2 * 1000000 + 12))
+    $legacyMetadataVersion = $versionRank * 1000 + $MetadataRevision
+    $metadataVersion = ($versionRank + 1) * 1000 + $MetadataRevision
     & $python "scripts\build_update_metadata.py" `
         --installer $installer `
-        --version "0.2.11" `
+        --version "0.2.12" `
         --minimum-updater-version "0.2.2" `
         --metadata-version $metadataVersion `
         --published-at $publishedAt `
@@ -274,11 +294,11 @@ try {
     }
     # Clients through 0.2.8 require the historical asset names. Keep a separate
     # signed manifest pointing at an identical copy of the renamed installer.
-    $legacyInstaller = Join-Path $installerDir "MomentoSetup-0.2.11.exe"
+    $legacyInstaller = Join-Path $installerDir "MomentoSetup-0.2.12.exe"
     Copy-Item -LiteralPath $installer -Destination $legacyInstaller
     & $python "scripts\build_update_metadata.py" `
         --installer $legacyInstaller `
-        --version "0.2.11" `
+        --version "0.2.12" `
         --minimum-updater-version "0.2.2" `
         --metadata-version $legacyMetadataVersion `
         --published-at $publishedAt `
@@ -290,8 +310,8 @@ try {
     $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $installer).Hash
     $legacyHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $legacyInstaller).Hash
     if ($hash -ne $legacyHash) { throw "The legacy installer alias differs from the release." }
-    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MementosSetup-0.2.11.exe"
-    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.11.txt"
+    Set-Content -LiteralPath "$installer.sha256" -Encoding ascii -Value "$hash  MementosSetup-0.2.12.exe"
+    $checksumFile = Join-Path $dist "SHA256SUMS-0.2.12.txt"
     $checksumLines = @(
         $installer,
         $sourceArchive,

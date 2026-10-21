@@ -84,6 +84,9 @@ class _UploadSession:
         self.post_calls.append(kwargs)
         return _Response()
 
+    def mount(self, _prefix: str, _adapter) -> None:
+        """The uploader mounts its cancellable transport adapter."""
+
     def close(self) -> None:
         self.closed = True
 

@@ -214,9 +214,11 @@ class RebrandTests(unittest.TestCase):
         public = _public_pem(private)
         cache = UpdateCache(self.root / "bridge-cache", public)
 
-        def release_contract(version, brand, metadata_version):
+        def release_contract(version, brand, metadata_version,
+                             expires_at="2027-02-13T12:00:00Z"):
             responses, metadata, _, installer, _ = _fixture(
-                private, version=version, metadata_version=metadata_version)
+                private, version=version, metadata_version=metadata_version,
+                expires_at=expires_at)
             payload = json.loads(metadata)
             payload["installer"]["name"] = f"{brand}Setup-{version}.exe"
             payload["installer"]["url"] = payload["installer"]["url"].replace(
@@ -246,6 +248,8 @@ class RebrandTests(unittest.TestCase):
             ("0.2.9", 4_000_018, 4_000_019),
             ("0.2.10", 4_000_020, 4_000_021),
             ("0.2.11", 4_000_022, 4_000_023),
+            # 0.2.12 onwards reserves 1000 re-sign revisions per identity.
+            ("0.2.12", 4_000_024_000, 4_000_025_000),
         ):
             with self.subTest(version=version):
                 old = UpdateClient(
@@ -266,6 +270,24 @@ class RebrandTests(unittest.TestCase):
                 self.assertEqual(new.status, UpdateStatus.CURRENT)
                 trust = json.loads((cache.root / "trusted-state.json").read_text())
                 self.assertEqual(trust["metadata_version"], new_sequence)
+
+        # Re-signing the same release to extend its expiry: reusing the number
+        # with new bytes is rejected (the trust store working as designed), so
+        # the re-sign takes the next revision, which the 0.2.12 scheme leaves
+        # room for.
+        extended = "2027-08-13T12:00:00Z"
+        reused = UpdateClient(
+            session=FakeSession(release_contract(
+                "0.2.12", "Mementos", 4_000_025_000, expires_at=extended)),
+            public_key=public, cache=cache).check(current_version="0.2.12")
+        self.assertEqual(reused.status, UpdateStatus.FAILED)
+        resigned = UpdateClient(
+            session=FakeSession(release_contract(
+                "0.2.12", "Mementos", 4_000_025_001, expires_at=extended)),
+            public_key=public, cache=cache).check(current_version="0.2.12")
+        self.assertEqual(resigned.status, UpdateStatus.CURRENT)
+        trust = json.loads((cache.root / "trusted-state.json").read_text())
+        self.assertEqual(trust["metadata_version"], 4_000_025_001)
 
     def test_new_name_does_not_allow_other_hosts_versions_or_paths(self):
         private = Ed25519PrivateKey.generate()

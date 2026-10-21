@@ -109,11 +109,21 @@ _AUDIO_RESYNC_THRESHOLD_S = 0.1
 # recording. A healthy-but-quiet mic still delivers (silence) frames, so this
 # only trips on a genuine capture stall, never on quiet audio.
 _AUDIO_STALL_TIMEOUT_S = 10.0
-# Treat loss as sustained only after five seconds at 60 fps, then warn at a
-# rate high enough to represent visible degradation rather than a brief stall.
-_VIDEO_DROP_WINDOW_FRAMES = 300
+# Final-stats health needs at least this many frames before a cumulative loss
+# rate is meaningful.
+_VIDEO_HEALTH_MIN_FRAMES = 300
+# The user-facing warning judges loss over a minute of video, not a few
+# seconds. With an 8-frame queue, a single quarter-second hitch (loading
+# screen, alt-tab, shader compile) drops ~15 frames; over a 5 s window that
+# read as "5% loss" and warned on recordings whose total loss was 0.005%.
+# 5% of a minute is ~3 s of missing video: visible, sustained degradation.
+_VIDEO_DROP_WINDOW_S = 60.0
 _VIDEO_DROP_WARN_RATE = 0.05
 _VIDEO_DROP_WARN_INTERVAL_S = 60.0
+# Ignore the first minute after recording starts: a game that is still
+# booting or loading saturates the CPU/GPU in a burst that says nothing about
+# steady-state recording health. Those drops are still counted in the stats.
+_VIDEO_DROP_GRACE_S = 60.0
 # One malformed audio frame can be transient. A consecutive run means the
 # track has stopped encoding and must become a visible fatal recording error.
 _AUDIO_ERROR_FATAL_COUNT = 3
@@ -140,7 +150,7 @@ class EncoderStats:
     @property
     def video_health_degraded(self) -> bool:
         return (
-            self.video_frames_submitted >= _VIDEO_DROP_WINDOW_FRAMES
+            self.video_frames_submitted >= _VIDEO_HEALTH_MIN_FRAMES
             and self.video_drop_rate >= _VIDEO_DROP_WARN_RATE
         )
 
@@ -311,7 +321,10 @@ class InProcessEncoder:
         # Stats
         self._stats = EncoderStats(output_path=self._path)
         self._t0_monotonic: float | None = None
-        self._video_drop_window: deque[bool] = deque(maxlen=_VIDEO_DROP_WINDOW_FRAMES)
+        self._video_drop_window: deque[bool] = deque(
+            maxlen=max(1, round(self._video_framerate * _VIDEO_DROP_WINDOW_S))
+        )
+        self._video_drop_window_dropped = 0
         self._last_video_drop_warning_at = 0.0
         self._video_degradation_notified = False
         self._video_pts_lock = threading.Lock()
@@ -340,6 +353,7 @@ class InProcessEncoder:
         # kill the whole audio worker — dropping ALL further audio and failing
         # finalize. We drop non-monotonic frames instead.
         self._last_audio_out_pts: int | None = None
+        self._audio_out_next_pts = 0
         self._audio_pts_dropped = 0
         self._audio_mux_errors = 0
         self._audio_mux_error_logged = False
@@ -485,9 +499,20 @@ class InProcessEncoder:
                 self._last_video_pts = pts
                 item = _VideoItem(array=frame, pts=pts)
                 accepted = self._push_drop_oldest(self._video_q, item, "video")
-        self._video_drop_window.append(not accepted)
-        self._maybe_warn_video_drops()
+        t0 = self._t0_monotonic
+        if t0 is None or time.monotonic() - t0 >= _VIDEO_DROP_GRACE_S:
+            self._record_video_frame_outcome(dropped=not accepted)
         return accepted
+
+    def _record_video_frame_outcome(self, *, dropped: bool) -> None:
+        """Feed the one-minute loss window in O(1) and maybe warn."""
+        window = self._video_drop_window
+        if len(window) == window.maxlen and window[0]:
+            self._video_drop_window_dropped -= 1
+        window.append(dropped)
+        if dropped:
+            self._video_drop_window_dropped += 1
+        self._maybe_warn_video_drops()
 
     def submit_mic_audio(self, samples: np.ndarray, pts_seconds: float | None = None) -> bool:
         """Submit a mic audio chunk. ``samples`` is shape (frames, channels), float32."""
@@ -726,9 +751,10 @@ class InProcessEncoder:
                 logger.exception("Encoder fatal-error callback raised")
 
     def _maybe_warn_video_drops(self) -> None:
-        if len(self._video_drop_window) < _VIDEO_DROP_WINDOW_FRAMES:
+        window = self._video_drop_window
+        if len(window) < (window.maxlen or 0):
             return
-        rolling_rate = sum(self._video_drop_window) / len(self._video_drop_window)
+        rolling_rate = self._video_drop_window_dropped / len(window)
         if rolling_rate < _VIDEO_DROP_WARN_RATE:
             return
         now = time.monotonic()
@@ -791,16 +817,20 @@ class InProcessEncoder:
         )
         vol_mic = g.add("volume", f"volume={self._mic_volume:.4f}")
         vol_sys = g.add("volume", f"volume={self._sys_volume:.4f}")
-        # amix wants matching sample rates / layouts on its inputs; insert
-        # aresamples to coerce both to the mixed output format.
-        ar_mic = g.add(
-            "aresample",
-            f"sample_rate={self._mixed_sample_rate}",
+        # amix wants matching sample rates / layouts on its inputs, and it mixes
+        # its inputs sample-for-sample, taking output timestamps from input 0
+        # only. Each leg's own timestamps must therefore be turned into sample
+        # positions BEFORE mixing: async=1 pads silence into timestamp gaps (and
+        # trims overlaps) and first_pts=0 pads each leg from the recording's
+        # origin to its first real sample. Without this, game audio was placed
+        # by the mic's clock (late by the mic-open latency), carried no
+        # timestamps at all when no mic was configured, and capture gaps were
+        # never filled.
+        resample_args = (
+            f"sample_rate={self._mixed_sample_rate}:async=1:first_pts=0"
         )
-        ar_sys = g.add(
-            "aresample",
-            f"sample_rate={self._mixed_sample_rate}",
-        )
+        ar_mic = g.add("aresample", resample_args)
+        ar_sys = g.add("aresample", resample_args)
         mix = g.add(
             "amix",
             "inputs=2:normalize=0:duration=longest:dropout_transition=0",
@@ -948,11 +978,18 @@ class InProcessEncoder:
         packet can't kill the audio worker.
         """
         pts = out_frame.pts
-        if pts is not None:
-            if self._last_audio_out_pts is not None and pts <= self._last_audio_out_pts:
-                self._audio_pts_dropped += 1
-                return
-            self._last_audio_out_pts = pts
+        if pts is None:
+            # amix only emits timestamps once its input 0 (the mic) has data.
+            # With no mic, the legs are already sample-aligned from 0 by the
+            # per-leg aresample, so the running output position IS the time.
+            pts = self._audio_out_next_pts
+            out_frame.pts = pts
+            out_frame.time_base = Fraction(1, self._mixed_sample_rate)
+        if self._last_audio_out_pts is not None and pts <= self._last_audio_out_pts:
+            self._audio_pts_dropped += 1
+            return
+        self._last_audio_out_pts = pts
+        self._audio_out_next_pts = pts + out_frame.samples
         try:
             for packet in stream.encode(out_frame):
                 with self._lock:

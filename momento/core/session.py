@@ -77,6 +77,9 @@ _WINDOW_RECREATE_RETRY_COOLDOWN_S = 1.0
 _DISK_GUARD_INTERVAL_S = 10.0
 _HARD_MIN_FREE_BYTES = 1 * 1024 ** 3
 _STARTER_JOIN_TIMEOUT_S = 12.0
+# Covers the encoder's per-worker drain timeout plus WGC/audio stop timeouts,
+# so quitting right after a game closes still lets the MKV finalise.
+_FINALIZE_SHUTDOWN_WAIT_S = 30.0
 
 
 @dataclass(slots=True)
@@ -166,6 +169,11 @@ class SessionManager:
         self._pending_game: ActiveGame | None = None
         self._deferred_game: ActiveGame | None = None
         self._finalizing = False
+        # Set while no finalise is running. Recorder.stop() reports idle as
+        # soon as it starts stopping, so shutdown waits on this instead of the
+        # recorder's busy flag to avoid exiting mid-flush.
+        self._finalize_done = threading.Event()
+        self._finalize_done.set()
         self._update_quiescing = False
         self._disk_guard_stop: threading.Event | None = None
 
@@ -307,6 +315,18 @@ class SessionManager:
         self._stop_disk_guard()
 
         finalised = False
+        if not self._finalize_done.is_set():
+            # A window-close / process-exit finalise is already flushing on a
+            # daemon thread. Exiting now would kill it mid-write and leave the
+            # MKV without its index (recoverable only by repair).
+            logger.info("Shutdown: waiting for the recording that is still finalising")
+            if self._finalize_done.wait(_FINALIZE_SHUTDOWN_WAIT_S):
+                finalised = True
+            else:
+                logger.warning(
+                    "Shutdown: finalise still running after %.0fs; exiting anyway",
+                    _FINALIZE_SHUTDOWN_WAIT_S,
+                )
         if self._recorder_busy():
             logger.info("Shutdown: stopping in-flight recording")
             try:
@@ -696,9 +716,9 @@ class SessionManager:
         self._emit_failure(
             FAILURE_VIDEO_PERFORMANCE,
             game,
-            f"Mementos dropped about {max(0.0, drop_rate) * 100:.1f}% of recent "
-            "video frames. Recording continues. If this keeps happening, lower "
-            "the recording resolution, frame rate, or quality.",
+            f"Mementos missed about {max(0.0, drop_rate) * 100:.1f}% of video "
+            "frames over the last minute. Recording continues. If this keeps "
+            "happening, lower the recording resolution, frame rate, or quality.",
         )
 
     def _on_video_capture_failed_mid_recording(self, exc: Exception) -> None:
@@ -773,6 +793,7 @@ class SessionManager:
             if not busy and state_game is None:
                 return
             self._finalizing = True
+            self._finalize_done.clear()
 
         self._stop_disk_guard()
 
@@ -826,19 +847,22 @@ class SessionManager:
                 except Exception:
                     logger.exception("Storage cleanup after recording stop failed")
         finally:
-            deferred: ActiveGame | None = None
-            with self._lock:
-                self._finalizing = False
-                deferred = self._take_deferred_start_if_idle_locked()
-            if game is not None:
-                if source in {"encoder failure", "capture failure"}:
-                    self._release_game_for_retry(game)
-                elif source == "window closed":
-                    self._release_game_for_retry(
-                        game, retry_after_s=_WINDOW_RECREATE_RETRY_COOLDOWN_S
-                    )
-            if deferred is not None:
-                self._on_game_start(deferred)
+            try:
+                deferred: ActiveGame | None = None
+                with self._lock:
+                    self._finalizing = False
+                    deferred = self._take_deferred_start_if_idle_locked()
+                if game is not None:
+                    if source in {"encoder failure", "capture failure"}:
+                        self._release_game_for_retry(game)
+                    elif source == "window closed":
+                        self._release_game_for_retry(
+                            game, retry_after_s=_WINDOW_RECREATE_RETRY_COOLDOWN_S
+                        )
+                if deferred is not None:
+                    self._on_game_start(deferred)
+            finally:
+                self._finalize_done.set()
 
     def _take_deferred_start_if_idle_locked(self) -> ActiveGame | None:
         """Claim a deferred watcher event once no start/finalise owns the recorder."""

@@ -11,7 +11,7 @@ from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import QApplication, QMessageBox, QSystemTrayIcon
 
 from momento import __version__
-from momento.config import load_config, save_config
+from momento.config import ConfigLoadResult, load_config_result, save_config
 from momento.core.media_probe import (
     cleanup_stale_repair_temps,
     find_broken_recordings,
@@ -44,6 +44,63 @@ def _log_auto_repair_done(path_str: str, ok: bool, err: str) -> None:
         logger.info("Auto-repair finished")
     else:
         logger.warning("Auto-repair failed: %s", err[:200])
+
+
+def _load_startup_config() -> tuple[ConfigLoadResult, bool]:
+    """Load config for launch; return it and whether this is a first run.
+
+    An explicit marker lets setup safely resume when its window was closed
+    before Finish. Older configs migrate as already complete.
+    """
+    loaded = load_config_result()
+    config = loaded.config
+    if loaded.problem is not None:
+        # An existing settings file couldn't be used, so this is a returning
+        # user, not a first run. Run on in-memory defaults (with real Windows
+        # audio devices) and never write them back over the user's file
+        # automatically; an explicit Settings save still can.
+        config.setup_complete = True
+        try:
+            _seed_default_devices(config)
+        except Exception:
+            logger.exception("Could not seed fallback audio devices")
+        return loaded, False
+
+    is_first_run = not config.setup_complete
+    _migrate_legacy_audio_devices(config)
+    if is_first_run:
+        # Seed real Windows defaults, but keep setup incomplete until the
+        # user successfully finishes the wizard.
+        try:
+            _seed_default_devices(config)
+            save_config(config)
+            logger.info(
+                "First-run defaults seeded: mic=%s system=%s",
+                bool(config.mic_device), bool(config.system_audio_device),
+            )
+        except Exception:
+            logger.exception("Could not seed first-run device defaults")
+    return loaded, is_first_run
+
+
+def _warn_config_not_loaded(tray, loaded: ConfigLoadResult) -> None:
+    """Tell the user their settings weren't applied this session, and why."""
+    if loaded.problem == "unreadable":
+        detail = (
+            "Mementos couldn't open its settings file, so it's using default "
+            "settings for now. Your file wasn't changed. Restart Mementos to "
+            "try again."
+        )
+    else:
+        saved = f" A copy was saved as {loaded.backup.name}." if loaded.backup else ""
+        detail = (
+            "The Mementos settings file is damaged, so it's using default "
+            f"settings for now. The file wasn't overwritten.{saved}"
+        )
+    try:
+        tray._ensure_toast().show_warning("Settings not loaded", detail)
+    except Exception:
+        logger.exception("Could not show settings-load warning toast")
 
 
 def _warn_if_low_disk(tray, config) -> None:
@@ -214,23 +271,8 @@ def main() -> int:
         except Exception as exc:
             logger.warning("Updater initialization failed (%s)", type(exc).__name__)
 
-        # An explicit marker lets setup safely resume when its window was
-        # closed before Finish. Older configs migrate as already complete.
-        config = load_config()
-        is_first_run = not config.setup_complete
-        _migrate_legacy_audio_devices(config)
-        if is_first_run:
-            # Seed real Windows defaults, but keep setup incomplete until the
-            # user successfully finishes the wizard.
-            try:
-                _seed_default_devices(config)
-                save_config(config)
-                logger.info(
-                    "First-run defaults seeded: mic=%s system=%s",
-                    bool(config.mic_device), bool(config.system_audio_device),
-                )
-            except Exception:
-                logger.exception("Could not seed first-run device defaults")
+        loaded_config, is_first_run = _load_startup_config()
+        config = loaded_config.config
         logger.info(
             "Loaded config: mic=%s system=%s output_configured=%s first_run=%s",
             bool(config.mic_device), bool(config.system_audio_device),
@@ -245,6 +287,8 @@ def main() -> int:
         session.set_recording_finished_callback(tray.on_recording_finished)
         tray.on_session_status("idle", None)
         tray.show()
+        if loaded_config.problem is not None:
+            _warn_config_not_loaded(tray, loaded_config)
 
         # Global bookmark hotkey (default F8, configurable in Settings).
         hotkey_service = HotkeyService(app)

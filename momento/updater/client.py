@@ -19,6 +19,7 @@ from momento.updater.metadata import (
     MAX_METADATA_BYTES,
     MAX_SIGNATURE_BYTES,
     UpdateMetadataError,
+    UpdateMetadataExpiredError,
     parse_signed_manifest,
 )
 from momento.util.paths import update_cache_dir
@@ -103,6 +104,7 @@ class UpdateClient:
             logger.warning("Update check failed (%s)", type(exc).__name__)
             return UpdateResult(UpdateStatus.FAILED, error=_safe_error(exc))
 
+        release_is_running_version = False
         try:
             release = _decode_release(release_bytes)
             version = _release_version(release)
@@ -111,6 +113,7 @@ class UpdateClient:
             running = Version(current_version)
             if version < running:
                 return UpdateResult(UpdateStatus.CURRENT)
+            release_is_running_version = version == running
 
             assets = _release_assets(release)
             expected_base = (
@@ -170,6 +173,14 @@ class UpdateClient:
                 )
             return UpdateResult(UpdateStatus.AVAILABLE, staged=staged)
         except (OSError, ValueError, requests.RequestException) as exc:
+            if release_is_running_version and isinstance(exc, UpdateMetadataExpiredError):
+                # The signature verified (it is checked before freshness), but
+                # the release we already run is more than 180 days old. Nothing
+                # can be installed from it, so telling an up-to-date user their
+                # update check "failed" is a false alarm. Tampering and other
+                # verification failures still report FAILED.
+                logger.info("Running the latest release; its signed metadata has expired")
+                return UpdateResult(UpdateStatus.CURRENT)
             logger.warning("Update check failed (%s)", type(exc).__name__)
             return UpdateResult(UpdateStatus.FAILED, error=_safe_error(exc))
 

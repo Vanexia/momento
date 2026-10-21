@@ -17,6 +17,21 @@ PRIVATE_ROOTS = {".agents", ".claude"}
 PRIVATE_NAMES = {"agents.md", "claude.md", "skills-lock.json"}
 PRIVATE_PREFIXES = {("docs", "superpowers")}
 REQUIRED_RELEASE_FILES = {
+    "Mementos-0.2.12-source.zip": {
+        "mementos/__init__.py",
+        "mementos/__main__.py",
+        "momento/ui/folder_dialog.py",
+        "tests/smoke_audio_timeline.py",
+        "tests/smoke_video_drop_warning.py",
+        "tests/smoke_config_load_failures.py",
+        "tests/smoke_shutdown_waits_for_finalize.py",
+        "tests/smoke_upload_cancel.py",
+        "tests/smoke_migration_move.py",
+        "build/pyav_runtime.json",
+        "scripts/build_pyav_runtime.ps1",
+        "scripts/build_pyav_runtime.sh",
+        "scripts/verify_pyav_runtime.py",
+    },
     "Mementos-0.2.11-source.zip": {
         "mementos/__init__.py",
         "mementos/__main__.py",

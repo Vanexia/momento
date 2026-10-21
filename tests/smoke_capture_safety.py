@@ -614,7 +614,7 @@ def test_successful_audio_frame_resets_error_streak() -> None:
             def encode(_frame):
                 return ()
 
-        encoder._encode_and_mux_audio(SimpleNamespace(pts=1), Stream())
+        encoder._encode_and_mux_audio(SimpleNamespace(pts=1, samples=1024), Stream())
         check(
             "audio errors: a healthy encoded frame resets the consecutive streak",
             encoder._audio_consecutive_errors == 0,
@@ -906,11 +906,13 @@ def test_sustained_video_drops_are_reported_as_degraded() -> None:
         encoder = _bare_encoder(Path(folder) / "degraded.mkv")
         encoder._stats.video_frames_submitted = 300
         encoder._stats.video_frames_dropped = 30
-        encoder._video_drop_window.extend([False] * 270 + [True] * 30)
+        window = encoder._video_drop_window.maxlen
+        dropped = window // 10
         handler = _MessageHandler()
         encoder_mod.logger.addHandler(handler)
         try:
-            encoder._maybe_warn_video_drops()
+            for index in range(window):
+                encoder._record_video_frame_outcome(dropped=index >= window - dropped)
         finally:
             encoder_mod.logger.removeHandler(handler)
 

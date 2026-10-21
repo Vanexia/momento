@@ -233,6 +233,9 @@ class SettingsPanel(QWidget):
     settings_saved = pyqtSignal(object)  # emits the new Config
     done = pyqtSignal()
     youtube_configuration_changed = pyqtSignal()
+    # Emitted just before recordings are moved to a new folder, so the host can
+    # release any open media handle (the preview player locks its file).
+    migration_starting = pyqtSignal()
 
     def __init__(
         self,
@@ -2124,6 +2127,9 @@ class SettingsPanel(QWidget):
         total = len(pairs)
         if total == 0:
             return 0, 0
+        # Direct connection: the host releases its media handles before the
+        # first file moves, not after.
+        self.migration_starting.emit()
 
         progress = _MigrationProgressDialog("Preparing…", "", 0, total, self)
         progress.setWindowTitle("Mementos — Transferring files")
