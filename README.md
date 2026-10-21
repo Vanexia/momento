@@ -25,7 +25,7 @@
 
 ## Download
 
-Download **[MementosSetup-0.2.9.exe](https://github.com/Vanexia/momento/releases/download/v0.2.9/MementosSetup-0.2.9.exe)** to install Mementos or upgrade an existing Momento installation. Read the [0.2.9 release notes](docs/releases/0.2.9.md) for the recording diagnostics fix and rename details.
+Download **[MementosSetup-0.2.12.exe](https://github.com/Vanexia/momento/releases/download/v0.2.12/MementosSetup-0.2.12.exe)** to install Mementos or upgrade an existing Momento installation. Read the [0.2.12 release notes](docs/releases/0.2.12.md) for the audio timing, upload cancel, and settings safety fixes.
 
 The installer includes everything Mementos needs. Python and administrator access are not required.
 
@@ -35,12 +35,12 @@ The installer includes everything Mementos needs. Python and administrator acces
 <details>
 <summary>Optional: verify a manual download</summary>
 
-Download `SHA256SUMS-0.2.9.txt` from the same release and compare the listed
+Download `SHA256SUMS-0.2.12.txt` from the same release and compare the listed
 installer hash:
 
 ```powershell
-Get-FileHash .\MementosSetup-0.2.9.exe -Algorithm SHA256
-Get-Content .\SHA256SUMS-0.2.9.txt
+Get-FileHash .\MementosSetup-0.2.12.exe -Algorithm SHA256
+Get-Content .\SHA256SUMS-0.2.12.txt
 ```
 
 The two SHA-256 values should match. This check can detect a damaged or replaced
