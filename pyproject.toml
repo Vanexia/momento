@@ -59,7 +59,7 @@ dependencies = [
     # pyasn1 is also pulled in by Google authentication. 0.6.4 fixes three
     # crafted-input denial-of-service vulnerabilities (CVE-2026-59884 through
     # CVE-2026-59886), so pin the transitive dependency at its patched floor.
-    "pyasn1>=0.6.4",
+    "pyasn1>=0.6.5",
 ]
 
 [project.optional-dependencies]
