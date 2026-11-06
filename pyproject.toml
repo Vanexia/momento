@@ -44,7 +44,7 @@ dependencies = [
     # certifi 2026.10.19 removes the compromised emSign trust root.
     "certifi>=2026.10.19",
     "urllib3>=2.8.0",
-    "oauthlib>=4.0.0",
+    "oauthlib>=4.0.1",
     "google-api-python-client>=2.130",
     "google-auth-oauthlib>=1.2",
     "google-auth-httplib2>=0.2",
